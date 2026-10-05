@@ -1,6 +1,5 @@
 /** Formato de números escritos (solo da formato: las reglas de validación viven en AuthModel). */
 
-const LARGO_TELEFONO = 10;
 const LARGO_TELEFONO_CON_52 = 12;
 const LARGO_TELEFONO_CON_521 = 13;
 
@@ -26,9 +25,12 @@ export function telefonoSinLada(texto: string): string {
   return digitos;
 }
 
-/** Teléfono pegado o autocompletado: sin lada y limitado a 10 dígitos. */
+/**
+ * Teléfono pegado o autocompletado: solo dígitos y sin lada (solo con 12 que empiezan con 52 o 13
+ * que empiezan con 521). Nunca se recorta: si no quedan 10 dígitos, la validación lo marca.
+ */
 export function telefonoPegado(texto: string): string {
-  return telefonoSinLada(texto).slice(0, LARGO_TELEFONO);
+  return telefonoSinLada(texto);
 }
 
 /**

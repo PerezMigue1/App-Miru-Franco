@@ -332,6 +332,17 @@ export const casilla = {
   tamano: 24,
 } as const;
 
+/** Indicador de pasos de un flujo (registro): diámetro del círculo con el número. */
+export const pasoFlujo = {
+  circulo: 28,
+} as const;
+
+/**
+ * Reintentos de la verificación del correo cuando no hubo respuesta (o no hubo red): esperas
+ * antes de cada uno, en ms. Con el correo sin cambios; al agotarse, el registro decide con su 409.
+ */
+export const reintentosCorreo = [5000, 10000, 20000] as const;
+
 /** Skeletons: alto de las líneas de texto y ancho de la línea corta. */
 export const esqueleto = {
   linea: 14,

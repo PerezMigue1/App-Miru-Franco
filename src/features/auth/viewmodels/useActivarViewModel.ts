@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 
+import { soloDigitos } from '@/shared/ui/digitos';
 import { useCandado } from '@/shared/ui/useCandado';
 
 import {
@@ -10,7 +11,6 @@ import {
   esErrorDeRed,
   estadoHttp,
   mensajeDelServidor,
-  soloDigitos,
 } from '../models/AuthModel';
 import { reenviarCodigo, verificarCodigo } from '../models/authService';
 

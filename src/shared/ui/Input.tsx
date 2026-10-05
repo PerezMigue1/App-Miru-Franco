@@ -6,6 +6,7 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
   type TextInputProps,
 } from 'react-native';
 import Animated, { Easing, FadeIn, ReduceMotion } from 'react-native-reanimated';
@@ -21,12 +22,16 @@ export type TipoInput =
   | 'telefono'
   | 'fecha'
   | 'claveActual'
-  | 'claveNueva';
+  | 'claveNueva'
+  /** Datos de salud: sin sugerencias, corrección ni autollenado del teclado. */
+  | 'sensible';
 
 /** Estado del campo que no es un error de validación (por ejemplo, verificar un correo). */
 export interface EstadoCampo {
   tipo: 'verificando' | 'exito' | 'aviso' | 'error';
   texto: string;
+  /** Enlace en la línea siguiente del mensaje (por ejemplo, "Iniciar sesión"). */
+  accion?: { texto: string; onPress: () => void };
 }
 
 interface InputProps {
@@ -46,14 +51,21 @@ interface InputProps {
   /** Mensaje de error de validación; tiene prioridad sobre el estado. */
   error?: string | null;
   estado?: EstadoCampo | null;
-  /** Reserva el alto de una línea de mensaje para que el formulario no salte al cambiar de estado. */
-  reservarMensaje?: boolean;
+  /**
+   * Líneas de mensaje que se reservan para que el formulario no salte al cambiar de estado. Crecen
+   * con el tamaño de letra del sistema.
+   */
+  lineasReservadas?: number;
   /** Contenido extra bajo el campo (enlaces, requisitos). */
   debajo?: ReactNode;
   ref?: Ref<TextInput>;
 }
 
 const LARGO_FECHA = 10;
+/** Alto de una línea de mensaje bajo el campo. */
+const LINEA_MENSAJE = tipo.etiqueta.linea;
+/** Lo que le falta a una línea de mensaje para llegar al objetivo táctil mínimo, por lado. */
+const HOLGURA_ACCION = (toqueMinimo - LINEA_MENSAJE) / 2;
 const DIGITOS_FECHA = 8;
 const EASE_SALIDA = Easing.bezier(...curva.salida);
 // Solo el ícono (decorativo) se funde; el texto queda fuera para que TalkBack lo anuncie.
@@ -89,6 +101,13 @@ const AJUSTES: Record<TipoInput, TextInputProps> = {
     autoCapitalize: 'none',
     autoCorrect: false,
   },
+  sensible: {
+    autoCapitalize: 'sentences',
+    autoCorrect: false,
+    spellCheck: false,
+    autoComplete: 'off',
+    importantForAutofill: 'no',
+  },
 };
 
 /** DD/MM/AAAA mientras se escribe: solo da formato, no valida. */
@@ -116,11 +135,12 @@ export function Input({
   ayuda,
   error,
   estado,
-  reservarMensaje = false,
+  lineasReservadas = 0,
   debajo,
   ref,
 }: InputProps) {
   const { colores } = useTheme();
+  const { fontScale } = useWindowDimensions();
   const id = useId();
   const [enfocado, setEnfocado] = useState(false);
   const [claveVisible, setClaveVisible] = useState(false);
@@ -212,7 +232,13 @@ export function Input({
       <View
         collapsable={false}
         accessibilityLiveRegion="polite"
-        style={hayMensaje || reservarMensaje ? styles.mensajes : null}
+        style={[
+          hayMensaje || lineasReservadas > 0 ? styles.mensajes : null,
+          // La holgura de abajo es el área táctil de la acción ("Iniciar sesión"), siempre reservada.
+          lineasReservadas > 0
+            ? { minHeight: lineasReservadas * LINEA_MENSAJE * fontScale + HOLGURA_ACCION }
+            : null,
+        ]}
       >
         {hayError ? (
           <Text style={[styles.nota, { color: colores.peligro }]}>{error}</Text>
@@ -233,6 +259,20 @@ export function Input({
               {estadoVisible.texto}
             </Text>
           </View>
+        ) : null}
+        {estadoVisible?.accion ? (
+          // Cabe en lo reservado: su relleno inferior y el hitSlop superior completan 48dp dentro del
+          // contenedor (el área táctil no puede salir de él).
+          <Pressable
+            accessibilityRole="link"
+            onPress={estadoVisible.accion.onPress}
+            hitSlop={{ top: HOLGURA_ACCION, left: espacio.s, right: espacio.s }}
+            style={styles.accionEstado}
+          >
+            <Text style={[styles.nota, styles.textoAccion, { color: colores.enlace }]}>
+              {estadoVisible.accion.texto}
+            </Text>
+          </Pressable>
         ) : null}
       </View>
       {!hayMensaje && ayuda ? (
@@ -325,5 +365,15 @@ const styles = StyleSheet.create({
   },
   textoEstado: {
     flexShrink: 1,
+  },
+  // Alineado con el texto del estado, después del ícono.
+  accionEstado: {
+    alignSelf: 'flex-start',
+    marginLeft: icono.tamanoPequeno + espacio.s,
+    paddingBottom: HOLGURA_ACCION,
+  },
+  textoAccion: {
+    fontFamily: fuente.textoMedio,
+    textDecorationLine: 'underline',
   },
 });

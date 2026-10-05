@@ -1,4 +1,5 @@
 import { ApiError, ErrorDeRed, esUrlPermitida } from '@/shared/api/apiClient';
+import { soloDigitos } from '@/shared/ui/digitos';
 
 /** Tipos y reglas del dominio de autenticación (contratos del backend NestJS ya desplegado). */
 
@@ -45,10 +46,24 @@ export interface RespuestaPreguntas {
 export type TipoCabello = 'liso' | 'ondulado' | 'rizado';
 
 export const TIPOS_CABELLO: { valor: TipoCabello; etiqueta: string }[] = [
-  { valor: 'liso', etiqueta: 'Liso' },
+  // La web muestra "Lacio" y envía 'liso'.
+  { valor: 'liso', etiqueta: 'Lacio' },
   { valor: 'ondulado', etiqueta: 'Ondulado' },
   { valor: 'rizado', etiqueta: 'Rizado' },
 ];
+
+/** Perfil capilar del registro (como lo arma la web): los opcionales vacíos no se envían. */
+export interface PerfilCapilar {
+  tipoCabello: TipoCabello;
+  colorNatural?: string;
+  colorActual?: string;
+  productosUsados?: string;
+  tieneAlergias: boolean;
+  /** Dato de salud: solo viaja en el registro; nunca se guarda en el teléfono ni en logs. */
+  alergias?: string;
+  tratamientosQuimicos: boolean;
+  tratamientos?: string;
+}
 
 /** POST /api/usuarios/registro. */
 export interface DatosRegistro {
@@ -59,8 +74,11 @@ export interface DatosRegistro {
   /** AAAA-MM-DD. */
   fechaNacimiento: string;
   preguntaSeguridad: { pregunta: string; respuesta: string };
-  perfilCapilar: { tipoCabello: TipoCabello };
+  perfilCapilar: PerfilCapilar;
   aceptaAvisoPrivacidad: true;
+  recibePromociones: boolean;
+  /** Obligatorio (true) si perfilCapilar.alergias trae texto; el backend no lo guarda. */
+  consienteDatosSensibles?: true;
 }
 
 /** POST /api/auth/verificar-correo → 200. */
@@ -160,13 +178,6 @@ function esMinuscula(c: string): boolean {
 function esLetraAscii(c: string): boolean {
   const minuscula = c.toLowerCase();
   return minuscula >= 'a' && minuscula <= 'z';
-}
-
-export function soloDigitos(texto: string): string {
-  return texto
-    .split('')
-    .filter(esDigito)
-    .join('');
 }
 
 /** Un solo @, texto a ambos lados, sin espacios y un punto con texto a ambos lados en el dominio. */
@@ -379,6 +390,61 @@ export function problemaDeRespuesta(respuesta: string): string | null {
   return respuesta.trim().length >= LARGO_MINIMO_TEXTO
     ? null
     : 'La respuesta debe tener al menos 2 caracteres';
+}
+
+// ── Perfil capilar (paso 2): reglas copiadas de la web (Register.tsx y consentimientoDatosSensibles) ──
+
+export const ERROR_CONSENTIMIENTO_SALUD =
+  'Para guardar tus alergias, marca la autorización para usar tus datos de salud.';
+
+export function problemaDeTieneAlergias(tieneAlergias: boolean | null): string | null {
+  return tieneAlergias === null ? 'Debes indicar si tienes alergias a productos' : null;
+}
+
+export function problemaDeAlergias(tieneAlergias: boolean | null, alergias: string): string | null {
+  if (tieneAlergias !== true) {
+    return null;
+  }
+  if (!alergias.trim()) {
+    return 'Especifica tus alergias';
+  }
+  return tieneFragmentosPeligrosos(alergias)
+    ? 'Las alergias no pueden contener caracteres especiales peligrosos'
+    : null;
+}
+
+/** Con texto de alergias, el backend exige consienteDatosSensibles: true. */
+export function requiereConsentimiento(tieneAlergias: boolean | null, alergias: string): boolean {
+  return tieneAlergias === true && alergias.trim() !== '';
+}
+
+export function problemaDeConsentimiento(
+  tieneAlergias: boolean | null,
+  alergias: string,
+  consiente: boolean,
+): string | null {
+  return requiereConsentimiento(tieneAlergias, alergias) && !consiente ? ERROR_CONSENTIMIENTO_SALUD : null;
+}
+
+export function problemaDeTieneTratamientos(tratamientosQuimicos: boolean | null): string | null {
+  return tratamientosQuimicos === null
+    ? 'Debes indicar si has tenido tratamientos químicos previos'
+    : null;
+}
+
+export function problemaDeTratamientos(
+  tratamientosQuimicos: boolean | null,
+  tratamientos: string,
+): string | null {
+  if (tratamientosQuimicos !== true) {
+    return null;
+  }
+  if (!tratamientos.trim()) {
+    return 'Especifica los tratamientos';
+  }
+  return tieneFragmentosPeligrosos(tratamientos)
+    ? 'Los tratamientos no pueden contener caracteres especiales peligrosos'
+    : null;
 }
 
 function dosDigitos(n: number): string {

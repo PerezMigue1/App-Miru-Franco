@@ -2,8 +2,8 @@ import { useRouter } from 'expo-router';
 import { openBrowserAsync } from 'expo-web-browser';
 import { useEffect, useRef, useState } from 'react';
 
-import { telefonoSinLada } from '@/shared/ui/digitos';
-import { duracion } from '@/shared/ui/tokens';
+import { soloDigitos, telefonoSinLada } from '@/shared/ui/digitos';
+import { duracion, reintentosCorreo } from '@/shared/ui/tokens';
 import { useCandado } from '@/shared/ui/useCandado';
 
 import {
@@ -20,12 +20,19 @@ import {
   mensajeDelServidor,
   normalizarCorreo,
   normalizarTelefono,
+  problemaDeAlergias,
   problemaDeClave,
+  problemaDeConsentimiento,
   problemaDeCorreo,
   problemaDeNombre,
   problemaDeRespuesta,
+  problemaDeTieneAlergias,
+  problemaDeTieneTratamientos,
+  problemaDeTratamientos,
+  requiereConsentimiento,
   requisitosDeClave,
   urlAvisoPrivacidad,
+  type DatosRegistro,
   type PreguntaSeguridad,
   type RequisitoClave,
   type TipoCabello,
@@ -39,10 +46,21 @@ export interface CamposRegistro {
   clave: string;
   confirmacion: string;
   nacimiento: string;
-  tipoCabello: TipoCabello | null;
   pregunta: PreguntaSeguridad | null;
   respuesta: string;
+  tipoCabello: TipoCabello | null;
+  colorNatural: string;
+  colorActual: string;
+  productosUsados: string;
+  /** null: todavía sin responder. */
+  tieneAlergias: boolean | null;
+  /** Dato de salud: solo en memoria y solo se envía en el registro. */
+  alergias: string;
+  consienteDatosSensibles: boolean;
+  tratamientosQuimicos: boolean | null;
+  tratamientos: string;
   aceptaAviso: boolean;
+  recibePromociones: boolean;
 }
 
 export type CampoRegistro = keyof CamposRegistro;
@@ -51,11 +69,23 @@ export type ErroresRegistro = Partial<Record<CampoRegistro, string | null>>;
 
 export type EstadoPreguntas = 'inactivo' | 'cargando' | 'listo' | 'error';
 
+export type PasoRegistro = 1 | 2;
+
 /**
- * Verificación del correo: solo lo que dice el endpoint (existe o no). 'sinVerificar': no respondió
- * a tiempo o falló la red; no bloquea, el registro lo revisará con su 409.
+ * Verificación del correo: solo lo que dice el endpoint (existe o no).
+ * - 'revisando': sin respuesta a los 6 s; se reintenta.
+ * - 'sinConexion': falló la red; se reintenta.
+ * - 'sinVerificar': se agotaron los reintentos; el registro lo revisará con su 409.
+ * Ninguno de los tres bloquea: la app no puede afirmar que un correo existe sin el servidor.
  */
-export type EstadoCorreo = 'inactivo' | 'verificando' | 'disponible' | 'registrado' | 'sinVerificar';
+export type EstadoCorreo =
+  | 'inactivo'
+  | 'verificando'
+  | 'disponible'
+  | 'registrado'
+  | 'revisando'
+  | 'sinConexion'
+  | 'sinVerificar';
 
 /** Pedido a la vista de llevar el foco a un campo (cambia en cada envío con errores). */
 export interface PedidoEnfoque {
@@ -70,6 +100,15 @@ export interface RegistroViewModel {
   salir: (campo: CampoRegistro) => void;
   errores: ErroresRegistro;
   errorGeneral: string | null;
+  paso: PasoRegistro;
+  /** Hacia dónde se movió el último cambio de paso: 1 avanzar, -1 volver. */
+  direccionPaso: 1 | -1;
+  /** Paso 1: valida sus campos y el correo; si todo está bien, pasa al paso 2. */
+  continuar: () => void;
+  /** Paso 2: regresa al paso 1 sin perder nada de lo escrito (no mientras se envía). */
+  atras: () => void;
+  /** "Continuar" espera la verificación del correo. */
+  verificandoCorreo: boolean;
   cargando: boolean;
   estadoCorreo: EstadoCorreo;
   requisitosClave: RequisitoClave[];
@@ -78,6 +117,7 @@ export interface RegistroViewModel {
   ayudaTelefono: string;
   preguntas: { estado: EstadoPreguntas; lista: PreguntaSeguridad[]; cargar: () => void };
   abrirAviso: () => void;
+  /** Paso 2: "Finalizar registro". */
   crearCuenta: () => void;
 }
 
@@ -88,27 +128,48 @@ const CAMPOS_INICIALES: CamposRegistro = {
   clave: '',
   confirmacion: '',
   nacimiento: '',
-  tipoCabello: null,
   pregunta: null,
   respuesta: '',
+  tipoCabello: null,
+  colorNatural: '',
+  colorActual: '',
+  productosUsados: '',
+  tieneAlergias: null,
+  alergias: '',
+  consienteDatosSensibles: false,
+  tratamientosQuimicos: null,
+  tratamientos: '',
   aceptaAviso: false,
+  recibePromociones: false,
 };
 
 /**
- * Orden visual del formulario: el foco va al primero de esta lista que tenga error. La contraseña
- * va después de los datos con los que la regla del backend la compara.
+ * Orden visual de cada paso: el foco va al primero con error. La contraseña va al final del paso 1
+ * porque se compara con los datos anteriores.
  */
-const ORDEN: CampoRegistro[] = [
+const PASO_1: CampoRegistro[] = [
   'nombre',
   'correo',
   'telefono',
   'nacimiento',
-  'tipoCabello',
   'pregunta',
   'respuesta',
   'clave',
   'confirmacion',
+];
+
+const PASO_2: CampoRegistro[] = [
+  'tipoCabello',
+  'colorNatural',
+  'colorActual',
+  'productosUsados',
+  'tieneAlergias',
+  'alergias',
+  'consienteDatosSensibles',
+  'tratamientosQuimicos',
+  'tratamientos',
   'aceptaAviso',
+  'recibePromociones',
 ];
 
 /** Campos que la regla de contraseña compara: si cambian, la contraseña se revalida. */
@@ -116,7 +177,7 @@ const DATOS_DE_LA_CLAVE: CampoRegistro[] = ['nombre', 'correo', 'telefono', 'nac
 
 const NO_COINCIDEN = 'Las contraseñas no coinciden';
 const REVISA_CAMPOS = 'Revisa los campos marcados.';
-const ESPERA_VERIFICACION = 'Espera un momento: estamos verificando tu correo.';
+const NO_PUDIMOS_CREAR = 'No pudimos crear tu cuenta. Intenta de nuevo.';
 
 function problemaDeTelefono(telefono: string): string | null {
   if (!telefono) {
@@ -137,7 +198,7 @@ function fechaIsoDe(nacimiento: string): string {
   return 'fecha' in fecha ? fecha.fecha : '';
 }
 
-/** Valida un campo con las reglas existentes (no agrega reglas nuevas). */
+/** Valida un campo con las reglas existentes y las del perfil capilar copiadas de la web. */
 function validarCampo(campo: CampoRegistro, c: CamposRegistro): string | null {
   switch (campo) {
     case 'nombre':
@@ -163,17 +224,73 @@ function validarCampo(campo: CampoRegistro, c: CamposRegistro): string | null {
       const fecha = convertirFechaNacimiento(c.nacimiento);
       return 'problema' in fecha ? fecha.problema : null;
     }
-    case 'tipoCabello':
-      return c.tipoCabello ? null : 'Selecciona tu tipo de cabello';
     case 'pregunta':
       return c.pregunta ? null : 'Debes seleccionar una pregunta de seguridad';
     case 'respuesta':
       return problemaDeRespuesta(c.respuesta);
+    case 'tipoCabello':
+      return c.tipoCabello ? null : 'Selecciona tu tipo de cabello';
+    case 'tieneAlergias':
+      return problemaDeTieneAlergias(c.tieneAlergias);
+    case 'alergias':
+      return problemaDeAlergias(c.tieneAlergias, c.alergias);
+    case 'consienteDatosSensibles':
+      return problemaDeConsentimiento(c.tieneAlergias, c.alergias, c.consienteDatosSensibles);
+    case 'tratamientosQuimicos':
+      return problemaDeTieneTratamientos(c.tratamientosQuimicos);
+    case 'tratamientos':
+      return problemaDeTratamientos(c.tratamientosQuimicos, c.tratamientos);
     case 'aceptaAviso':
       return c.aceptaAviso ? null : 'Debes aceptar el Aviso de Privacidad';
     default:
+      // Color natural, color actual, productos y promociones: opcionales, sin reglas (como la web).
       return null;
   }
+}
+
+function validar(campos: CampoRegistro[], c: CamposRegistro): ErroresRegistro {
+  return Object.fromEntries(campos.map((campo) => [campo, validarCampo(campo, c)]));
+}
+
+/** Texto opcional: recortado, y omitido si queda vacío. */
+function opcional(texto: string): string | undefined {
+  const recortado = texto.trim();
+  return recortado || undefined;
+}
+
+/**
+ * Cuerpo de POST /api/usuarios/registro como lo arma la web: perfil capilar completo, alergias y
+ * tratamientos solo si respondió Sí, consentimiento solo si hay texto de alergias.
+ */
+function cuerpoDeRegistro(
+  c: CamposRegistro,
+  email: string,
+  tipoCabello: TipoCabello,
+  pregunta: PreguntaSeguridad,
+): DatosRegistro {
+  const tieneAlergias = c.tieneAlergias === true;
+  const tratamientosQuimicos = c.tratamientosQuimicos === true;
+  return {
+    nombre: c.nombre.trim(),
+    email,
+    telefono: normalizarTelefono(c.telefono),
+    password: c.clave,
+    fechaNacimiento: fechaIsoDe(c.nacimiento),
+    preguntaSeguridad: { pregunta: pregunta.pregunta, respuesta: c.respuesta.trim() },
+    perfilCapilar: {
+      tipoCabello,
+      colorNatural: opcional(c.colorNatural),
+      colorActual: opcional(c.colorActual),
+      productosUsados: opcional(c.productosUsados),
+      tieneAlergias,
+      alergias: tieneAlergias ? c.alergias.trim() : undefined,
+      tratamientosQuimicos,
+      tratamientos: tratamientosQuimicos ? c.tratamientos.trim() : undefined,
+    },
+    aceptaAvisoPrivacidad: true,
+    recibePromociones: c.recibePromociones,
+    ...(requiereConsentimiento(c.tieneAlergias, c.alergias) ? { consienteDatosSensibles: true } : {}),
+  };
 }
 
 function mensajeDeRegistro(error: unknown): string {
@@ -183,13 +300,28 @@ function mensajeDeRegistro(error: unknown): string {
   if (estadoHttp(error) === 429) {
     return MENSAJE_DEMASIADOS_INTENTOS;
   }
-  return mensajeDelServidor(error, 'No pudimos crear tu cuenta. Intenta de nuevo.');
+  return mensajeDelServidor(error, NO_PUDIMOS_CREAR);
 }
 
+/** Espera la promesa o el límite, lo que pase primero. Nunca rechaza. */
+function conLimite(promesa: Promise<void>, ms: number): Promise<void> {
+  return new Promise((resolver) => {
+    const temporizador = setTimeout(resolver, ms);
+    const terminar = () => {
+      clearTimeout(temporizador);
+      resolver();
+    };
+    promesa.then(terminar).catch(terminar);
+  });
+}
+
+type Temporizador = ReturnType<typeof setTimeout>;
+
 /**
- * Registro: validaciones y mensajes de la web; cada campo se valida al salir de él y, desde su
- * primer error, en cada cambio. El correo se verifica contra el servidor 600 ms después de dejar
- * de escribir y al salir del campo. Con éxito, se pasa a la activación por código.
+ * Registro en dos pasos, como la web: "Tu cuenta" y "Tu cabello". Cada campo se valida al salir de
+ * él y, desde su primer error, en cada cambio. El correo se verifica 600 ms después de dejar de
+ * escribir y al salir del campo; sin respuesta o sin red se reintenta (5, 10 y 20 s) mientras no
+ * cambie. Con éxito, se pasa a la activación por código.
  */
 export function useRegistroViewModel(): RegistroViewModel {
   const { push } = useRouter();
@@ -197,116 +329,254 @@ export function useRegistroViewModel(): RegistroViewModel {
   const [errores, setErrores] = useState<ErroresRegistro>({});
   const [enVivo, setEnVivo] = useState<Partial<Record<CampoRegistro, boolean>>>({});
   const [errorGeneral, setErrorGeneral] = useState<string | null>(null);
+  const [navegacion, setNavegacion] = useState<{ paso: PasoRegistro; direccion: 1 | -1 }>({
+    paso: 1,
+    direccion: 1,
+  });
+  const paso = navegacion.paso;
+  const irAPaso = (destino: PasoRegistro) => {
+    setNavegacion((actual) =>
+      actual.paso === destino ? actual : { paso: destino, direccion: destino > actual.paso ? 1 : -1 },
+    );
+  };
+  const [verificandoCorreo, setVerificandoCorreo] = useState(false);
   const [cargando, setCargando] = useState(false);
   const [estadoCorreo, setEstadoCorreo] = useState<EstadoCorreo>('inactivo');
   const [enfoque, setEnfoque] = useState<PedidoEnfoque | null>(null);
   const [estadoPreguntas, setEstadoPreguntas] = useState<EstadoPreguntas>('inactivo');
   const [listaPreguntas, setListaPreguntas] = useState<PreguntaSeguridad[]>([]);
 
-  // Verificación del correo: temporizador, número de solicitud (descarta respuestas viejas),
-  // correo ya consultado y si la pantalla sigue montada. En refs: no provocan renders.
-  const temporizador = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Límite de espera de la verificación: si vence, el registro deja de estar bloqueado.
-  const limite = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const solicitudCorreo = useRef(0);
-  const correoConsultado = useRef<string | null>(null);
+  // Verificación del correo por rondas: una ronda es un correo; cambia al escribir otro (o con el
+  // 409) y descarta todo lo que siga en curso de la anterior. En refs: no provocan renders.
+  const ronda = useRef(0);
+  const correoRonda = useRef<string | null>(null);
+  const resuelta = useRef(false);
+  const resultado = useRef<'registrado' | 'disponible' | null>(null);
+  const reintentosHechos = useRef(0);
+  const espera = useRef<Temporizador | null>(null);
+  const reintento = useRef<Temporizador | null>(null);
+  const limites = useRef(new Set<Temporizador>());
   const montado = useRef(true);
   const vecesEnfoque = useRef(0);
+  // Cambios en los campos (para descartar un "Continuar" si se editó mientras esperaba) y el
+  // último correo escrito (para que un 409 tardío solo marque el correo que se envió).
+  const cambios = useRef(0);
+  const ultimoCorreo = useRef('');
 
-  const limpiarTemporizador = () => {
-    if (temporizador.current) {
-      clearTimeout(temporizador.current);
-      temporizador.current = null;
+  const limpiarEspera = () => {
+    if (espera.current) {
+      clearTimeout(espera.current);
+      espera.current = null;
     }
   };
 
-  const limpiarLimite = () => {
-    if (limite.current) {
-      clearTimeout(limite.current);
-      limite.current = null;
+  const limpiarReintento = () => {
+    if (reintento.current) {
+      clearTimeout(reintento.current);
+      reintento.current = null;
     }
+  };
+
+  const limpiarLimites = () => {
+    limites.current.forEach(clearTimeout);
+    limites.current.clear();
+  };
+
+  const limpiarTodo = () => {
+    limpiarEspera();
+    limpiarReintento();
+    limpiarLimites();
   };
 
   useEffect(() => {
     montado.current = true;
+    const pendientes = limites.current;
     return () => {
+      // Al cerrar la pantalla se cancela todo sin actualizar nada.
       montado.current = false;
-      if (temporizador.current) {
-        clearTimeout(temporizador.current);
+      ronda.current += 1;
+      if (espera.current) {
+        clearTimeout(espera.current);
       }
-      if (limite.current) {
-        clearTimeout(limite.current);
+      if (reintento.current) {
+        clearTimeout(reintento.current);
       }
+      pendientes.forEach(clearTimeout);
+      pendientes.clear();
     };
   }, []);
 
-  const verificarAhora = (valor: string) => {
-    const email = normalizarCorreo(valor);
-    if (!esCorreoValido(email) || correoConsultado.current === email) {
+  /** La ronda sigue abierta: el correo no cambió, no hay respuesta aún y la pantalla sigue montada. */
+  const vigente = (r: number) => montado.current && r === ronda.current && !resuelta.current;
+
+  const abrirRonda = (email: string | null): number => {
+    limpiarTodo();
+    ronda.current += 1;
+    correoRonda.current = email;
+    resuelta.current = false;
+    resultado.current = null;
+    reintentosHechos.current = 0;
+    return ronda.current;
+  };
+
+  const resolver = (r: number, existe: boolean) => {
+    if (!vigente(r)) {
       return;
     }
-    limpiarTemporizador();
-    correoConsultado.current = email;
-    solicitudCorreo.current += 1;
-    const solicitud = solicitudCorreo.current;
-    setEstadoCorreo('verificando');
-    // Si no responde a tiempo, deja de bloquear. No se incrementa la solicitud ni se libera el correo
-    // consultado: si la respuesta llega tarde y el correo no cambió, se aplica igual.
-    limpiarLimite();
-    limite.current = setTimeout(() => {
-      limite.current = null;
-      if (!montado.current || solicitud !== solicitudCorreo.current) {
+    resuelta.current = true;
+    resultado.current = existe ? 'registrado' : 'disponible';
+    limpiarReintento();
+    limpiarLimites();
+    setEstadoCorreo(resultado.current);
+  };
+
+  /** Sin respuesta (o sin red): programa el siguiente reintento; al agotarse, decide el 409. */
+  const sinRespuesta = (email: string, r: number, estado: 'revisando' | 'sinConexion') => {
+    if (!vigente(r) || reintento.current) {
+      return;
+    }
+    if (reintentosHechos.current >= reintentosCorreo.length) {
+      // Se agotaron: decide el 409. Una respuesta tardía de esta ronda se aplica igual, y
+      // "Continuar" todavía hace un intento más.
+      setEstadoCorreo('sinVerificar');
+      return;
+    }
+    setEstadoCorreo(estado);
+    reintento.current = setTimeout(() => {
+      reintento.current = null;
+      if (!vigente(r)) {
         return;
       }
-      setErrorGeneral((previo) => (previo === ESPERA_VERIFICACION ? null : previo));
-      setEstadoCorreo('sinVerificar');
+      reintentosHechos.current += 1;
+      intentar(email, r).catch(() => {
+        // intentar() ya maneja sus errores.
+      });
+    }, reintentosCorreo[reintentosHechos.current]);
+  };
+
+  /**
+   * Un intento con su propio límite de 6 s. Un error de red antes del límite es "sin conexión"
+   * (sin red, la petición falla de inmediato); después del límite es el corte de 15 s del cliente
+   * y ya hay un reintento programado.
+   */
+  const intentar = (email: string, r: number): Promise<void> => {
+    let vencido = false;
+    const limite = setTimeout(() => {
+      limites.current.delete(limite);
+      vencido = true;
+      sinRespuesta(email, r, 'revisando');
     }, duracion.limiteVerificacionCorreo);
-    verificarCorreo(email)
+    limites.current.add(limite);
+    const terminar = () => {
+      clearTimeout(limite);
+      limites.current.delete(limite);
+    };
+    return verificarCorreo(email)
       .then((respuesta) => {
-        if (!montado.current || solicitud !== solicitudCorreo.current) {
-          return;
-        }
-        limpiarLimite();
-        setErrorGeneral((previo) => (previo === ESPERA_VERIFICACION ? null : previo));
-        if (respuesta?.existe === true) {
-          setEstadoCorreo('registrado');
-        } else if (respuesta?.existe === false) {
-          setEstadoCorreo('disponible');
-        } else {
-          correoConsultado.current = null;
-          setEstadoCorreo('inactivo');
+        terminar();
+        if (typeof respuesta?.existe === 'boolean') {
+          resolver(r, respuesta.existe);
+        } else if (!vencido) {
+          sinRespuesta(email, r, 'revisando');
         }
       })
-      .catch(() => {
-        // Sin red no se bloquea: si el correo existe, el registro responderá 409.
-        if (!montado.current || solicitud !== solicitudCorreo.current) {
+      .catch((error: unknown) => {
+        terminar();
+        if (vencido) {
           return;
         }
-        limpiarLimite();
-        setErrorGeneral((previo) => (previo === ESPERA_VERIFICACION ? null : previo));
-        // Se puede volver a intentar al salir del campo; mientras, no se bloquea el registro.
-        correoConsultado.current = null;
-        setEstadoCorreo('sinVerificar');
+        const estado = estadoHttp(error);
+        if (estado !== null && estado < 500) {
+          // Un 4xx (por ejemplo, 429) no se arregla reintentando: decide el 409 del registro.
+          if (vigente(r)) {
+            // La ronda queda agotada: ningún otro intento en vuelo reinicia la cadena.
+            reintentosHechos.current = reintentosCorreo.length;
+            limpiarReintento();
+            setEstadoCorreo('sinVerificar');
+          }
+          return;
+        }
+        sinRespuesta(email, r, esErrorDeRed(error) ? 'sinConexion' : 'revisando');
       });
   };
 
+  const verificarAhora = (valor: string) => {
+    const email = normalizarCorreo(valor);
+    if (!esCorreoValido(email) || correoRonda.current === email) {
+      return;
+    }
+    const r = abrirRonda(email);
+    setEstadoCorreo('verificando');
+    intentar(email, r).catch(() => {
+      // intentar() ya maneja sus errores.
+    });
+  };
+
   const programarVerificacion = (valor: string) => {
-    limpiarTemporizador();
-    limpiarLimite();
-    solicitudCorreo.current += 1;
-    correoConsultado.current = null;
+    // Otro correo: se cancelan los reintentos de la ronda anterior sin actualizar nada.
+    abrirRonda(null);
     setEstadoCorreo('inactivo');
     if (esCorreoValido(valor)) {
-      temporizador.current = setTimeout(() => verificarAhora(valor), duracion.verificarCorreo);
+      espera.current = setTimeout(() => verificarAhora(valor), duracion.verificarCorreo);
     }
   };
 
+  /** "Continuar" sin respuesta del correo: un intento más con el límite de 6 s. ¿Está registrado? */
+  const verificarAntesDeContinuar = async (valor: string): Promise<boolean> => {
+    const email = normalizarCorreo(valor);
+    let r = ronda.current;
+    if (correoRonda.current !== email) {
+      r = abrirRonda(email);
+      setEstadoCorreo('verificando');
+    }
+    // Este intento ocupa el lugar del reintento que estuviera programado.
+    limpiarReintento();
+    await conLimite(intentar(email, r), duracion.limiteVerificacionCorreo);
+    return r === ronda.current && resultado.current === 'registrado';
+  };
+
+  /** El servidor dijo que el correo ya tiene cuenta (409 del registro). */
+  const marcarRegistrado = (email: string) => {
+    abrirRonda(email);
+    resuelta.current = true;
+    resultado.current = 'registrado';
+    setEstadoCorreo('registrado');
+  };
+
   const cambiar = <K extends CampoRegistro>(campo: K, valor: CamposRegistro[K]) => {
+    cambios.current += 1;
     const nuevos: CamposRegistro = { ...campos, [campo]: valor };
+    if (campo === 'correo') {
+      ultimoCorreo.current = nuevos.correo;
+    }
+    if (campo === 'tieneAlergias' && valor !== true) {
+      // Sin alergias, el detalle y el consentimiento desaparecen y no se envían.
+      nuevos.alergias = '';
+      nuevos.consienteDatosSensibles = false;
+    }
+    if (campo === 'tratamientosQuimicos' && valor !== true) {
+      nuevos.tratamientos = '';
+    }
     setCampos(nuevos);
     const siguientes: ErroresRegistro = { ...errores };
     if (enVivo[campo]) {
       siguientes[campo] = validarCampo(campo, nuevos);
+    }
+    // Pegar en el teléfono (varios dígitos de golpe) se valida al momento: si no quedan 10
+    // dígitos, el error aparece sin esperar a salir del campo.
+    const pegado =
+      campo === 'telefono' && soloDigitos(nuevos.telefono).length - soloDigitos(campos.telefono).length > 1;
+    if (pegado) {
+      siguientes.telefono = validarCampo('telefono', nuevos);
+    }
+    if (campo === 'tieneAlergias' || campo === 'alergias') {
+      siguientes.alergias = enVivo.alergias ? validarCampo('alergias', nuevos) : null;
+      siguientes.consienteDatosSensibles = enVivo.consienteDatosSensibles
+        ? validarCampo('consienteDatosSensibles', nuevos)
+        : null;
+    }
+    if (campo === 'tratamientosQuimicos') {
+      siguientes.tratamientos = enVivo.tratamientos ? validarCampo('tratamientos', nuevos) : null;
     }
     if (campo === 'confirmacion') {
       // Avisa en cuanto lo escrito deja de coincidir con la contraseña.
@@ -326,8 +596,15 @@ export function useRegistroViewModel(): RegistroViewModel {
     if (errorGeneral === REVISA_CAMPOS && !Object.values(siguientes).some(Boolean)) {
       setErrorGeneral(null);
     }
+    const activarEnVivo: Partial<Record<CampoRegistro, boolean>> = {};
     if (campo === 'confirmacion' && siguientes.confirmacion) {
-      setEnVivo((previos) => ({ ...previos, confirmacion: true }));
+      activarEnVivo.confirmacion = true;
+    }
+    if (pegado && siguientes.telefono) {
+      activarEnVivo.telefono = true;
+    }
+    if (Object.keys(activarEnVivo).length > 0) {
+      setEnVivo((previos) => ({ ...previos, ...activarEnVivo }));
     }
     if (campo === 'correo') {
       programarVerificacion(nuevos.correo);
@@ -361,6 +638,17 @@ export function useRegistroViewModel(): RegistroViewModel {
     setEnfoque({ campo, vez: vecesEnfoque.current });
   };
 
+  /** Valida los campos indicados, los deja en vivo y devuelve el primero con error. */
+  const revisar = (lista: CampoRegistro[], valores: CamposRegistro): CampoRegistro | undefined => {
+    const nuevos = validar(lista, valores);
+    setErrores((previos) => ({ ...previos, ...nuevos }));
+    setEnVivo((previos) => ({
+      ...previos,
+      ...Object.fromEntries(lista.map((campo) => [campo, Boolean(nuevos[campo])])),
+    }));
+    return lista.find((campo) => nuevos[campo]);
+  };
+
   const cargarPreguntas = () => {
     if (estadoPreguntas === 'cargando' || estadoPreguntas === 'listo') {
       return;
@@ -387,55 +675,80 @@ export function useRegistroViewModel(): RegistroViewModel {
     });
   };
 
-  const enviar = async () => {
-    if (estadoCorreo === 'verificando') {
-      setErrorGeneral(ESPERA_VERIFICACION);
-      return;
-    }
+  const avanzar = async () => {
     const valores = limpiarTelefono(campos);
-    const nuevos: ErroresRegistro = {};
-    for (const campo of ORDEN) {
-      nuevos[campo] = validarCampo(campo, valores);
-    }
-    setErrores(nuevos);
-    setEnVivo(Object.fromEntries(ORDEN.map((campo) => [campo, Boolean(nuevos[campo])])));
-    setErrorGeneral(null);
-    const correoRegistrado = estadoCorreo === 'registrado';
-    const primero = ORDEN.find((campo) => nuevos[campo] || (campo === 'correo' && correoRegistrado));
-    if (primero || !campos.tipoCabello || !campos.pregunta) {
+    const primero = revisar(PASO_1, valores);
+    if (primero) {
       setErrorGeneral(REVISA_CAMPOS);
-      if (primero) {
-        pedirEnfoque(primero);
-      }
+      pedirEnfoque(primero);
       return;
     }
-    const email = normalizarCorreo(campos.correo);
-    setCargando(true);
-    try {
-      const respuesta = await registrarUsuario({
-        nombre: campos.nombre.trim(),
-        email,
-        telefono: normalizarTelefono(valores.telefono),
-        password: campos.clave,
-        fechaNacimiento: fechaIsoDe(campos.nacimiento),
-        preguntaSeguridad: { pregunta: campos.pregunta.pregunta, respuesta: campos.respuesta.trim() },
-        perfilCapilar: { tipoCabello: campos.tipoCabello },
-        aceptaAvisoPrivacidad: true,
-      });
-      if (respuesta?.success === false) {
-        setErrorGeneral(respuesta.message ?? 'No pudimos crear tu cuenta. Intenta de nuevo.');
+    setErrorGeneral(null);
+    let registrado = estadoCorreo === 'registrado';
+    if (!registrado && estadoCorreo !== 'disponible') {
+      const version = cambios.current;
+      setVerificandoCorreo(true);
+      try {
+        registrado = await verificarAntesDeContinuar(valores.correo);
+      } finally {
+        if (montado.current) {
+          setVerificandoCorreo(false);
+        }
+      }
+      // Si editó algo mientras esperaba, lo validado ya no vale: no avanza bajo sus dedos.
+      if (!montado.current || version !== cambios.current) {
         return;
       }
+    }
+    if (registrado) {
+      // El campo ya muestra "Este correo ya está registrado" con "Iniciar sesión".
+      pedirEnfoque('correo');
+      return;
+    }
+    irAPaso(2);
+  };
+
+  const enviar = async () => {
+    const valores = limpiarTelefono(campos);
+    const primeroCuenta =
+      revisar(PASO_1, valores) ?? (estadoCorreo === 'registrado' ? 'correo' : undefined);
+    if (primeroCuenta) {
+      irAPaso(1);
+      setErrorGeneral(REVISA_CAMPOS);
+      pedirEnfoque(primeroCuenta);
+      return;
+    }
+    const primeroCabello = revisar(PASO_2, valores);
+    if (primeroCabello || !valores.tipoCabello || !valores.pregunta) {
+      setErrorGeneral(REVISA_CAMPOS);
+      if (primeroCabello) {
+        pedirEnfoque(primeroCabello);
+      }
+      return;
+    }
+    setErrorGeneral(null);
+    const email = normalizarCorreo(valores.correo);
+    setCargando(true);
+    try {
+      const respuesta = await registrarUsuario(
+        cuerpoDeRegistro(valores, email, valores.tipoCabello, valores.pregunta),
+      );
+      if (respuesta?.success === false) {
+        setErrorGeneral(respuesta.message ?? NO_PUDIMOS_CREAR);
+        return;
+      }
+      // Los datos de salud ya viajaron: no se conservan ni en memoria.
+      setCampos((previos) => ({ ...previos, alergias: '', consienteDatosSensibles: false }));
       push({ pathname: '/activar', params: { email, enviado: '1' } });
     } catch (error) {
       if (estadoHttp(error) === 409) {
-        // El correo ya tiene cuenta: se muestra en el propio campo, como la verificación.
+        // El correo ya tiene cuenta: se muestra en el propio campo, en el paso 1 (solo si el
+        // campo sigue teniendo el correo que se envió).
         if (montado.current) {
-          limpiarTemporizador();
-          limpiarLimite();
-          solicitudCorreo.current += 1;
-          correoConsultado.current = email;
-          setEstadoCorreo('registrado');
+          if (normalizarCorreo(ultimoCorreo.current) === email) {
+            marcarRegistrado(email);
+          }
+          irAPaso(1);
           setErrorGeneral(REVISA_CAMPOS);
           pedirEnfoque('correo');
         }
@@ -445,6 +758,23 @@ export function useRegistroViewModel(): RegistroViewModel {
     } finally {
       setCargando(false);
     }
+  };
+
+  const candadoPaso = useCandado();
+  const continuar = () => {
+    if (verificandoCorreo) {
+      return;
+    }
+    // Candado inmediato además del estado: avanzar() ya muestra cualquier error en pantalla.
+    candadoPaso(avanzar);
+  };
+
+  const atras = () => {
+    if (cargando) {
+      return;
+    }
+    setErrorGeneral(null);
+    irAPaso(1);
   };
 
   const candado = useCandado();
@@ -462,6 +792,11 @@ export function useRegistroViewModel(): RegistroViewModel {
     salir,
     errores,
     errorGeneral,
+    paso,
+    direccionPaso: navegacion.direccion,
+    continuar,
+    atras,
+    verificandoCorreo,
     cargando,
     estadoCorreo,
     requisitosClave: requisitosDeClave(campos.clave),

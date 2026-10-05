@@ -1,7 +1,20 @@
+import { useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Circle, CircleAlert, CircleCheck, Check, ChevronDown } from 'lucide-react-native';
-import { useEffect, useId, useRef, useState, type ReactNode, type Ref, type RefObject } from 'react';
 import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ReactNode,
+  type Ref,
+  type RefObject,
+} from 'react';
+import {
+  AccessibilityInfo,
+  BackHandler,
   Keyboard,
   KeyboardAvoidingView,
   Modal,
@@ -18,6 +31,9 @@ import {
 } from 'react-native';
 import Animated, {
   Easing,
+  FadeIn,
+  Keyframe,
+  ReduceMotion,
   useAnimatedStyle,
   useSharedValue,
   withSequence,
@@ -46,6 +62,7 @@ import {
   radio,
   tipo,
   hoja,
+  pasoFlujo,
   toqueMinimo,
   tracking,
 } from '@/shared/ui/tokens';
@@ -56,13 +73,13 @@ import {
   TIPOS_CABELLO,
   type PreguntaSeguridad,
   type RequisitoClave,
-  type TipoCabello,
 } from '../models/AuthModel';
 import type { LoginViewModel } from '../viewmodels/useLoginViewModel';
 import type {
   CampoRegistro,
   EstadoCorreo,
   EstadoPreguntas,
+  PasoRegistro,
   RegistroViewModel,
 } from '../viewmodels/useRegistroViewModel';
 
@@ -86,8 +103,38 @@ const ESTADO_CORREO: Record<EstadoCorreo, EstadoCampo | null> = {
   verificando: { tipo: 'verificando', texto: 'Verificando correo…' },
   disponible: { tipo: 'exito', texto: 'Correo disponible' },
   registrado: { tipo: 'error', texto: 'Este correo ya está registrado' },
+  revisando: { tipo: 'aviso', texto: 'Revisando si el correo ya tiene cuenta…' },
+  sinConexion: { tipo: 'aviso', texto: 'Sin conexión. Revisaremos el correo cuando haya red.' },
   sinVerificar: { tipo: 'aviso', texto: 'Se verificará al crear la cuenta.' },
 };
+/**
+ * Líneas que reserva el mensaje del correo: "Sin conexión…" ocupa dos a 360dp, y "ya está
+ * registrado" lleva "Iniciar sesión" en la segunda. Así el formulario no salta.
+ */
+const LINEAS_ESTADO_CORREO = 2;
+
+/** Pasos del registro, como la web. */
+const PASOS: { numero: PasoRegistro; etiqueta: string }[] = [
+  { numero: 1, etiqueta: 'Tu cuenta' },
+  { numero: 2, etiqueta: 'Tu cabello' },
+];
+
+type SiNo = 'si' | 'no';
+const OPCIONES_SI_NO: { valor: SiNo; etiqueta: string }[] = [
+  { valor: 'no', etiqueta: 'No' },
+  { valor: 'si', etiqueta: 'Sí' },
+];
+
+function aSiNo(valor: boolean | null): SiNo | null {
+  if (valor === null) {
+    return null;
+  }
+  return valor ? 'si' : 'no';
+}
+
+/** Texto de la web (CasillaDatosSalud, clienta); "Aviso de Privacidad" es el enlace. */
+const TEXTO_CONSENTIMIENTO_SALUD =
+  'Autorizo el uso de mis datos de salud (alergias y sensibilidad) solo para valorar si un tratamiento es seguro para mí, conforme al';
 const VISTAS: VistaAcceso[] = ['acceso', 'registro'];
 const ETIQUETA_PESTANA: Record<VistaAcceso, string> = { acceso: 'Acceso', registro: 'Registro' };
 
@@ -127,8 +174,11 @@ export function AuthContainer({
     transform: [{ translateX: progreso.get() * anchoPestana }],
   }));
 
+  // Mientras el registro envía o espera la verificación del correo, no se cambia de pestaña.
+  const pestanasBloqueadas = registro.cargando || registro.verificandoCorreo;
+
   const cambiarA = (destino: VistaAcceso) => {
-    if (destino === vista) {
+    if (destino === vista || pestanasBloqueadas) {
       return;
     }
     setVista(destino);
@@ -186,7 +236,7 @@ export function AuthContainer({
               <Pressable
                 key={v}
                 accessibilityRole="tab"
-                accessibilityState={{ selected: activa }}
+                accessibilityState={{ selected: activa, disabled: !activa && pestanasBloqueadas }}
                 onPress={() => cambiarA(v)}
                 style={styles.pestana}
               >
@@ -216,7 +266,12 @@ export function AuthContainer({
               <FormularioAcceso login={login} onRecuperar={onRecuperar} aviso={aviso ?? null} />
             </Panel>
             <Panel ancho={ancho} activo={vista === 'registro'} onLayout={medirVista('registro')}>
-              <FormularioRegistro registro={registro} refScroll={refScroll} onIrAAcceso={irAAcceso} />
+              <FormularioRegistro
+                registro={registro}
+                refScroll={refScroll}
+                onIrAAcceso={irAAcceso}
+                activo={vista === 'registro'}
+              />
             </Panel>
           </Animated.View>
         </View>
@@ -397,37 +452,43 @@ function FormularioRegistro({
   registro,
   refScroll,
   onIrAAcceso,
+  activo,
 }: {
   registro: RegistroViewModel;
   refScroll: RefObject<ScrollView | null>;
   onIrAAcceso: (correo: string) => void;
+  /** La pestaña Registro está a la vista. */
+  activo: boolean;
 }) {
-  const {
-    campos,
-    cambiar,
-    salir,
-    errores,
-    errorGeneral,
-    cargando,
-    estadoCorreo,
-    requisitosClave,
-    avisoDatosPersonales,
-    enfoque,
-    ayudaTelefono,
-    preguntas,
-  } = registro;
+  const { paso, direccionPaso, atras, enfoque } = registro;
   const reducido = useMovimientoReducido();
-  const refNombre = useRef<TextInput>(null);
-  const refCorreo = useRef<TextInput>(null);
-  const refTelefono = useRef<TextInput>(null);
-  const refClave = useRef<TextInput>(null);
-  const refConfirmacion = useRef<TextInput>(null);
-  const refNacimiento = useRef<TextInput>(null);
-  const refRespuesta = useRef<TextInput>(null);
-  const refCabello = useRef<View>(null);
-  const refPregunta = useRef<View>(null);
-  const refAviso = useRef<View>(null);
+  const refIndicador = useRef<View>(null);
+  const refsTexto = useRef<Partial<Record<CampoRegistro, TextInput | null>>>({});
+  const refsBloque = useRef<Partial<Record<CampoRegistro, View | null>>>({});
   const enfoqueAtendido = useRef(0);
+  const pasoAnterior = useRef<PasoRegistro>(paso);
+  // El botón Atrás de Android lee la versión vigente de atras() sin volver a suscribirse.
+  const refAtras = useRef(atras);
+  useEffect(() => {
+    refAtras.current = atras;
+  });
+
+  // Al cambiar de paso, el indicador vuelve a la vista y recibe el foco de TalkBack ("Paso 2 de 2").
+  // Si el cambio trae un pedido de foco (errores del paso 1), manda ese pedido.
+  useEffect(() => {
+    if (pasoAnterior.current === paso) {
+      return;
+    }
+    pasoAnterior.current = paso;
+    if (enfoque && enfoque.vez !== enfoqueAtendido.current) {
+      return;
+    }
+    Keyboard.dismiss();
+    traerALaVista(refIndicador.current, refScroll.current, !reducido);
+    if (refIndicador.current) {
+      AccessibilityInfo.sendAccessibilityEvent(refIndicador.current, 'focus');
+    }
+  }, [paso, enfoque, refScroll, reducido]);
 
   // Al enviar con errores, el foco va al primer campo con error; los que no son de texto se
   // traen a la vista.
@@ -437,104 +498,229 @@ function FormularioRegistro({
       return;
     }
     enfoqueAtendido.current = enfoque.vez;
-    const textos: Partial<Record<CampoRegistro, RefObject<TextInput | null>>> = {
-      nombre: refNombre,
-      correo: refCorreo,
-      telefono: refTelefono,
-      clave: refClave,
-      confirmacion: refConfirmacion,
-      nacimiento: refNacimiento,
-      respuesta: refRespuesta,
-    };
-    const bloques: Partial<Record<CampoRegistro, RefObject<View | null>>> = {
-      tipoCabello: refCabello,
-      pregunta: refPregunta,
-      aceptaAviso: refAviso,
-    };
-    const entrada = textos[enfoque.campo]?.current;
+    const entrada = refsTexto.current[enfoque.campo];
     if (entrada) {
       entrada.focus();
       return;
     }
-    traerALaVista(bloques[enfoque.campo]?.current, refScroll.current, !reducido);
+    traerALaVista(refsBloque.current[enfoque.campo], refScroll.current, !reducido);
   }, [enfoque, refScroll, reducido]);
 
-  // Después de la fecha siguen controles que el teclado no alcanza: se cierra y se trae a la vista
-  // el tipo de cabello.
-  const irACabello = () => {
+  // En el paso 2, el botón Atrás de Android regresa al paso 1 en vez de salir. Solo con la
+  // pantalla enfocada y la pestaña Registro a la vista.
+  useFocusEffect(
+    useCallback(() => {
+      if (!activo || paso !== 2) {
+        return undefined;
+      }
+      // Mientras se envía, atras() no hace nada y la pulsación se consume igual.
+      const suscripcion = BackHandler.addEventListener('hardwareBackPress', () => {
+        refAtras.current();
+        return true;
+      });
+      return () => suscripcion.remove();
+    }, [activo, paso]),
+  );
+
+  const texto = (campo: CampoRegistro) => (instancia: TextInput | null) => {
+    refsTexto.current[campo] = instancia;
+  };
+  const bloqueDe = (campo: CampoRegistro) => (instancia: View | null) => {
+    refsBloque.current[campo] = instancia;
+  };
+  const enfocar = (campo: CampoRegistro) => () => refsTexto.current[campo]?.focus();
+  // Después del campo siguen controles que el teclado no alcanza: se cierra y se trae el bloque.
+  const irABloque = (campo: CampoRegistro) => () => {
     Keyboard.dismiss();
-    traerALaVista(refCabello.current, refScroll.current, !reducido);
+    traerALaVista(refsBloque.current[campo], refScroll.current, !reducido);
   };
 
-  const errorCorreo = errores.correo ?? null;
+  const entrada = reducido
+    ? FadeIn.duration(duracion.pestana).reduceMotion(ReduceMotion.Never)
+    : new Keyframe({
+        // De la derecha al avanzar, de la izquierda al volver.
+        0: { opacity: 0, transform: [{ translateX: direccionPaso * espacio.xxl }] },
+        100: { opacity: 1, transform: [{ translateX: 0 }], easing: EASE_SALIDA },
+      }).duration(duracion.pestana);
+
+  const ref = { texto, bloqueDe, enfocar, irABloque };
+
+  return (
+    <>
+      <Encabezado titulo="Crea tu cuenta" texto="Reserva tus citas y compra en la tienda del salón." />
+      <IndicadorPasos paso={paso} refIndicador={refIndicador} />
+      <Animated.View key={paso} entering={entrada} style={styles.paso}>
+        {paso === 1 ? (
+          <PasoCuenta registro={registro} refs={ref} onIrAAcceso={onIrAAcceso} />
+        ) : (
+          <PasoCabello registro={registro} refs={ref} />
+        )}
+      </Animated.View>
+    </>
+  );
+}
+
+interface RefsRegistro {
+  texto: (campo: CampoRegistro) => (instancia: TextInput | null) => void;
+  bloqueDe: (campo: CampoRegistro) => (instancia: View | null) => void;
+  enfocar: (campo: CampoRegistro) => () => void;
+  irABloque: (campo: CampoRegistro) => () => void;
+}
+
+/**
+ * Indicador "1 Tu cuenta — 2 Tu cabello", como la web: el paso actual en vino con anillo de oro,
+ * el hecho en vino con palomita y el pendiente solo con contorno.
+ */
+function IndicadorPasos({ paso, refIndicador }: { paso: PasoRegistro; refIndicador: Ref<View> }) {
+  const { colores } = useTheme();
+  const actual = PASOS[paso - 1];
+  return (
+    <View
+      ref={refIndicador}
+      accessible
+      accessibilityRole="header"
+      accessibilityLabel={`Paso ${actual.numero} de ${PASOS.length}: ${actual.etiqueta}`}
+      style={styles.pasos}
+    >
+      {PASOS.map((item, indice) => {
+        const hecho = item.numero < paso;
+        const esActual = item.numero === paso;
+        const marcado = hecho || esActual;
+        return (
+          <Fragment key={item.numero}>
+            {indice > 0 ? (
+              <View
+                style={[styles.conectorPaso, { backgroundColor: marcado ? colores.foco : colores.hairline }]}
+              />
+            ) : null}
+            <View style={styles.itemPaso}>
+              <View
+                style={[
+                  styles.circuloPaso,
+                  marcado
+                    ? {
+                        backgroundColor: colores.accion,
+                        borderColor: esActual ? colores.oro : colores.accion,
+                        borderWidth: borde.indicador,
+                      }
+                    : { borderColor: colores.textoSuave, borderWidth: borde.campo },
+                ]}
+              >
+                {hecho ? (
+                  <Check color={colores.textoSobreAccion} size={icono.tamanoPequeno} strokeWidth={icono.trazoMarca} />
+                ) : (
+                  <Text
+                    style={[styles.numeroPaso, { color: marcado ? colores.textoSobreAccion : colores.textoSuave }]}
+                  >
+                    {item.numero}
+                  </Text>
+                )}
+              </View>
+              <Text
+                style={[
+                  styles.etiquetaPaso,
+                  { color: marcado ? colores.texto : colores.textoSuave },
+                  esActual ? styles.etiquetaPasoActual : null,
+                ]}
+              >
+                {item.etiqueta}
+              </Text>
+            </View>
+          </Fragment>
+        );
+      })}
+    </View>
+  );
+}
+
+/** Paso 1, "Tu cuenta": nombre, correo, teléfono, fecha, pregunta, respuesta y contraseña. */
+function PasoCuenta({
+  registro,
+  refs,
+  onIrAAcceso,
+}: {
+  registro: RegistroViewModel;
+  refs: RefsRegistro;
+  onIrAAcceso: (correo: string) => void;
+}) {
+  const {
+    campos,
+    cambiar,
+    salir,
+    errores,
+    errorGeneral,
+    estadoCorreo,
+    requisitosClave,
+    avisoDatosPersonales,
+    ayudaTelefono,
+    preguntas,
+    verificandoCorreo,
+    continuar,
+  } = registro;
+
   // Si falta un requisito de la lista (son las primeras reglas de problemaDeClave), se marca
   // en la propia lista en lugar de repetirlo en rojo; el texto queda para las demás reglas.
   const faltanRequisitos = requisitosClave.some((requisito) => !requisito.cumplido);
   const marcarFaltantes = Boolean(errores.clave) && faltanRequisitos;
   const errorClave = marcarFaltantes ? null : (errores.clave ?? null);
-  const correoRegistrado = !errorCorreo && estadoCorreo === 'registrado';
+  const estadoDelCorreo: EstadoCampo | null =
+    estadoCorreo === 'registrado'
+      ? {
+          tipo: 'error',
+          texto: 'Este correo ya está registrado',
+          accion: { texto: 'Iniciar sesión', onPress: () => onIrAAcceso(campos.correo.trim()) },
+        }
+      : ESTADO_CORREO[estadoCorreo];
 
   return (
     <>
-      <Encabezado titulo="Crea tu cuenta" texto="Reserva tus citas y compra en la tienda del salón." />
       <Input
-        ref={refNombre}
+        ref={refs.texto('nombre')}
         etiqueta="Nombre completo"
         tipo="nombre"
         valor={campos.nombre}
         onCambiar={(t) => cambiar('nombre', t)}
         onSalir={() => salir('nombre')}
-        siguiente={() => refCorreo.current?.focus()}
+        siguiente={refs.enfocar('correo')}
         error={errores.nombre}
       />
       <Input
-        ref={refCorreo}
+        ref={refs.texto('correo')}
         etiqueta="Correo electrónico"
         tipo="correo"
         valor={campos.correo}
         onCambiar={(t) => cambiar('correo', t)}
         onSalir={() => salir('correo')}
-        siguiente={() => refTelefono.current?.focus()}
+        siguiente={refs.enfocar('telefono')}
         placeholder="tu@correo.com"
-        error={errorCorreo}
-        estado={ESTADO_CORREO[estadoCorreo]}
-        reservarMensaje
-        debajo={
-          correoRegistrado ? (
-            <Enlace texto="Iniciar sesión" onPress={() => onIrAAcceso(campos.correo.trim())} />
-          ) : null
-        }
+        error={errores.correo ?? null}
+        estado={estadoDelCorreo}
+        lineasReservadas={LINEAS_ESTADO_CORREO}
       />
       <Input
-        ref={refTelefono}
+        ref={refs.texto('telefono')}
         etiqueta="Teléfono"
         tipo="telefono"
         valor={campos.telefono}
         onCambiar={(t) => cambiar('telefono', t)}
         onSalir={() => salir('telefono')}
-        siguiente={() => refNacimiento.current?.focus()}
+        siguiente={refs.enfocar('nacimiento')}
         ayuda={ayudaTelefono}
         error={errores.telefono}
       />
       <Input
-        ref={refNacimiento}
+        ref={refs.texto('nacimiento')}
         etiqueta="Fecha de nacimiento"
         tipo="fecha"
         valor={campos.nacimiento}
         onCambiar={(t) => cambiar('nacimiento', t)}
         onSalir={() => salir('nacimiento')}
-        siguiente={irACabello}
+        siguiente={refs.irABloque('pregunta')}
         placeholder="DD/MM/AAAA"
         error={errores.nacimiento}
       />
-      <OpcionesCabello
-        refContenedor={refCabello}
-        valor={campos.tipoCabello}
-        onElegir={(v) => cambiar('tipoCabello', v)}
-        error={errores.tipoCabello ?? null}
-      />
       <Selector
-        refContenedor={refPregunta}
+        refContenedor={refs.bloqueDe('pregunta')}
         etiqueta="Pregunta de seguridad"
         placeholder="Elige una pregunta"
         valor={campos.pregunta}
@@ -545,22 +731,22 @@ function FormularioRegistro({
         error={errores.pregunta ?? null}
       />
       <Input
-        ref={refRespuesta}
+        ref={refs.texto('respuesta')}
         etiqueta="Respuesta de seguridad"
         valor={campos.respuesta}
         onCambiar={(t) => cambiar('respuesta', t)}
         onSalir={() => salir('respuesta')}
-        siguiente={() => refClave.current?.focus()}
+        siguiente={refs.enfocar('clave')}
         error={errores.respuesta}
       />
       <Input
-        ref={refClave}
+        ref={refs.texto('clave')}
         etiqueta="Contraseña"
         tipo="claveNueva"
         valor={campos.clave}
         onCambiar={(t) => cambiar('clave', t)}
         onSalir={() => salir('clave')}
-        siguiente={() => refConfirmacion.current?.focus()}
+        siguiente={refs.enfocar('confirmacion')}
         error={errorClave}
         estado={marcarFaltantes ? { tipo: 'error', texto: 'Te faltan requisitos de la contraseña.' } : null}
         debajo={
@@ -572,30 +758,150 @@ function FormularioRegistro({
         }
       />
       <Input
-        ref={refConfirmacion}
+        ref={refs.texto('confirmacion')}
         etiqueta="Confirmar contraseña"
         tipo="claveNueva"
         valor={campos.confirmacion}
         onCambiar={(t) => cambiar('confirmacion', t)}
         onSalir={() => salir('confirmacion')}
-        alEnviar={registro.crearCuenta}
+        alEnviar={continuar}
         error={errores.confirmacion}
       />
-      <View ref={refAviso}>
+      <Aviso tipo="error" texto={errorGeneral} />
+      <Button
+        titulo={verificandoCorreo ? 'Verificando correo…' : 'Continuar'}
+        onPress={continuar}
+        cargando={verificandoCorreo}
+      />
+    </>
+  );
+}
+
+/**
+ * Paso 2, "Tu cabello": perfil capilar, alergias (con consentimiento de datos de salud),
+ * tratamientos, aviso de privacidad y promociones. Textos de la web.
+ */
+function PasoCabello({ registro, refs }: { registro: RegistroViewModel; refs: RefsRegistro }) {
+  const { colores } = useTheme();
+  const { campos, cambiar, salir, errores, errorGeneral, cargando, atras, abrirAviso, crearCuenta } =
+    registro;
+  const enlaceAviso = {
+    texto: 'Aviso de Privacidad',
+    accion: 'Abrir el Aviso de Privacidad',
+    onPress: abrirAviso,
+  };
+
+  return (
+    <>
+      <Text accessibilityRole="header" style={[styles.subtituloPaso, { color: colores.texto }]}>
+        Cuéntanos sobre tu cabello
+      </Text>
+      <Opciones
+        refContenedor={refs.bloqueDe('tipoCabello')}
+        etiqueta="Tipo de cabello"
+        opciones={TIPOS_CABELLO}
+        valor={campos.tipoCabello}
+        onElegir={(v) => cambiar('tipoCabello', v)}
+        error={errores.tipoCabello ?? null}
+      />
+      <Input
+        ref={refs.texto('colorNatural')}
+        etiqueta="Color natural (opcional)"
+        valor={campos.colorNatural}
+        onCambiar={(t) => cambiar('colorNatural', t)}
+        siguiente={refs.enfocar('colorActual')}
+        placeholder="Ej. Castaño oscuro"
+      />
+      <Input
+        ref={refs.texto('colorActual')}
+        etiqueta="Color actual (opcional)"
+        valor={campos.colorActual}
+        onCambiar={(t) => cambiar('colorActual', t)}
+        siguiente={refs.enfocar('productosUsados')}
+        placeholder="Ej. Rubio cenizo"
+      />
+      <Input
+        ref={refs.texto('productosUsados')}
+        etiqueta="Productos usados (opcional)"
+        valor={campos.productosUsados}
+        onCambiar={(t) => cambiar('productosUsados', t)}
+        siguiente={refs.irABloque('tieneAlergias')}
+        placeholder="Ej. Shampoo sin sulfatos"
+      />
+      <Opciones
+        refContenedor={refs.bloqueDe('tieneAlergias')}
+        etiqueta="¿Tienes alergias a productos?"
+        opciones={OPCIONES_SI_NO}
+        valor={aSiNo(campos.tieneAlergias)}
+        onElegir={(v) => cambiar('tieneAlergias', v === 'si')}
+        error={errores.tieneAlergias ?? null}
+      />
+      {campos.tieneAlergias ? (
+        <>
+          <Input
+            ref={refs.texto('alergias')}
+            etiqueta="Especifica tus alergias"
+            tipo="sensible"
+            valor={campos.alergias}
+            onCambiar={(t) => cambiar('alergias', t)}
+            onSalir={() => salir('alergias')}
+            siguiente={refs.irABloque('consienteDatosSensibles')}
+            error={errores.alergias}
+          />
+          <View ref={refs.bloqueDe('consienteDatosSensibles')}>
+            <Casilla
+              marcada={campos.consienteDatosSensibles}
+              onCambiar={(v) => cambiar('consienteDatosSensibles', v)}
+              texto={TEXTO_CONSENTIMIENTO_SALUD}
+              enlace={enlaceAviso}
+              error={errores.consienteDatosSensibles ?? null}
+            />
+          </View>
+        </>
+      ) : null}
+      <Opciones
+        refContenedor={refs.bloqueDe('tratamientosQuimicos')}
+        etiqueta="¿Tratamientos químicos previos?"
+        opciones={OPCIONES_SI_NO}
+        valor={aSiNo(campos.tratamientosQuimicos)}
+        onElegir={(v) => cambiar('tratamientosQuimicos', v === 'si')}
+        error={errores.tratamientosQuimicos ?? null}
+      />
+      {campos.tratamientosQuimicos ? (
+        <Input
+          ref={refs.texto('tratamientos')}
+          etiqueta="Especifica los tratamientos"
+          valor={campos.tratamientos}
+          onCambiar={(t) => cambiar('tratamientos', t)}
+          onSalir={() => salir('tratamientos')}
+          siguiente={refs.irABloque('aceptaAviso')}
+          error={errores.tratamientos}
+        />
+      ) : null}
+      <View ref={refs.bloqueDe('aceptaAviso')}>
         <Casilla
           marcada={campos.aceptaAviso}
           onCambiar={(v) => cambiar('aceptaAviso', v)}
-          texto="Acepto el aviso de privacidad"
+          texto="Acepto el"
+          enlace={enlaceAviso}
           error={errores.aceptaAviso ?? null}
         />
-        <Enlace texto="Leer el aviso de privacidad" onPress={registro.abrirAviso} />
+        <Casilla
+          marcada={campos.recibePromociones}
+          onCambiar={(v) => cambiar('recibePromociones', v)}
+          texto="Deseo recibir promociones"
+          error={null}
+        />
       </View>
       <Aviso tipo="error" texto={errorGeneral} />
-      <Button
-        titulo={cargando ? 'Creando cuenta…' : 'Crear cuenta'}
-        onPress={registro.crearCuenta}
-        cargando={cargando}
-      />
+      <View style={styles.botonesPaso}>
+        <Button
+          titulo={cargando ? 'Registrando…' : 'Finalizar registro'}
+          onPress={crearCuenta}
+          cargando={cargando}
+        />
+        <Button titulo="Atrás" variante="secundario" onPress={atras} deshabilitado={cargando} />
+      </View>
     </>
   );
 }
@@ -697,16 +1003,20 @@ function Requisito({
   );
 }
 
-/** Tipo de cabello obligatorio: tres opciones excluyentes. */
-function OpcionesCabello({
+/** Opciones excluyentes en pastillas (tipo de cabello, Sí/No). */
+function Opciones<T extends string>({
   refContenedor,
+  etiqueta,
+  opciones,
   valor,
   onElegir,
   error,
 }: {
   refContenedor?: Ref<View>;
-  valor: TipoCabello | null;
-  onElegir: (valor: TipoCabello) => void;
+  etiqueta: string;
+  opciones: readonly { valor: T; etiqueta: string }[];
+  valor: T | null;
+  onElegir: (valor: T) => void;
   error: string | null;
 }) {
   const { colores } = useTheme();
@@ -714,10 +1024,10 @@ function OpcionesCabello({
   return (
     <View ref={refContenedor} style={styles.campo}>
       <Text nativeID={`${id}-etiqueta`} style={[styles.etiqueta, { color: colores.texto }]}>
-        Tipo de cabello
+        {etiqueta}
       </Text>
       <View accessibilityRole="radiogroup" accessibilityLabelledBy={`${id}-etiqueta`} style={styles.opcionesCabello}>
-        {TIPOS_CABELLO.map((opcion) => {
+        {opciones.map((opcion) => {
           const elegida = opcion.valor === valor;
           let colorBorde = colores.campoBorde;
           if (elegida) {
@@ -729,6 +1039,7 @@ function OpcionesCabello({
             <Pressable
               key={opcion.valor}
               accessibilityRole="radio"
+              accessibilityLabel={`${etiqueta}: ${opcion.etiqueta}`}
               accessibilityState={{ checked: elegida }}
               onPress={() => onElegir(opcion.valor)}
               style={[
@@ -1009,16 +1320,21 @@ function ContenidoSelector({
   );
 }
 
-/** Casilla de verificación hecha con Pressable. */
+/**
+ * Casilla de verificación hecha con Pressable. Con enlace, el texto termina en un enlace (como en
+ * la web); tocarlo abre el enlace sin marcar la casilla, y TalkBack lo ofrece como acción.
+ */
 function Casilla({
   marcada,
   onCambiar,
   texto,
+  enlace,
   error,
 }: {
   marcada: boolean;
   onCambiar: (marcada: boolean) => void;
   texto: string;
+  enlace?: { texto: string; accion: string; onPress: () => void };
   error: string | null;
 }) {
   const { colores } = useTheme();
@@ -1033,6 +1349,12 @@ function Casilla({
       <Pressable
         accessibilityRole="checkbox"
         accessibilityState={{ checked: marcada }}
+        accessibilityActions={enlace ? [{ name: 'abrirEnlace', label: enlace.accion }] : undefined}
+        onAccessibilityAction={(evento) => {
+          if (evento.nativeEvent.actionName === 'abrirEnlace') {
+            enlace?.onPress();
+          }
+        }}
         onPress={() => onCambiar(!marcada)}
         style={styles.filaCasilla}
       >
@@ -1049,7 +1371,17 @@ function Casilla({
             <Check color={colores.textoSobreAccion} size={icono.tamanoPequeno} strokeWidth={icono.trazoMarca} />
           ) : null}
         </View>
-        <Text style={[styles.texto, styles.textoCasilla, { color: colores.texto }]}>{texto}</Text>
+        <Text style={[styles.texto, styles.textoCasilla, { color: colores.texto }]}>
+          {texto}
+          {enlace ? (
+            <>
+              {' '}
+              <Text onPress={enlace.onPress} style={[styles.enlaceEnTexto, { color: colores.enlace }]}>
+                {enlace.texto}
+              </Text>
+            </>
+          ) : null}
+        </Text>
       </Pressable>
       <MensajeCampo error={error} />
     </View>
@@ -1288,6 +1620,57 @@ const styles = StyleSheet.create({
   },
   fueraDeFlujo: {
     position: 'absolute',
+  },
+  paso: {
+    gap: espacio.xl,
+  },
+  pasos: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: espacio.s,
+  },
+  itemPaso: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: espacio.s,
+  },
+  conectorPaso: {
+    flex: 1,
+    height: borde.hairline,
+  },
+  circuloPaso: {
+    width: pasoFlujo.circulo,
+    height: pasoFlujo.circulo,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radio.pastilla,
+  },
+  numeroPaso: {
+    fontFamily: fuente.textoFuerte,
+    fontSize: tipo.pequeno.tamano,
+    lineHeight: tipo.pequeno.linea,
+    fontVariant: ['tabular-nums'],
+  },
+  etiquetaPaso: {
+    fontFamily: fuente.texto,
+    fontSize: tipo.pequeno.tamano,
+    lineHeight: tipo.pequeno.linea,
+  },
+  etiquetaPasoActual: {
+    fontFamily: fuente.textoMedio,
+  },
+  subtituloPaso: {
+    fontFamily: fuente.titulo,
+    fontSize: tipo.subtitulo.tamano,
+    lineHeight: tipo.subtitulo.linea,
+    letterSpacing: tracking.titulo,
+  },
+  enlaceEnTexto: {
+    fontFamily: fuente.textoMedio,
+    textDecorationLine: 'underline',
+  },
+  botonesPaso: {
+    gap: espacio.m,
   },
   requisito: {
     flexDirection: 'row',
