@@ -9,11 +9,17 @@ export default function HomeScreen() {
 
   useEffect(() => {
     let active = true;
-    checkHealth().then((ok) => {
-      if (active) {
-        setBackendOk(ok);
-      }
-    });
+    checkHealth()
+      .then((ok) => {
+        if (active) {
+          setBackendOk(ok);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setBackendOk(false);
+        }
+      });
     return () => {
       active = false;
     };
