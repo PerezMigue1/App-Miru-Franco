@@ -783,8 +783,18 @@ function PasoCuenta({
  */
 function PasoCabello({ registro, refs }: { registro: RegistroViewModel; refs: RefsRegistro }) {
   const { colores } = useTheme();
-  const { campos, cambiar, salir, errores, errorGeneral, cargando, atras, abrirAviso, crearCuenta } =
-    registro;
+  const {
+    campos,
+    cambiar,
+    salir,
+    errores,
+    errorGeneral,
+    cargando,
+    atras,
+    abrirAviso,
+    abrirTerminos,
+    crearCuenta,
+  } = registro;
   const enlaceAviso = {
     texto: 'Aviso de Privacidad',
     accion: 'Abrir el Aviso de Privacidad',
@@ -902,6 +912,7 @@ function PasoCabello({ registro, refs }: { registro: RegistroViewModel; refs: Re
         />
         <Button titulo="Atrás" variante="secundario" onPress={atras} deshabilitado={cargando} />
       </View>
+      <LeyendaTerminos onPress={abrirTerminos} />
     </>
   );
 }
@@ -1000,6 +1011,31 @@ function Requisito({
         {etiqueta}
       </Text>
     </View>
+  );
+}
+
+/**
+ * "Al crear tu cuenta aceptas los Términos y Condiciones", como la web. Toda la línea es el enlace:
+ * así el área táctil llega a 48dp aunque el texto ocupe dos renglones.
+ */
+function LeyendaTerminos({ onPress }: { onPress: () => void }) {
+  const { colores } = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="link"
+      accessibilityLabel="Al crear tu cuenta aceptas los Términos y Condiciones"
+      accessibilityHint="Se abre en el navegador"
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.leyenda,
+        { backgroundColor: pressed ? colores.presionado : 'transparent' },
+      ]}
+    >
+      <Text style={[styles.textoLeyenda, { color: colores.textoSuave }]}>
+        Al crear tu cuenta aceptas los{' '}
+        <Text style={[styles.enlaceEnTexto, { color: colores.enlace }]}>Términos y Condiciones</Text>
+      </Text>
+    </Pressable>
   );
 }
 
@@ -1671,6 +1707,18 @@ const styles = StyleSheet.create({
   },
   botonesPaso: {
     gap: espacio.m,
+  },
+  leyenda: {
+    minHeight: toqueMinimo,
+    justifyContent: 'center',
+    paddingHorizontal: espacio.xs,
+    borderRadius: radio.campo,
+  },
+  textoLeyenda: {
+    textAlign: 'center',
+    fontFamily: fuente.texto,
+    fontSize: tipo.pequeno.tamano,
+    lineHeight: tipo.pequeno.linea,
   },
   requisito: {
     flexDirection: 'row',

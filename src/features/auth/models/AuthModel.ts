@@ -355,10 +355,10 @@ export const AVISO_DATOS_PERSONALES_CLAVE =
   'No incluyas tu nombre, tu correo, tu teléfono, tu año de nacimiento ni tu respuesta de seguridad.';
 
 /**
- * Enlace al aviso de privacidad en el sitio web (EXPO_PUBLIC_WEB_URL), o null si no está
- * configurado o no usa https (en desarrollo se permite http).
+ * Página del sitio web (EXPO_PUBLIC_WEB_URL más la ruta), o null si no está configurado o no usa
+ * https (en desarrollo se permite http).
  */
-export function urlAvisoPrivacidad(): string | null {
+function urlDelSitio(ruta: string): string | null {
   const base = process.env.EXPO_PUBLIC_WEB_URL?.trim();
   if (!base || !esUrlPermitida(base)) {
     return null;
@@ -367,7 +367,17 @@ export function urlAvisoPrivacidad(): string | null {
   while (fin > 0 && base[fin - 1] === '/') {
     fin--;
   }
-  return `${base.slice(0, fin)}/aviso-de-privacidad`;
+  return `${base.slice(0, fin)}${ruta}`;
+}
+
+/** Aviso de privacidad en el sitio web. */
+export function urlAvisoPrivacidad(): string | null {
+  return urlDelSitio('/aviso-de-privacidad');
+}
+
+/** Términos y condiciones en el sitio web. */
+export function urlTerminos(): string | null {
+  return urlDelSitio('/terminos-y-condiciones');
 }
 
 export function problemaDeNombre(nombre: string): string | null {

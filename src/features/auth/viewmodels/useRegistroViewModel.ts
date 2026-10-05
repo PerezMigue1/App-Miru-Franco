@@ -32,6 +32,7 @@ import {
   requiereConsentimiento,
   requisitosDeClave,
   urlAvisoPrivacidad,
+  urlTerminos,
   type DatosRegistro,
   type PreguntaSeguridad,
   type RequisitoClave,
@@ -117,6 +118,8 @@ export interface RegistroViewModel {
   ayudaTelefono: string;
   preguntas: { estado: EstadoPreguntas; lista: PreguntaSeguridad[]; cargar: () => void };
   abrirAviso: () => void;
+  /** Abre los Términos y Condiciones del sitio en el navegador. */
+  abrirTerminos: () => void;
   /** Paso 2: "Finalizar registro". */
   crearCuenta: () => void;
 }
@@ -664,15 +667,23 @@ export function useRegistroViewModel(): RegistroViewModel {
       });
   };
 
-  const abrirAviso = () => {
-    const url = urlAvisoPrivacidad();
+  /** Abre una página del sitio en el navegador; si no se puede, lo dice en el aviso general. */
+  const abrirPagina = (url: string | null, error: string) => {
     if (!url) {
-      setErrorGeneral('No pudimos abrir el aviso de privacidad.');
+      setErrorGeneral(error);
       return;
     }
     openBrowserAsync(url).catch(() => {
-      setErrorGeneral('No pudimos abrir el aviso de privacidad.');
+      setErrorGeneral(error);
     });
+  };
+
+  const abrirAviso = () => {
+    abrirPagina(urlAvisoPrivacidad(), 'No pudimos abrir el aviso de privacidad.');
+  };
+
+  const abrirTerminos = () => {
+    abrirPagina(urlTerminos(), 'No pudimos abrir los términos y condiciones.');
   };
 
   const avanzar = async () => {
@@ -805,6 +816,7 @@ export function useRegistroViewModel(): RegistroViewModel {
     ayudaTelefono: AYUDA_TELEFONO,
     preguntas: { estado: estadoPreguntas, lista: listaPreguntas, cargar: cargarPreguntas },
     abrirAviso,
+    abrirTerminos,
     crearCuenta,
   };
 }
