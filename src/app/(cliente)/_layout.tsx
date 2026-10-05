@@ -8,7 +8,7 @@ import {
   UserRound,
   type LucideIcon,
 } from 'lucide-react-native';
-import { Easing, type ColorValue } from 'react-native';
+import { Easing, Text, type ColorValue } from 'react-native';
 
 import { borde, curva, duracion, fuente, icono, pestanas, tipo } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
@@ -54,11 +54,23 @@ export default function ClienteLayout() {
             borderTopWidth: borde.hairline,
           },
           tabBarItemStyle: { minHeight: pestanas.altoItem, paddingVertical: pestanas.relleno },
-          tabBarLabelStyle: {
-            fontFamily: fuente.textoMedio,
-            fontSize: tipo.pestana.tamano,
-            lineHeight: tipo.pestana.linea,
-          },
+          // Una sola línea: si el sistema agranda la fuente, la etiqueta se encoge en lugar de cortarse.
+          tabBarLabel: ({ color, focused, children }) => (
+            <Text
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={pestanas.escalaMinimaEtiqueta}
+              style={{
+                color,
+                // La pestaña activa no depende solo del color: también sube de peso.
+                fontFamily: focused ? fuente.textoFuerte : fuente.textoMedio,
+                fontSize: tipo.pestana.tamano,
+                lineHeight: tipo.pestana.linea,
+              }}
+            >
+              {children}
+            </Text>
+          ),
         }}
       >
         <Tabs.Screen name="inicio" options={{ title: 'Inicio', tabBarIcon: iconoInicio }} />

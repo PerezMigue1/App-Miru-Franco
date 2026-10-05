@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { memo, useEffect } from 'react';
 import { StyleSheet } from 'react-native';
 import Animated, {
   Easing,
@@ -28,7 +28,7 @@ interface StickerProps {
  * Sticker vectorial troquelado (borde de papel crema) en la paleta de la marca. Aparece escalonado
  * 60 ms desde escala 0.9; con movimiento reducido ya está en su lugar. Decorativo.
  */
-export function Sticker({ motivo, indice, reducido }: StickerProps) {
+export const Sticker = memo(function Sticker({ motivo, indice, reducido }: StickerProps) {
   const entrada = useSharedValue(reducido ? 1 : 0);
 
   useEffect(() => {
@@ -126,7 +126,7 @@ export function Sticker({ motivo, indice, reducido }: StickerProps) {
       </Svg>
     </Animated.View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   sticker: {

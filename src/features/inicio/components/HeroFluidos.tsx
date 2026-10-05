@@ -1,9 +1,8 @@
 import { Image } from 'expo-image';
 import { DeviceMotion } from 'expo-sensors';
 import { ArrowRight } from 'lucide-react-native';
-import { useEffect, useState, type ReactNode } from 'react';
+import { memo, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
-  Image as ImagenNativa,
   PixelRatio,
   StyleSheet,
   Text,
@@ -17,18 +16,17 @@ import Animated, {
   Extrapolation,
   clamp,
   interpolate,
-  useAnimatedReaction,
   useAnimatedStyle,
   useDerivedValue,
   useSharedValue,
   withTiming,
+  type DerivedValue,
   type SharedValue,
 } from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
-import { scheduleOnRN } from 'react-native-worklets';
 
 import { Button } from '@/shared/ui/Button';
+import { Skeleton } from '@/shared/ui/Skeleton';
 import {
   borde,
   capaHero,
@@ -50,8 +48,7 @@ import {
 import { useTheme } from '@/shared/ui/useTheme';
 
 import { CAPAS, ORDEN_CAPAS, type ClaveFluido, type FluidoHero } from '../models/FluidoModel';
-import { EsqueletoPulso } from './GaleriaTrabajo';
-import { MOTIVOS, Sticker } from './StickersSalon';
+import { MOTIVOS, Sticker, type Motivo } from './StickersSalon';
 
 /** Renders propios de la marca (no las imágenes del API), en dos tamaños. */
 const RENDERS: Record<ClaveFluido, { chico: number; grande: number }> = {
@@ -73,37 +70,27 @@ const RENDERS: Record<ClaveFluido, { chico: number; grande: number }> = {
   },
 };
 
-/** Secuencia de giro del Fluido Di Goji (24 cuadros). */
+/** Secuencia de giro del Fluido Di Goji: 12 cuadros (los pares de la secuencia original). */
 const GIRO: number[] = [
   require('@/assets/images/hero/giro-00.webp'),
-  require('@/assets/images/hero/giro-01.webp'),
   require('@/assets/images/hero/giro-02.webp'),
-  require('@/assets/images/hero/giro-03.webp'),
   require('@/assets/images/hero/giro-04.webp'),
-  require('@/assets/images/hero/giro-05.webp'),
   require('@/assets/images/hero/giro-06.webp'),
-  require('@/assets/images/hero/giro-07.webp'),
   require('@/assets/images/hero/giro-08.webp'),
-  require('@/assets/images/hero/giro-09.webp'),
   require('@/assets/images/hero/giro-10.webp'),
-  require('@/assets/images/hero/giro-11.webp'),
   require('@/assets/images/hero/giro-12.webp'),
-  require('@/assets/images/hero/giro-13.webp'),
   require('@/assets/images/hero/giro-14.webp'),
-  require('@/assets/images/hero/giro-15.webp'),
   require('@/assets/images/hero/giro-16.webp'),
-  require('@/assets/images/hero/giro-17.webp'),
   require('@/assets/images/hero/giro-18.webp'),
-  require('@/assets/images/hero/giro-19.webp'),
   require('@/assets/images/hero/giro-20.webp'),
-  require('@/assets/images/hero/giro-21.webp'),
   require('@/assets/images/hero/giro-22.webp'),
-  require('@/assets/images/hero/giro-23.webp'),
 ];
 
 const EASE_SALIDA = Easing.bezier(...curva.salida);
 const CURVA_VIAJE = Easing.bezierFn(...curva.entradaSalida);
 const GRADOS_A_RADIANES = Math.PI / 180;
+/** Suavizado del parallax: cada lectura del giroscopio se alcanza en este tiempo, en el hilo de UI. */
+const AMORTIGUADO = { duration: duracion.parallax, easing: EASE_SALIDA };
 
 interface HeroFluidosProps {
   fluidos: FluidoHero[];
@@ -112,6 +99,8 @@ interface HeroFluidosProps {
   desplazamiento: SharedValue<number>;
   /** Alto visible del ScrollView (pantalla sin la barra de pestañas). */
   altoVisible: number;
+  /** Alto de la cabecera fija de Inicio (incluye la barra de estado): el escenario queda bajo ella. */
+  altoCabecera: number;
   /** La pestaña Inicio está enfocada: solo entonces se escucha el giroscopio. */
   enfocada: boolean;
   reducido: boolean;
@@ -133,7 +122,7 @@ interface Viaje {
  * Hero de fluidos (DESIGN.md, piezas de marca): los cuatro fluidos AVYNA flotan en capas con
  * parallax amortiguado que sigue la inclinación del teléfono y el scroll, con stickers que
  * aparecen escalonados. Al hacer scroll el escenario queda fijo y el Fluido Di Goji viaja girando
- * (24 cuadros) hasta quedar junto a la tipografía grande. Con movimiento reducido todo queda en su
+ * (12 cuadros) hasta quedar junto a la tipografía grande. Con movimiento reducido todo queda en su
  * composición estática.
  */
 export function HeroFluidos({
@@ -141,25 +130,30 @@ export function HeroFluidos({
   cargando,
   desplazamiento,
   altoVisible,
+  altoCabecera,
   enfocada,
   reducido,
   onVerGoji,
 }: HeroFluidosProps) {
   const { colores } = useTheme();
-  const { top } = useSafeAreaInsets();
+  const top = altoCabecera;
   const altoEscenario = altoVisible - top;
   const recorrido = reducido ? 0 : altoVisible * hero.recorrido;
   const altoAncla = altoEscenario * hero.altoGojiDestino;
 
-  const inclinacionX = useSharedValue(0);
-  const inclinacionY = useSharedValue(0);
+  // El sensor solo escribe el objetivo; el suavizado corre en el hilo de UI y React no se entera.
+  const objetivoX = useSharedValue(0);
+  const objetivoY = useSharedValue(0);
+  const inclinacionX = useDerivedValue(() => withTiming(objetivoX.get(), AMORTIGUADO));
+  const inclinacionY = useDerivedValue(() => withTiming(objetivoY.get(), AMORTIGUADO));
   const [caja, setCaja] = useState<LayoutRectangle | null>(null);
   const [ancla, setAncla] = useState<LayoutRectangle | null>(null);
-  const [cuadro, setCuadro] = useState(0);
 
+  // Todo lo que depende del scroll se deriva en el hilo de UI: sin setState ni saltos a JS.
   const progreso = useDerivedValue(() =>
     recorrido > 0 ? clamp(desplazamiento.get() / recorrido, 0, 1) : 0,
   );
+  const cuadroActivo = useDerivedValue(() => Math.round(progreso.get() * (hero.cuadros - 1)));
 
   // Giroscopio a 50 ms, solo con la pestaña enfocada y sin movimiento reducido.
   useEffect(() => {
@@ -170,7 +164,6 @@ export function HeroFluidos({
     let suscripcion: ReturnType<typeof DeviceMotion.addListener> | null = null;
     const rango = hero.rangoInclinacion * GRADOS_A_RADIANES;
     const reposo = hero.inclinacionReposo * GRADOS_A_RADIANES;
-    const amortiguado = { duration: duracion.parallax, easing: EASE_SALIDA };
     DeviceMotion.isAvailableAsync()
       .then((disponible) => {
         if (!activo || !disponible) {
@@ -181,8 +174,8 @@ export function HeroFluidos({
           if (!rotation) {
             return;
           }
-          inclinacionX.set(withTiming(clamp(rotation.gamma / rango, -1, 1), amortiguado));
-          inclinacionY.set(withTiming(clamp((rotation.beta - reposo) / rango, -1, 1), amortiguado));
+          objetivoX.set(clamp(rotation.gamma / rango, -1, 1));
+          objetivoY.set(clamp((rotation.beta - reposo) / rango, -1, 1));
         });
       })
       .catch(() => {
@@ -191,31 +184,10 @@ export function HeroFluidos({
     return () => {
       activo = false;
       suscripcion?.remove();
-      inclinacionX.set(withTiming(0, amortiguado));
-      inclinacionY.set(withTiming(0, amortiguado));
+      objetivoX.set(0);
+      objetivoY.set(0);
     };
-  }, [enfocada, reducido, inclinacionX, inclinacionY]);
-
-  // Precarga de la secuencia de giro después del primer pintado: no bloquea la pantalla.
-  useEffect(() => {
-    if (reducido) {
-      return;
-    }
-    const uris = GIRO.map((modulo) => ImagenNativa.resolveAssetSource(modulo).uri);
-    Image.prefetch(uris, 'memory-disk').catch(() => {
-      // Si la precarga falla, cada cuadro se carga al mostrarse.
-    });
-  }, [reducido]);
-
-  // El cuadro de la secuencia solo cambia de React cuando cruza a otro índice (máximo 24 veces).
-  useAnimatedReaction(
-    () => Math.round(progreso.get() * (hero.cuadros - 1)),
-    (actual, previo) => {
-      if (actual !== previo) {
-        scheduleOnRN(setCuadro, actual);
-      }
-    },
-  );
+  }, [enfocada, reducido, objetivoX, objetivoY]);
 
   const estiloEscenario = useAnimatedStyle(() => ({
     transform: [{ translateY: clamp(desplazamiento.get(), 0, recorrido) }],
@@ -253,7 +225,10 @@ export function HeroFluidos({
 
   const medirCaja = (e: LayoutChangeEvent) => setCaja(e.nativeEvent.layout);
   const medirAncla = (e: LayoutChangeEvent) => setAncla(e.nativeEvent.layout);
-  const compartidos = { inclinacionX, inclinacionY, progreso };
+  const compartidos = useMemo(
+    () => ({ inclinacionX, inclinacionY, progreso }),
+    [inclinacionX, inclinacionY, progreso],
+  );
 
   return (
     <View style={{ height: top + altoEscenario + recorrido }}>
@@ -272,27 +247,16 @@ export function HeroFluidos({
         <View style={styles.composicion} onLayout={medirCaja}>
           {caja ? (
             <>
-              {MOTIVOS.map((motivo, indice) => {
-                const posicion = stickers[motivo];
-                return (
-                  <CapaParallax
-                    key={motivo}
-                    {...compartidos}
-                    profundidad={posicion.prof}
-                    giro={posicion.giro}
-                    sale
-                    estilo={{
-                      position: 'absolute',
-                      left: (caja.width * posicion.x) / 100,
-                      top: (caja.height * posicion.y) / 100,
-                      width: posicion.ancho,
-                      zIndex: capaHero.stickers,
-                    }}
-                  >
-                    <Sticker motivo={motivo} indice={indice} reducido={reducido} />
-                  </CapaParallax>
-                );
-              })}
+              {MOTIVOS.map((motivo, indice) => (
+                <CapaSticker
+                  key={motivo}
+                  motivo={motivo}
+                  indice={indice}
+                  caja={caja}
+                  compartidos={compartidos}
+                  reducido={reducido}
+                />
+              ))}
               {ORDEN_CAPAS.map((clave) => (
                 <Frasco key={clave} clave={clave} caja={caja} compartidos={compartidos} />
               ))}
@@ -301,7 +265,7 @@ export function HeroFluidos({
         </View>
 
         <Animated.View style={estiloSalida}>
-          <Leyenda fluidos={fluidos} cargando={cargando} reducido={reducido} />
+          <Leyenda fluidos={fluidos} cargando={cargando} />
         </Animated.View>
 
         <View style={styles.accion}>
@@ -340,12 +304,16 @@ export function HeroFluidos({
             accessible={false}
             style={[styles.viaje, { width: viaje.ancho, height: viaje.alto }, estiloViaje]}
           >
-            <Image
-              source={GIRO[cuadro]}
-              style={StyleSheet.absoluteFill}
-              contentFit="contain"
-              cachePolicy="memory-disk"
-            />
+            {/* Los 12 cuadros quedan montados (y cargados) desde el inicio; el scroll solo cambia
+                cuál tiene opacidad 1. */}
+            {GIRO.map((fuenteCuadro, indice) => (
+              <CuadroGiro
+                key={fuenteCuadro}
+                fuente={fuenteCuadro}
+                indice={indice}
+                cuadroActivo={cuadroActivo}
+              />
+            ))}
           </Animated.View>
         ) : null}
       </Animated.View>
@@ -372,10 +340,68 @@ function calcularViaje(caja: LayoutRectangle, ancla: LayoutRectangle): Viaje {
 }
 
 interface Compartidos {
-  inclinacionX: SharedValue<number>;
-  inclinacionY: SharedValue<number>;
-  progreso: SharedValue<number>;
+  inclinacionX: DerivedValue<number>;
+  inclinacionY: DerivedValue<number>;
+  progreso: DerivedValue<number>;
 }
+
+/** Un cuadro de la secuencia de giro: visible solo cuando es el cuadro activo. */
+const CuadroGiro = memo(function CuadroGiro({
+  fuente: fuenteCuadro,
+  indice,
+  cuadroActivo,
+}: {
+  fuente: number;
+  indice: number;
+  cuadroActivo: DerivedValue<number>;
+}) {
+  const estilo = useAnimatedStyle(() => ({ opacity: cuadroActivo.get() === indice ? 1 : 0 }));
+  return (
+    <Animated.View style={[StyleSheet.absoluteFill, estilo]}>
+      <Image
+        source={fuenteCuadro}
+        style={StyleSheet.absoluteFill}
+        contentFit="contain"
+        cachePolicy="memory"
+        transition={0}
+      />
+    </Animated.View>
+  );
+});
+
+/** Sticker en su capa de parallax, posicionado en % de la composición. */
+const CapaSticker = memo(function CapaSticker({
+  motivo,
+  indice,
+  caja,
+  compartidos,
+  reducido,
+}: {
+  motivo: Motivo;
+  indice: number;
+  caja: LayoutRectangle;
+  compartidos: Compartidos;
+  reducido: boolean;
+}) {
+  const posicion = stickers[motivo];
+  return (
+    <CapaParallax
+      {...compartidos}
+      profundidad={posicion.prof}
+      giro={posicion.giro}
+      sale
+      estilo={{
+        position: 'absolute',
+        left: (caja.width * posicion.x) / 100,
+        top: (caja.height * posicion.y) / 100,
+        width: posicion.ancho,
+        zIndex: capaHero.stickers,
+      }}
+    >
+      <Sticker motivo={motivo} indice={indice} reducido={reducido} />
+    </CapaParallax>
+  );
+});
 
 interface CapaParallaxProps extends Compartidos {
   profundidad: number;
@@ -389,7 +415,7 @@ interface CapaParallaxProps extends Compartidos {
 }
 
 /** Capa de la composición: sigue al giroscopio según su profundidad y sale con el scroll. */
-function CapaParallax({
+const CapaParallax = memo(function CapaParallax({
   inclinacionX,
   inclinacionY,
   progreso,
@@ -429,9 +455,9 @@ function CapaParallax({
       {children}
     </Animated.View>
   );
-}
+});
 
-function Frasco({
+const Frasco = memo(function Frasco({
   clave,
   caja,
   compartidos,
@@ -472,7 +498,7 @@ function Frasco({
       />
     </CapaParallax>
   );
-}
+});
 
 /** Resplandor del color del fluido detrás de cada frasco. */
 function Resplandor({ clave, ancho, alto }: { clave: ClaveFluido; ancho: number; alto: number }) {
@@ -501,27 +527,22 @@ function Resplandor({ clave, ancho, alto }: { clave: ClaveFluido; ancho: number;
 }
 
 /** Leyenda con nombre y precio del catálogo real; sin dato del API, el fluido no se anuncia. */
-function Leyenda({
+const Leyenda = memo(function Leyenda({
   fluidos,
   cargando,
-  reducido,
 }: {
   fluidos: FluidoHero[];
   cargando: boolean;
-  reducido: boolean;
 }) {
   const { colores } = useTheme();
 
   if (cargando) {
     return (
-      <EsqueletoPulso reducido={reducido} estilo={styles.leyenda}>
+      <View style={styles.leyenda} accessible accessibilityLabel="Cargando los fluidos de la tienda">
         {ORDEN_CAPAS.map((clave) => (
-          <View
-            key={clave}
-            style={[styles.chip, styles.chipEsqueleto, { backgroundColor: colores.superficieSecundaria }]}
-          />
+          <Skeleton key={clave} estilo={[styles.chip, styles.chipEsqueleto]} />
         ))}
-      </EsqueletoPulso>
+      </View>
     );
   }
 
@@ -534,7 +555,7 @@ function Leyenda({
   }
 
   return (
-    <View style={styles.leyenda} accessibilityLabel="Fluidos AVYNA en la tienda">
+    <View style={styles.leyenda}>
       {visibles.map((f) => (
         <View
           key={f.clave}
@@ -544,7 +565,7 @@ function Leyenda({
         >
           <View style={[styles.punto, { backgroundColor: f.color }]} />
           {f.nombre ? (
-            <Text numberOfLines={1} style={[styles.chipNombre, { color: colores.texto }]}>
+            <Text numberOfLines={2} style={[styles.chipNombre, { color: colores.texto }]}>
               {f.nombre}
             </Text>
           ) : null}
@@ -555,7 +576,7 @@ function Leyenda({
       ))}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   escenario: {
@@ -599,18 +620,20 @@ const styles = StyleSheet.create({
     paddingTop: espacio.m,
   },
   chip: {
-    flexBasis: '47%',
+    flexBasis: hero.baseChip,
     flexGrow: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: espacio.s,
     minHeight: toqueMinimo - espacio.s,
     paddingHorizontal: espacio.m,
+    paddingVertical: espacio.xs,
     borderRadius: radio.pastilla,
     borderWidth: borde.hairline,
   },
   chipEsqueleto: {
     borderWidth: 0,
+    borderRadius: radio.pastilla,
   },
   punto: {
     width: hero.puntoLeyenda,

@@ -20,6 +20,9 @@ export const paleta = {
   bordeCampoOscuro: '#6e6e6e',
   placeholderClaro: '#6b5a4e',
   placeholderOscuro: '#b8a597',
+  /** Texto de peligro del sistema web (--danger-texto). */
+  peligroClaro: '#600011',
+  peligroOscuro: '#e0748f',
 } as const;
 
 /** Resplandor detrás de cada frasco del hero (solo para eso). */
@@ -37,6 +40,8 @@ const transparencias = {
   cremaTexto: 'rgba(242, 241, 237, 0.74)',
   cremaTenue: 'rgba(242, 241, 237, 0.12)',
   oroHairline: 'rgba(159, 109, 31, 0.45)',
+  carbonPresionado: 'rgba(22, 22, 22, 0.08)',
+  cremaPresionado: 'rgba(242, 241, 237, 0.1)',
   velo: 'rgba(22, 22, 22, 0.94)',
 } as const;
 
@@ -72,6 +77,10 @@ export interface Colores {
   oroTextoPequeno: string;
   sombra: string;
   velo: string;
+  /** Errores de formulario y acciones destructivas. */
+  peligro: string;
+  /** Fondo de una fila mientras se presiona. */
+  presionado: string;
 }
 
 export const temaClaro: Colores = {
@@ -100,6 +109,8 @@ export const temaClaro: Colores = {
   oroTextoPequeno: paleta.oroSobreCarbon,
   sombra: paleta.vino,
   velo: transparencias.velo,
+  peligro: paleta.peligroClaro,
+  presionado: transparencias.carbonPresionado,
 };
 
 export const temaOscuro: Colores = {
@@ -114,12 +125,15 @@ export const temaOscuro: Colores = {
   textoSobreSecundario: paleta.carbon,
   foco: paleta.oroFoco,
   hairline: transparencias.oroHairline,
-  campoFondo: paleta.crema,
+  // Campo oscuro: el placeholder #b8a597 y el borde #6e6e6e de DESIGN.md solo cumplen
+  // contraste sobre una superficie oscura (sobre crema el placeholder daría 2.1:1).
+  campoFondo: paleta.carbonClaro,
   campoBorde: paleta.bordeCampoOscuro,
-  campoTexto: paleta.carbon,
+  campoTexto: paleta.crema,
   campoPlaceholder: paleta.placeholderOscuro,
   barraFondo: paleta.carbonMedio,
-  iconoActivo: paleta.oro,
+  // Oro de foco y selección (DESIGN.md): el oro de marca daría 3.7:1 en etiquetas pequeñas.
+  iconoActivo: paleta.oroFoco,
   iconoInactivo: transparencias.cremaTexto,
   panel: paleta.carbon,
   textoSobrePanel: paleta.crema,
@@ -128,6 +142,8 @@ export const temaOscuro: Colores = {
   oroTextoPequeno: paleta.oroSobreCarbon,
   sombra: paleta.carbon,
   velo: transparencias.velo,
+  peligro: paleta.peligroOscuro,
+  presionado: transparencias.cremaPresionado,
 };
 
 /** Ritmo de 4px. */
@@ -147,6 +163,7 @@ export const espacio = {
 
 export const radio = {
   campo: 10,
+  casilla: 6,
   tarjeta: 14,
   sticker: 17,
   pastilla: 999,
@@ -165,6 +182,8 @@ export const icono = {
   tamano: 24,
   tamanoPequeno: 18,
   trazo: 1.75,
+  /** Trazo más grueso para la marca "G" y la palomita de la casilla. */
+  trazoMarca: 2.4,
 } as const;
 
 /** Familias cargadas en src/app/_layout.tsx con @expo-google-fonts. */
@@ -187,7 +206,8 @@ export const tipo = {
   marca: { tamano: 44, linea: 48 },
   marcaManuscrita: { tamano: 40, linea: 52 },
   gigante: { tamano: 52, linea: 54 },
-  pestana: { tamano: 11, linea: 14 },
+  /** 10sp: "Notificaciones" mide 69 dp en Geist y cada pestaña tiene 72 dp a 360 dp de ancho. */
+  pestana: { tamano: 10, linea: 13 },
 } as const;
 
 /** Espaciado de letra: títulos ligeramente cerrados, lema abierto. */
@@ -252,6 +272,32 @@ export const pantalla = {
 export const pestanas = {
   altoItem: toqueMinimo,
   relleno: espacio.xs,
+  /** La etiqueta se encoge hasta este factor si el sistema agranda la fuente. */
+  escalaMinimaEtiqueta: 0.8,
+} as const;
+
+/** Cabecera fija de Inicio: alto del contenido bajo la barra de estado. */
+export const cabecera = {
+  alto: toqueMinimo + espacio.s * 2,
+  relleno: espacio.s,
+} as const;
+
+/** Filas de lista (Perfil). */
+export const fila = {
+  alto: 56,
+} as const;
+
+/** Casilla de verificación. */
+export const casilla = {
+  tamano: 24,
+} as const;
+
+/** Skeletons: alto de las líneas de texto y ancho de la línea corta. */
+export const esqueleto = {
+  linea: 14,
+  lineaGrande: 20,
+  anchoCorto: '60%',
+  anchoMedio: '80%',
 } as const;
 
 /** Acceso: panel de marca compacto y pestañas Acceso / Registro. */
@@ -293,8 +339,10 @@ export const hero = {
   /** Entrada de los stickers. */
   stickerDesde: 8,
   stickerEscala: 0.9,
-  cuadros: 24,
+  cuadros: 12,
   puntoLeyenda: 10,
+  /** Base de ancho de las pastillas de la leyenda: dos por fila. */
+  baseChip: '47%',
   /** Opacidad del color del fluido en el centro del resplandor y su tamaño respecto al frasco. */
   resplandor: 0.32,
   resplandorAncho: 2.4,
@@ -340,6 +388,11 @@ export const colorSticker = {
   gota: { fondo: colorFluido.hialuronico, tinta: paleta.vino },
   peine: { fondo: paleta.lino, tinta: paleta.vino },
   papel: paleta.crema,
+} as const;
+
+/** Tienda: columnas de la cuadrícula de productos. */
+export const tienda = {
+  columnas: 2,
 } as const;
 
 /** Galería: mosaico de 4 columnas por 3 filas por cada 7 fotos. */

@@ -1,39 +1,23 @@
 import { Image } from 'expo-image';
-import { useEffect, useState, type ReactNode } from 'react';
-import {
-  Pressable,
-  StyleSheet,
-  View,
-  type LayoutChangeEvent,
-  type StyleProp,
-  type ViewStyle,
-} from 'react-native';
+import { useState } from 'react';
+import { Pressable, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import Animated, {
   Easing,
-  cancelAnimation,
   useAnimatedStyle,
   useSharedValue,
-  withRepeat,
   withTiming,
 } from 'react-native-reanimated';
 
 import { EmptyState } from '@/shared/ui/EmptyState';
 import { Monograma } from '@/shared/ui/Monograma';
-import {
-  curva,
-  duracion,
-  escalaPresionado,
-  galeria,
-  opacidad,
-  radio,
-} from '@/shared/ui/tokens';
+import { Skeleton } from '@/shared/ui/Skeleton';
+import { curva, duracion, escalaPresionado, galeria, radio } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
 import type { FotoGaleria } from '../models/FotoModel';
 import { VisorFoto } from './VisorFoto';
 
 const EASE_SALIDA = Easing.bezier(...curva.salida);
-const EASE_ENTRADA_SALIDA = Easing.bezier(...curva.entradaSalida);
 
 interface Forma {
   columna: number;
@@ -158,66 +142,27 @@ function Celda({
 }
 
 /** Esqueleto de la galería: un bloque del mosaico en arena con pulso suave. */
-export function GaleriaEsqueleto({ reducido }: { reducido: boolean }) {
-  const { colores } = useTheme();
+export function GaleriaEsqueleto() {
   const [ancho, setAncho] = useState(0);
   const { lista, alto } = posicionesDe(galeria.fotosPorBloque, ancho);
   const medir = (e: LayoutChangeEvent) => setAncho(e.nativeEvent.layout.width);
 
   return (
-    <EsqueletoPulso reducido={reducido}>
-      <View onLayout={medir} style={{ height: ancho > 0 ? alto : 0 }}>
-        {ancho > 0
-          ? lista.map((posicion, i) => (
-              <View
-                key={MOSAICO[i].columna * galeria.columnas + MOSAICO[i].fila}
-                style={[
-                  styles.celda,
-                  styles.marco,
-                  posicion,
-                  { backgroundColor: colores.superficieSecundaria },
-                ]}
-              />
-            ))
-          : null}
-      </View>
-    </EsqueletoPulso>
-  );
-}
-
-/** Pulso de opacidad de los skeletons (estado de carga); con movimiento reducido queda fijo. */
-export function EsqueletoPulso({
-  reducido,
-  estilo,
-  children,
-}: {
-  reducido: boolean;
-  estilo?: StyleProp<ViewStyle>;
-  children: ReactNode;
-}) {
-  const valor = useSharedValue(1);
-
-  useEffect(() => {
-    if (reducido) {
-      valor.set(1);
-      return undefined;
-    }
-    valor.set(
-      withRepeat(
-        withTiming(opacidad.pulsoMinimo, { duration: duracion.pulso, easing: EASE_ENTRADA_SALIDA }),
-        -1,
-        true,
-      ),
-    );
-    return () => cancelAnimation(valor);
-  }, [reducido, valor]);
-
-  const animado = useAnimatedStyle(() => ({ opacity: valor.get() }));
-
-  return (
-    <Animated.View accessible accessibilityLabel="Cargando" style={[estilo, animado]}>
-      {children}
-    </Animated.View>
+    <View
+      accessible
+      accessibilityLabel="Cargando fotos del salón"
+      onLayout={medir}
+      style={{ height: ancho > 0 ? alto : 0 }}
+    >
+      {ancho > 0
+        ? lista.map((posicion, i) => (
+            <Skeleton
+              key={MOSAICO[i].columna * galeria.columnas + MOSAICO[i].fila}
+              estilo={[styles.celda, posicion, styles.esqueleto]}
+            />
+          ))
+        : null}
+    </View>
   );
 }
 
@@ -231,5 +176,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: radio.tarjeta,
     overflow: 'hidden',
+  },
+  esqueleto: {
+    borderRadius: radio.tarjeta,
   },
 });

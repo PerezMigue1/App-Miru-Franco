@@ -1,10 +1,24 @@
 import { useIsFocused, useRouter } from 'expo-router';
+import { Bell, UserRound, type LucideIcon } from 'lucide-react-native';
 import { useState } from 'react';
-import { StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
+import { Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import Animated, { useAnimatedRef, useScrollOffset } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/shared/ui/EmptyState';
-import { espacio, fuente, pantalla, tipo, tracking } from '@/shared/ui/tokens';
+import { SearchBar } from '@/shared/ui/SearchBar';
+import {
+  borde,
+  cabecera,
+  espacio,
+  fuente,
+  icono,
+  pantalla,
+  radio,
+  tipo,
+  toqueMinimo,
+  tracking,
+} from '@/shared/ui/tokens';
 import { useMovimientoReducido } from '@/shared/ui/useMovimientoReducido';
 import { useTheme } from '@/shared/ui/useTheme';
 
@@ -16,60 +30,111 @@ import { useInicioViewModel, type EstadoInicio } from '../viewmodels/useInicioVi
 export default function InicioView() {
   const { estado, fluidos, fotos, recargar } = useInicioViewModel();
   const { colores } = useTheme();
+  const { top } = useSafeAreaInsets();
   const reducido = useMovimientoReducido();
   const enfocada = useIsFocused();
   const { navigate } = useRouter();
   const refScroll = useAnimatedRef<Animated.ScrollView>();
   const desplazamiento = useScrollOffset(refScroll);
   const [altoVisible, setAltoVisible] = useState(0);
+  const altoCabecera = top + cabecera.alto;
 
   const medir = (e: LayoutChangeEvent) => setAltoVisible(e.nativeEvent.layout.height);
 
   // TODO(GP-06): llevar al detalle del Fluido Di Goji en la tienda; por ahora abre la pestaña Tienda.
   const verGoji = () => navigate('/tienda');
+  // TODO(GP-06): abrir la búsqueda de productos y servicios; por ahora abre la pestaña Tienda.
+  const buscar = () => navigate('/tienda');
+  const abrirPerfil = () => navigate('/perfil');
+  const abrirNotificaciones = () => navigate('/notificaciones');
 
   return (
-    <Animated.ScrollView
-      ref={refScroll}
-      onLayout={medir}
-      style={{ backgroundColor: colores.fondo }}
-      contentContainerStyle={styles.contenido}
-    >
-      {altoVisible > 0 ? (
-        <HeroFluidos
-          fluidos={fluidos}
-          cargando={estado === 'cargando'}
-          desplazamiento={desplazamiento}
-          altoVisible={altoVisible}
-          enfocada={enfocada}
-          reducido={reducido}
-          onVerGoji={verGoji}
-        />
-      ) : null}
+    <View style={[styles.raiz, { backgroundColor: colores.fondo }]}>
+      <Animated.ScrollView
+        ref={refScroll}
+        onLayout={medir}
+        contentContainerStyle={styles.contenido}
+      >
+        {altoVisible > 0 ? (
+          <HeroFluidos
+            fluidos={fluidos}
+            cargando={estado === 'cargando'}
+            desplazamiento={desplazamiento}
+            altoVisible={altoVisible}
+            altoCabecera={altoCabecera}
+            enfocada={enfocada}
+            reducido={reducido}
+            onVerGoji={verGoji}
+          />
+        ) : null}
 
-      <View style={styles.galeria}>
-        <Text accessibilityRole="header" style={[styles.titulo, { color: colores.texto }]}>
-          Nuestro trabajo
-        </Text>
-        <ContenidoGaleria estado={estado} fotos={fotos} reducido={reducido} onReintentar={recargar} />
+        <View style={styles.galeria}>
+          <Text accessibilityRole="header" style={[styles.titulo, { color: colores.texto }]}>
+            Nuestro trabajo
+          </Text>
+          <ContenidoGaleria estado={estado} fotos={fotos} onReintentar={recargar} />
+        </View>
+      </Animated.ScrollView>
+
+      {/* Cabecera fija con fondo propio: el contenido pasa por debajo sin chocar con la barra de estado. */}
+      <View
+        style={[
+          styles.cabecera,
+          {
+            paddingTop: top + cabecera.relleno,
+            backgroundColor: colores.fondo,
+            borderBottomColor: colores.hairline,
+          },
+        ]}
+      >
+        <BotonIcono icono={UserRound} etiqueta="Abrir perfil" onPress={abrirPerfil} />
+        <SearchBar
+          texto="Buscar productos y servicios"
+          accessibilityHint="Abre la tienda"
+          onPress={buscar}
+        />
+        <BotonIcono icono={Bell} etiqueta="Abrir notificaciones" onPress={abrirNotificaciones} />
       </View>
-    </Animated.ScrollView>
+    </View>
+  );
+}
+
+function BotonIcono({
+  icono: Icono,
+  etiqueta,
+  onPress,
+}: {
+  icono: LucideIcon;
+  etiqueta: string;
+  onPress: () => void;
+}) {
+  const { colores } = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={etiqueta}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.botonIcono,
+        { backgroundColor: pressed ? colores.presionado : 'transparent' },
+      ]}
+    >
+      <Icono color={colores.texto} size={icono.tamano} strokeWidth={icono.trazo} />
+    </Pressable>
   );
 }
 
 function ContenidoGaleria({
   estado,
   fotos,
-  reducido,
   onReintentar,
 }: {
   estado: EstadoInicio;
   fotos: FotoGaleria[];
-  reducido: boolean;
   onReintentar: () => void;
 }) {
   if (estado === 'cargando') {
-    return <GaleriaEsqueleto reducido={reducido} />;
+    return <GaleriaEsqueleto />;
   }
   if (estado === 'error') {
     return (
@@ -84,8 +149,30 @@ function ContenidoGaleria({
 }
 
 const styles = StyleSheet.create({
+  raiz: {
+    flex: 1,
+  },
   contenido: {
     paddingBottom: espacio.x5,
+  },
+  cabecera: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: espacio.xs,
+    paddingHorizontal: pantalla.margen - espacio.s,
+    paddingBottom: cabecera.relleno,
+    borderBottomWidth: borde.hairline,
+  },
+  botonIcono: {
+    width: toqueMinimo,
+    height: toqueMinimo,
+    borderRadius: radio.pastilla,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   galeria: {
     paddingHorizontal: pantalla.margen,

@@ -22,8 +22,9 @@ interface ButtonProps {
   titulo: string;
   onPress?: () => void;
   variante?: Variante;
-  /** Ícono lucide a la derecha del texto. */
+  /** Ícono a la derecha del texto (o a la izquierda con posicionIcono="inicio"). */
   icono?: ReactNode;
+  posicionIcono?: 'inicio' | 'fin';
   deshabilitado?: boolean;
   accessibilityHint?: string;
 }
@@ -36,6 +37,7 @@ export function Button({
   onPress,
   variante = 'primario',
   icono,
+  posicionIcono = 'fin',
   deshabilitado = false,
   accessibilityHint,
 }: ButtonProps) {
@@ -73,8 +75,9 @@ export function Button({
           estiloAnimado,
         ]}
       >
+        {icono && posicionIcono === 'inicio' ? <View accessible={false}>{icono}</View> : null}
         <Text style={[styles.texto, { color: colorTexto }]}>{titulo}</Text>
-        {icono ? <View accessible={false}>{icono}</View> : null}
+        {icono && posicionIcono === 'fin' ? <View accessible={false}>{icono}</View> : null}
       </Animated.View>
     </Pressable>
   );
