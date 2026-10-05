@@ -19,7 +19,11 @@ export function getBaseUrl(): string {
   if (!url) {
     throw new Error('Falta la variable de entorno EXPO_PUBLIC_API_URL.');
   }
-  return url.replace(/\/+$/, '');
+  let end = url.length;
+  while (end > 0 && url[end - 1] === '/') {
+    end--;
+  }
+  return url.slice(0, end);
 }
 
 async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
