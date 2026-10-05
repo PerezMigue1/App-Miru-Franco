@@ -1,5 +1,3 @@
-import { useRouter } from 'expo-router';
-import { openBrowserAsync } from 'expo-web-browser';
 import { CalendarDays, LogOut, Package, ShieldCheck, UserPen } from 'lucide-react-native';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -10,29 +8,13 @@ import { Skeleton } from '@/shared/ui/Skeleton';
 import { borde, esqueleto, espacio, fuente, pantalla, tipo, tracking } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
-import { urlAvisoPrivacidad } from '../models/AuthModel';
-import { useAuth } from '../viewmodels/useAuth';
+import { Aviso } from '../components/AuthContainer';
+import { usePerfilViewModel } from '../viewmodels/usePerfilViewModel';
 
 /** Perfil con los datos de la sesión. */
 export default function PerfilView() {
   const { colores } = useTheme();
-  const { navigate } = useRouter();
-  const { usuario, salir } = useAuth();
-
-  const abrirCitas = () => navigate('/citas');
-  const abrirAviso = () => {
-    const url = urlAvisoPrivacidad();
-    if (url) {
-      openBrowserAsync(url).catch(() => {
-        // Sin navegador disponible no hay nada más que hacer aquí.
-      });
-    }
-  };
-  const cerrarSesion = () => {
-    salir().catch(() => {
-      // salir() siempre deja la app sin sesión aunque falle el aviso al servidor.
-    });
-  };
+  const { usuario, errorCierre, abrirCitas, abrirAviso, cerrarSesion } = usePerfilViewModel();
 
   return (
     <ScrollView
@@ -72,6 +54,7 @@ export default function PerfilView() {
       <View style={[styles.grupo, { borderColor: colores.hairline }]}>
         <ListRow icono={LogOut} titulo="Cerrar sesión" destructiva onPress={cerrarSesion} />
       </View>
+      <Aviso tipo="error" texto={errorCierre} estilo={styles.aviso} />
     </ScrollView>
   );
 }
@@ -109,6 +92,9 @@ const styles = StyleSheet.create({
   correoEsqueleto: {
     width: esqueleto.anchoMedio,
     height: esqueleto.linea,
+  },
+  aviso: {
+    paddingHorizontal: pantalla.margen,
   },
   grupo: {
     borderTopWidth: borde.hairline,

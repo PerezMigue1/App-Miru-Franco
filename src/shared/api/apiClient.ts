@@ -1,4 +1,11 @@
-import { borrarSesion, edadDelToken, getToken, guardarToken } from './tokenStorage';
+import {
+  borrarSesionSi,
+  generacionActual,
+  getToken,
+  leerSesion,
+  reemplazarToken,
+  type SesionGuardada,
+} from './tokenStorage';
 
 const TIMEOUT_MS = 15000;
 const MINUTO_MS = 60 * 1000;
@@ -39,14 +46,27 @@ export interface OpcionesSolicitud {
 
 /**
  * Resultado de intentar renovar. Solo 'rechazada' (401 del servidor) significa que el token ya
- * no sirve; 'fallida' (sin red, timeout o error del servidor) nunca cierra la sesión.
+ * no sirve; 'fallida' (sin red, timeout o error del servidor) nunca cierra la sesión;
+ * 'descartada': la sesión cambió mientras tanto (se cerró o se inició otra) y no se escribió nada.
  */
-export type ResultadoRenovacion = 'renovada' | 'rechazada' | 'fallida';
+export type ResultadoRenovacion = 'renovada' | 'rechazada' | 'fallida' | 'descartada';
+
+/**
+ * Solo https: el token, la contraseña y los códigos no viajan en claro. En desarrollo (__DEV__) se
+ * permite http para un backend local.
+ */
+export function esUrlPermitida(url: string): boolean {
+  const minusculas = url.trim().toLowerCase();
+  return minusculas.startsWith('https://') || (__DEV__ && minusculas.startsWith('http://'));
+}
 
 export function getBaseUrl(): string {
-  const url = process.env.EXPO_PUBLIC_API_URL;
+  const url = process.env.EXPO_PUBLIC_API_URL?.trim();
   if (!url) {
     throw new Error('Falta la variable de entorno EXPO_PUBLIC_API_URL.');
+  }
+  if (!esUrlPermitida(url)) {
+    throw new Error('EXPO_PUBLIC_API_URL debe usar https.');
   }
   let end = url.length;
   while (end > 0 && url[end - 1] === '/') {
@@ -139,23 +159,37 @@ export function alExpirarSesion(manejador: () => void): () => void {
   };
 }
 
-/** Borra la sesión local y avisa al manejador registrado. */
-export async function expirarSesion(): Promise<void> {
+/**
+ * Cierra la sesión que recibió el rechazo y avisa al manejador. Si mientras tanto se cerró o se
+ * inició otra sesión, no toca nada: el rechazo era de una sesión que ya no está.
+ */
+async function expirarSesion(token: string, generacion: number): Promise<void> {
+  let cerrada = false;
   try {
-    await borrarSesion();
+    cerrada = await borrarSesionSi(token, generacion);
   } catch {
-    // Aunque SecureStore falle, la app debe salir de la sesión.
+    cerrada = false;
   }
-  manejadorSesionExpirada?.();
+  if (cerrada) {
+    manejadorSesionExpirada?.();
+  }
+}
+
+function edad(sesion: SesionGuardada, ahora: number = Date.now()): number {
+  return Math.max(0, ahora - sesion.emitidoEn);
 }
 
 async function ejecutarRenovacion(): Promise<ResultadoRenovacion> {
+  const generacion = generacionActual();
   try {
-    const token = await getToken();
-    if (!token) {
-      return 'rechazada';
+    const sesion = await leerSesion();
+    if (!sesion) {
+      return generacion === generacionActual() ? 'rechazada' : 'descartada';
     }
-    const respuesta = await enviar('POST', '/api/auth/refresh', undefined, token);
+    const respuesta = await enviar('POST', '/api/auth/refresh', undefined, sesion.token);
+    if (generacion !== generacionActual()) {
+      return 'descartada';
+    }
     if (respuesta.status === 401) {
       return 'rechazada';
     }
@@ -167,13 +201,9 @@ async function ejecutarRenovacion(): Promise<ResultadoRenovacion> {
     if (typeof nuevo !== 'string' || !nuevo) {
       return 'fallida';
     }
-    // Si mientras tanto se cerró la sesión (o se inició otra), no se revive el token anterior.
-    const actual = await getToken();
-    if (actual !== token) {
-      return actual ? 'renovada' : 'rechazada';
-    }
-    await guardarToken(nuevo, Date.now());
-    return 'renovada';
+    // Solo se escribe si la sesión sigue siendo la misma: nunca se revive una sesión cerrada.
+    const guardado = await reemplazarToken(sesion.token, nuevo, Date.now(), generacion);
+    return guardado ? 'renovada' : 'descartada';
   } catch {
     return 'fallida';
   }
@@ -192,20 +222,22 @@ export function renovarSesion(): Promise<ResultadoRenovacion> {
  * servidor lo rechaza, la sesión expira; sin red se conserva.
  */
 export async function renovarSesionSiVigente(): Promise<void> {
-  const edad = await edadDelToken();
-  if (edad === null || edad >= LIMITE_RENOVACION_MS) {
+  const generacion = generacionActual();
+  const sesion = await leerSesion();
+  if (!sesion || edad(sesion) >= LIMITE_RENOVACION_MS) {
     return;
   }
   if ((await renovarSesion()) === 'rechazada') {
-    await expirarSesion();
+    await expirarSesion(sesion.token, generacion);
   }
 }
 
 /** Entre 10 y 15 minutos de edad, renueva antes de la petición; si falla, sigue con el actual. */
 async function renovarSiToca(): Promise<void> {
   try {
-    const edad = await edadDelToken();
-    if (edad !== null && edad >= RENOVAR_DESDE_MS && edad < LIMITE_RENOVACION_MS) {
+    const sesion = await leerSesion();
+    const edadActual = sesion ? edad(sesion) : null;
+    if (edadActual !== null && edadActual >= RENOVAR_DESDE_MS && edadActual < LIMITE_RENOVACION_MS) {
       await renovarSesion();
     }
   } catch {
@@ -214,31 +246,43 @@ async function renovarSiToca(): Promise<void> {
 }
 
 /**
- * Petición protegida. Ante un 401: si el token tiene menos de 15 minutos, una renovación y un
- * único reintento; si no se puede (o es más viejo), se borra la sesión y se avisa. Un error de
+ * Petición protegida. Ante un 401, solo si la sesión con la que salió sigue siendo la actual
+ * (misma generación y mismo token): si el token tiene menos de 15 minutos, una renovación y un
+ * único reintento; si no se puede (o es más viejo), se cierra esa sesión y se avisa. Un error de
  * red o un timeout se propaga como ErrorDeRed y nunca cierra la sesión.
  */
 async function solicitudProtegida<T>(method: HttpMethod, path: string, body: unknown): Promise<T> {
   await renovarSiToca();
-  const token = await getToken();
-  const respuesta = await enviar(method, path, body, token);
+  const generacion = generacionActual();
+  const sesion = await leerSesion();
+  const respuesta = await enviar(method, path, body, sesion?.token ?? null);
   if (respuesta.status !== 401) {
     return leer<T>(respuesta);
   }
-  const edad = await edadDelToken();
-  if (token && edad !== null && edad < LIMITE_RENOVACION_MS) {
+  // Sin sesión, o si cambió mientras la petición estaba en vuelo, el 401 no renueva, no reintenta
+  // y no cierra nada: solo se informa.
+  if (!sesion || generacion !== generacionActual() || (await getToken()) !== sesion.token) {
+    return leer<T>(respuesta);
+  }
+  if (edad(sesion) < LIMITE_RENOVACION_MS) {
     const resultado = await renovarSesion();
-    if (resultado === 'fallida') {
+    if (resultado === 'fallida' || resultado === 'descartada') {
       return leer<T>(respuesta);
     }
     if (resultado === 'renovada') {
-      const reintento = await enviar(method, path, body, await getToken());
+      const nuevo = await getToken();
+      if (!nuevo || nuevo === sesion.token || generacion !== generacionActual()) {
+        return leer<T>(respuesta);
+      }
+      const reintento = await enviar(method, path, body, nuevo);
       if (reintento.status !== 401) {
         return leer<T>(reintento);
       }
+      await expirarSesion(nuevo, generacion);
+      return leer<T>(reintento);
     }
   }
-  await expirarSesion();
+  await expirarSesion(sesion.token, generacion);
   return leer<T>(respuesta);
 }
 
@@ -251,7 +295,11 @@ async function request<T>(
   if (opciones.publica) {
     return leer<T>(await enviar(method, path, body, null));
   }
-  if (opciones.token) {
+  if (opciones.token !== undefined) {
+    // Un token explícito vacío nunca cae al token guardado (podría revocar la sesión actual).
+    if (!opciones.token) {
+      throw new Error('Token explícito vacío: la petición no se envía.');
+    }
     return leer<T>(await enviar(method, path, body, opciones.token));
   }
   return solicitudProtegida<T>(method, path, body);

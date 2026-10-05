@@ -1,4 +1,4 @@
-import { ApiError, ErrorDeRed } from '@/shared/api/apiClient';
+import { ApiError, ErrorDeRed, esUrlPermitida } from '@/shared/api/apiClient';
 
 /** Tipos y reglas del dominio de autenticación (contratos del backend NestJS ya desplegado). */
 
@@ -87,6 +87,7 @@ export class ErrorRolNoPermitido extends Error {
 
 export const MENSAJE_SIN_CONEXION = 'Sin conexión. Revisa tu internet e intenta de nuevo';
 export const MENSAJE_DEMASIADOS_INTENTOS = 'Demasiados intentos, espera un minuto';
+export const MENSAJE_ERROR_SERVIDOR = 'Ocurrió un problema en el servidor. Intenta de nuevo.';
 
 export function esErrorDeRed(error: unknown): boolean {
   return error instanceof ErrorDeRed;
@@ -105,9 +106,18 @@ export function esCuentaSinActivar(error: unknown): boolean {
   return mensaje.includes('no está activada') || mensaje.includes('activar tu cuenta');
 }
 
-/** Mensaje del servidor si lo hay; si no, el genérico indicado. */
+/**
+ * Mensaje del servidor si lo hay; si no, el genérico indicado. Con un error 5xx nunca se muestra
+ * el texto del servidor (podría traer detalles internos).
+ */
 export function mensajeDelServidor(error: unknown, generico: string): string {
-  return error instanceof ApiError && error.message ? error.message : generico;
+  if (!(error instanceof ApiError)) {
+    return generico;
+  }
+  if (error.status >= 500) {
+    return MENSAJE_ERROR_SERVIDOR;
+  }
+  return error.message || generico;
 }
 
 // ── Validaciones (sin expresiones regulares) ───────────────────────────────────────────────
@@ -333,10 +343,13 @@ export function requisitosDeClave(clave: string): RequisitoClave[] {
 export const AVISO_DATOS_PERSONALES_CLAVE =
   'No incluyas tu nombre, tu correo, tu teléfono, tu año de nacimiento ni tu respuesta de seguridad.';
 
-/** Enlace al aviso de privacidad en el sitio web (EXPO_PUBLIC_WEB_URL), o null si no está configurado. */
+/**
+ * Enlace al aviso de privacidad en el sitio web (EXPO_PUBLIC_WEB_URL), o null si no está
+ * configurado o no usa https (en desarrollo se permite http).
+ */
 export function urlAvisoPrivacidad(): string | null {
-  const base = process.env.EXPO_PUBLIC_WEB_URL;
-  if (!base) {
+  const base = process.env.EXPO_PUBLIC_WEB_URL?.trim();
+  if (!base || !esUrlPermitida(base)) {
     return null;
   }
   let fin = base.length;

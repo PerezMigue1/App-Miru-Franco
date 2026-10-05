@@ -4,10 +4,12 @@ import { AppState } from 'react-native';
 import { ApiError, alExpirarSesion, renovarSesionSiVigente } from '@/shared/api/apiClient';
 import {
   borrarSesion,
-  getToken,
+  cerrarSesionDeGeneracion,
+  generacionActual,
   guardarSesion,
   guardarUsuario,
   leerSesion,
+  nuevaGeneracion,
   type SesionGuardada,
 } from '@/shared/api/tokenStorage';
 
@@ -26,8 +28,11 @@ interface ContextoAuth {
   usuario: UsuarioSesion | null;
   /** Inicia sesión. Lanza ApiError, ErrorDeRed o ErrorRolNoPermitido. */
   ingresar: (email: string, password: string) => Promise<void>;
-  /** Cierra la sesión: avisa al servidor sin esperar y siempre borra la sesión local. */
-  salir: () => Promise<void>;
+  /**
+   * Cierra la sesión: borra la sesión local (con un reintento) y después avisa al servidor sin
+   * esperar. Devuelve false si no se pudo borrar: la sesión sigue abierta.
+   */
+  salir: () => Promise<boolean>;
 }
 
 const RENOVAR_CADA_MS = 10 * 60 * 1000;
@@ -44,6 +49,21 @@ function avisarCierre(token: string | null): void {
   });
 }
 
+/** Borra la sesión local; si falla, lo intenta una vez más. Devuelve si quedó borrada. */
+async function borrarConReintento(): Promise<boolean> {
+  try {
+    await borrarSesion();
+    return true;
+  } catch {
+    try {
+      await borrarSesion();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [estado, setEstado] = useState<EstadoSesion>('cargando');
   const [usuario, setUsuario] = useState<UsuarioSesion | null>(null);
@@ -56,9 +76,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // apiClient avisa aquí cuando la sesión expira (401 sin renovación posible).
   useEffect(() => alExpirarSesion(quedarAnonimo), [quedarAnonimo]);
 
-  // Restaura la sesión guardada y la valida con /api/auth/me: solo un 401 la cierra.
+  // Restaura la sesión guardada y la valida con /api/auth/me: solo un 401 la cierra. Si mientras
+  // tanto se inicia o se cierra sesión (cambia la generación), el resultado se descarta.
   useEffect(() => {
     let activo = true;
+    const generacion = generacionActual();
+    const vigente = () => activo && generacion === generacionActual();
+    // Sesión de alguien que no es clienta: se cierra por generación (una renovación pudo cambiar
+    // el token mientras tanto) y se revoca el token que estaba guardado.
+    const cerrarNoCliente = async () => {
+      const cerrado = await cerrarSesionDeGeneracion(generacion);
+      if (cerrado) {
+        avisarCierre(cerrado);
+        if (activo) {
+          quedarAnonimo();
+        }
+      }
+    };
     const restaurar = async () => {
       let guardada: SesionGuardada | null = null;
       try {
@@ -66,38 +100,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch {
         guardada = null;
       }
-      if (!activo) {
+      if (!vigente()) {
         return;
       }
-      if (!guardada || guardada.usuario.rol !== ROL_CLIENTE) {
-        if (guardada) {
-          await borrarSesion();
-        }
+      if (!guardada) {
         quedarAnonimo();
+        return;
+      }
+      if (guardada.usuario.rol !== ROL_CLIENTE) {
+        await cerrarNoCliente();
         return;
       }
       setUsuario(guardada.usuario);
       setEstado('autenticado');
       try {
         const perfil = normalizarUsuario((await obtenerPerfil())?.data);
-        if (!activo || !perfil) {
+        if (!vigente() || !perfil) {
           return;
         }
         if (perfil.rol !== ROL_CLIENTE) {
-          avisarCierre(await getToken());
-          await borrarSesion();
-          quedarAnonimo();
+          await cerrarNoCliente();
           return;
         }
-        setUsuario(perfil);
-        await guardarUsuario(perfil);
+        if (await guardarUsuario(perfil, generacion)) {
+          setUsuario(perfil);
+        }
       } catch {
         // Un 401 ya lo resolvió apiClient (renovó, o expiró la sesión y avisó al manejador);
         // sin red o con error del servidor la sesión se conserva.
       }
     };
     restaurar().catch(() => {
-      if (activo) {
+      if (vigente()) {
         quedarAnonimo();
       }
     });
@@ -136,6 +170,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [estado]);
 
   const ingresar = useCallback(async (email: string, password: string) => {
+    // Iniciar sesión abre una generación nueva: lo que siga en curso de antes se descarta.
+    const generacion = nuevaGeneracion();
     const respuesta = await iniciarSesion(email, password);
     const datos = normalizarUsuario(respuesta?.usuario);
     const token = typeof respuesta?.token === 'string' ? respuesta.token : '';
@@ -147,24 +183,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       avisarCierre(token);
       throw new ErrorRolNoPermitido();
     }
-    await guardarSesion({ token, emitidoEn: Date.now(), usuario: datos });
+    // Si mientras tanto empezó otro inicio o un cierre de sesión, este token no se guarda.
+    let guardada = false;
+    try {
+      guardada = await guardarSesion({ token, emitidoEn: Date.now(), usuario: datos }, generacion);
+    } catch (error) {
+      // No quedó guardado: se revoca el token recién emitido.
+      avisarCierre(token);
+      throw error;
+    }
+    if (!guardada) {
+      avisarCierre(token);
+      return;
+    }
     setUsuario(datos);
     setEstado('autenticado');
   }, []);
 
   const salir = useCallback(async () => {
+    // Cerrar sesión abre una generación nueva: renovaciones y /me en curso ya no escriben nada.
+    nuevaGeneracion();
     let token: string | null = null;
     try {
-      token = await getToken();
+      token = (await leerSesion())?.token ?? null;
     } catch {
       token = null;
     }
-    avisarCierre(token);
-    try {
-      await borrarSesion();
-    } finally {
-      quedarAnonimo();
+    if (!(await borrarConReintento())) {
+      // La sesión local sigue guardada: no se muestra cerrada ni se revoca el token.
+      return false;
     }
+    avisarCierre(token);
+    quedarAnonimo();
+    return true;
   }, [quedarAnonimo]);
 
   const valor = useMemo(

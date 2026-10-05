@@ -1,6 +1,8 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 
+import { useCandado } from '@/shared/ui/useCandado';
+
 import {
   MENSAJE_DEMASIADOS_INTENTOS,
   MENSAJE_SIN_CONEXION,
@@ -122,22 +124,22 @@ export function useActivarViewModel(email: string, recienEnviado: boolean): Acti
     }
   };
 
+  const candadoVerificar = useCandado();
+  const candadoReenvio = useCandado();
   const verificar = () => {
     if (cargando) {
       return;
     }
-    enviarVerificacion().catch(() => {
-      // enviarVerificacion() ya muestra cualquier error en pantalla.
-    });
+    // Candado inmediato además de cargando: enviarVerificacion() ya muestra cualquier error en pantalla.
+    candadoVerificar(enviarVerificacion);
   };
 
   const reenviar = () => {
     if (reenviando || espera > 0 || !email) {
       return;
     }
-    enviarReenvio().catch(() => {
-      // enviarReenvio() ya muestra cualquier error en pantalla.
-    });
+    // Candado inmediato además de cargando: enviarReenvio() ya muestra cualquier error en pantalla.
+    candadoReenvio(enviarReenvio);
   };
 
   const volver = () => dismissTo('/login');

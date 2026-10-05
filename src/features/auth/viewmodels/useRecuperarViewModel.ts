@@ -1,6 +1,8 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 
+import { useCandado } from '@/shared/ui/useCandado';
+
 import {
   MENSAJE_DEMASIADOS_INTENTOS,
   MENSAJE_SIN_CONEXION,
@@ -65,13 +67,13 @@ export function useRecuperarViewModel(): RecuperarViewModel {
     }
   };
 
+  const candado = useCandado();
   const enviar = () => {
     if (cargando) {
       return;
     }
-    solicitar().catch(() => {
-      // solicitar() ya muestra cualquier error en pantalla.
-    });
+    // Candado inmediato además de cargando: solicitar() ya muestra cualquier error en pantalla.
+    candado(solicitar);
   };
 
   const volver = () => {

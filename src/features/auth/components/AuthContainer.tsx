@@ -13,6 +13,8 @@ import {
   useWindowDimensions,
   type TextInput,
   type LayoutChangeEvent,
+  type StyleProp,
+  type ViewStyle,
 } from 'react-native';
 import Animated, {
   Easing,
@@ -84,10 +86,7 @@ const ESTADO_CORREO: Record<EstadoCorreo, EstadoCampo | null> = {
   verificando: { tipo: 'verificando', texto: 'Verificando correo…' },
   disponible: { tipo: 'exito', texto: 'Correo disponible' },
   registrado: { tipo: 'error', texto: 'Este correo ya está registrado' },
-  sinVerificar: {
-    tipo: 'aviso',
-    texto: 'No pudimos verificar el correo ahora; lo revisaremos al crear la cuenta',
-  },
+  sinVerificar: { tipo: 'aviso', texto: 'Se verificará al crear la cuenta.' },
 };
 const VISTAS: VistaAcceso[] = ['acceso', 'registro'];
 const ETIQUETA_PESTANA: Record<VistaAcceso, string> = { acceso: 'Acceso', registro: 'Registro' };
@@ -776,7 +775,16 @@ function MensajeCampo({ error }: { error: string | null }) {
  * Mensaje de error o de éxito de un formulario. La región en vivo queda siempre montada para que
  * TalkBack anuncie el texto cuando aparece; vacía, queda fuera del flujo y no suma espacio.
  */
-export function Aviso({ tipo: tipoAviso, texto }: { tipo: 'error' | 'exito'; texto: string | null }) {
+export function Aviso({
+  tipo: tipoAviso,
+  texto,
+  estilo,
+}: {
+  tipo: 'error' | 'exito';
+  texto: string | null;
+  /** Estilo del contenedor cuando hay mensaje (por ejemplo, márgenes). */
+  estilo?: StyleProp<ViewStyle>;
+}) {
   const { colores } = useTheme();
   const esError = tipoAviso === 'error';
   const Icono = esError ? CircleAlert : CircleCheck;
@@ -785,7 +793,7 @@ export function Aviso({ tipo: tipoAviso, texto }: { tipo: 'error' | 'exito'; tex
     <View
       collapsable={false}
       accessibilityLiveRegion={esError ? 'assertive' : 'polite'}
-      style={texto ? null : styles.fueraDeFlujo}
+      style={texto ? estilo : styles.fueraDeFlujo}
     >
       {texto ? (
         <View

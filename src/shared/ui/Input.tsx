@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import Animated, { Easing, FadeIn, ReduceMotion } from 'react-native-reanimated';
 
+import { soloDigitos, telefonoEscrito, telefonoPegado } from './digitos';
 import { borde, curva, duracion, espacio, fuente, icono, radio, tipo, toqueMinimo } from './tokens';
 import { useTheme } from './useTheme';
 
@@ -52,9 +53,6 @@ interface InputProps {
   ref?: Ref<TextInput>;
 }
 
-const LARGO_TELEFONO = 10;
-const LARGO_TELEFONO_CON_52 = 12;
-const LARGO_TELEFONO_CON_521 = 13;
 const LARGO_FECHA = 10;
 const DIGITOS_FECHA = 8;
 const EASE_SALIDA = Easing.bezier(...curva.salida);
@@ -78,30 +76,20 @@ const AJUSTES: Record<TipoInput, TextInputProps> = {
     keyboardType: 'number-pad',
   },
   fecha: { autoComplete: 'birthdate-full', keyboardType: 'number-pad', maxLength: LARGO_FECHA },
-  claveActual: { autoComplete: 'current-password', textContentType: 'password', autoCapitalize: 'none' },
-  claveNueva: { autoComplete: 'new-password', textContentType: 'newPassword', autoCapitalize: 'none' },
+  // Sin autocorrección: el teclado no aprende la contraseña ni la cambia al mostrarla.
+  claveActual: {
+    autoComplete: 'password',
+    textContentType: 'password',
+    autoCapitalize: 'none',
+    autoCorrect: false,
+  },
+  claveNueva: {
+    autoComplete: 'new-password',
+    textContentType: 'newPassword',
+    autoCapitalize: 'none',
+    autoCorrect: false,
+  },
 };
-
-function soloDigitos(texto: string): string {
-  return texto
-    .split('')
-    .filter((c) => c >= '0' && c <= '9')
-    .join('');
-}
-
-/**
- * Teléfono escrito o pegado: solo dígitos; si quedan 12 que empiezan con 52 o 13 que empiezan con
- * 521, se quita esa lada; después se limita a 10. Solo da formato: la validación vive en AuthModel.
- */
-function telefonoEscrito(texto: string): string {
-  let digitos = soloDigitos(texto);
-  if (digitos.length === LARGO_TELEFONO_CON_52 && digitos.startsWith('52')) {
-    digitos = digitos.slice(2);
-  } else if (digitos.length === LARGO_TELEFONO_CON_521 && digitos.startsWith('521')) {
-    digitos = digitos.slice(3);
-  }
-  return digitos.slice(0, LARGO_TELEFONO);
-}
 
 /** DD/MM/AAAA mientras se escribe: solo da formato, no valida. */
 function conFormatoFecha(texto: string): string {
@@ -155,7 +143,10 @@ export function Input({
     if (tipo === 'fecha') {
       onCambiar(conFormatoFecha(texto));
     } else if (tipo === 'telefono') {
-      onCambiar(telefonoEscrito(texto));
+      // Varios dígitos de golpe es pegar o autocompletar: se normaliza ya. Tecla por tecla se
+      // aceptan hasta 13 y la lada se quita al salir del campo.
+      const pegado = soloDigitos(texto).length - soloDigitos(valor).length > 1;
+      onCambiar(pegado ? telefonoPegado(texto) : telefonoEscrito(texto));
     } else {
       onCambiar(texto);
     }

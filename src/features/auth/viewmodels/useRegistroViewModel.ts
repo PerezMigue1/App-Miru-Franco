@@ -2,7 +2,9 @@ import { useRouter } from 'expo-router';
 import { openBrowserAsync } from 'expo-web-browser';
 import { useEffect, useRef, useState } from 'react';
 
+import { telefonoSinLada } from '@/shared/ui/digitos';
 import { duracion } from '@/shared/ui/tokens';
+import { useCandado } from '@/shared/ui/useCandado';
 
 import {
   AVISO_DATOS_PERSONALES_CLAVE,
@@ -143,13 +145,14 @@ function validarCampo(campo: CampoRegistro, c: CamposRegistro): string | null {
     case 'correo':
       return problemaDeCorreo(c.correo);
     case 'telefono':
-      return problemaDeTelefono(c.telefono);
+      // Se valida sin la lada (52 o 521), que se quita al salir del campo y al enviar.
+      return problemaDeTelefono(telefonoSinLada(c.telefono));
     case 'clave':
       return c.clave
         ? problemaDeClave(c.clave, {
             nombre: c.nombre,
             email: c.correo,
-            telefono: c.telefono,
+            telefono: telefonoSinLada(c.telefono),
             fechaNacimiento: fechaIsoDe(c.nacimiento),
             respuesta: c.respuesta,
           })
@@ -331,8 +334,19 @@ export function useRegistroViewModel(): RegistroViewModel {
     }
   };
 
+  /** Teléfono sin la lada; si cambió, se guarda así en el campo. */
+  const limpiarTelefono = (actuales: CamposRegistro): CamposRegistro => {
+    const telefono = telefonoSinLada(actuales.telefono);
+    if (telefono === actuales.telefono) {
+      return actuales;
+    }
+    setCampos((previos) => ({ ...previos, telefono: telefonoSinLada(previos.telefono) }));
+    return { ...actuales, telefono };
+  };
+
   const salir = (campo: CampoRegistro) => {
-    const problema = validarCampo(campo, campos);
+    const valores = campo === 'telefono' ? limpiarTelefono(campos) : campos;
+    const problema = validarCampo(campo, valores);
     setErrores((previos) => ({ ...previos, [campo]: problema }));
     if (problema) {
       setEnVivo((previos) => ({ ...previos, [campo]: true }));
@@ -378,9 +392,10 @@ export function useRegistroViewModel(): RegistroViewModel {
       setErrorGeneral(ESPERA_VERIFICACION);
       return;
     }
+    const valores = limpiarTelefono(campos);
     const nuevos: ErroresRegistro = {};
     for (const campo of ORDEN) {
-      nuevos[campo] = validarCampo(campo, campos);
+      nuevos[campo] = validarCampo(campo, valores);
     }
     setErrores(nuevos);
     setEnVivo(Object.fromEntries(ORDEN.map((campo) => [campo, Boolean(nuevos[campo])])));
@@ -400,7 +415,7 @@ export function useRegistroViewModel(): RegistroViewModel {
       const respuesta = await registrarUsuario({
         nombre: campos.nombre.trim(),
         email,
-        telefono: normalizarTelefono(campos.telefono),
+        telefono: normalizarTelefono(valores.telefono),
         password: campos.clave,
         fechaNacimiento: fechaIsoDe(campos.nacimiento),
         preguntaSeguridad: { pregunta: campos.pregunta.pregunta, respuesta: campos.respuesta.trim() },
@@ -432,13 +447,13 @@ export function useRegistroViewModel(): RegistroViewModel {
     }
   };
 
+  const candado = useCandado();
   const crearCuenta = () => {
     if (cargando) {
       return;
     }
-    enviar().catch(() => {
-      // enviar() ya muestra cualquier error en pantalla.
-    });
+    // Candado inmediato además de cargando: enviar() ya muestra cualquier error en pantalla.
+    candado(enviar);
   };
 
   return {

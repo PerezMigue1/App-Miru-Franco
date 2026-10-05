@@ -1,6 +1,8 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 
+import { useCandado } from '@/shared/ui/useCandado';
+
 import {
   ErrorRolNoPermitido,
   MENSAJE_DEMASIADOS_INTENTOS,
@@ -113,13 +115,13 @@ export function useLoginViewModel(): LoginViewModel {
     }
   };
 
+  const candado = useCandado();
   const entrar = () => {
     if (cargando) {
       return;
     }
-    enviar().catch(() => {
-      // enviar() ya muestra cualquier error en pantalla.
-    });
+    // Candado inmediato además de cargando: enviar() ya muestra cualquier error en pantalla.
+    candado(enviar);
   };
 
   return { correo, setCorreo, salirCorreo, clave, setClave, errores, errorGeneral, cargando, entrar };
