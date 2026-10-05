@@ -242,6 +242,10 @@ export const duracion = {
   parallax: 600,
   /** Medio ciclo del pulso de los skeletons. */
   pulso: 900,
+  /** Cambio de estado de un campo (verificando, disponible, requisito cumplido): igual que presionar. */
+  estadoCampo: 140,
+  /** Espera tras dejar de escribir el correo antes de verificar si ya está registrado. */
+  verificarCorreo: 600,
 } as const;
 
 /** Intervalo de lectura del giroscopio. */
@@ -249,6 +253,9 @@ export const intervaloSensor = 50;
 
 /** Escala al presionar: se hunde sin animar desde escala 0. */
 export const escalaPresionado = 0.97;
+
+/** Escala desde la que entra un ícono de estado (nunca desde 0). */
+export const escalaEntrada = 0.9;
 
 export const opacidad = {
   deshabilitado: 0.45,

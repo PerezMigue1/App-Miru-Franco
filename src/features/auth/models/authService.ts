@@ -7,6 +7,7 @@ import type {
   RespuestaPerfil,
   RespuestaPreguntas,
   RespuestaSimple,
+  RespuestaVerificarCorreo,
   UsuarioSesion,
 } from './AuthModel';
 
@@ -48,6 +49,11 @@ export function obtenerPreguntasSeguridad(): Promise<PreguntaSeguridad[]> {
   return apiGet<RespuestaPreguntas>('/api/pregunta-seguridad', { publica: true }).then((respuesta) =>
     Array.isArray(respuesta?.data) ? respuesta.data : [],
   );
+}
+
+/** POST /api/auth/verificar-correo (público): indica si el correo ya tiene cuenta. */
+export function verificarCorreo(correo: string): Promise<RespuestaVerificarCorreo> {
+  return apiPost<RespuestaVerificarCorreo>('/api/auth/verificar-correo', { correo }, { publica: true });
 }
 
 /** POST /api/usuarios/registro (público). Crea la cuenta sin activar y envía un código por correo. */

@@ -63,6 +63,12 @@ export interface DatosRegistro {
   aceptaAvisoPrivacidad: true;
 }
 
+/** POST /api/auth/verificar-correo → 200. */
+export interface RespuestaVerificarCorreo {
+  existe: boolean;
+  message?: string;
+}
+
 /** Respuesta genérica { success, message } de registro, OTP, reenvío y recuperación. */
 export interface RespuestaSimple {
   success?: boolean;
@@ -298,6 +304,34 @@ export function problemaDeClave(clave: string, datos: DatosPersonales = {}): str
   const fallida = reglas.find(([falla]) => falla);
   return fallida ? fallida[1] : null;
 }
+
+export interface RequisitoClave {
+  id: 'largo' | 'mayuscula' | 'minuscula' | 'numero' | 'especial';
+  etiqueta: string;
+  cumplido: boolean;
+}
+
+/**
+ * Los requisitos básicos de problemaDeClave, uno por uno, para mostrarlos mientras se escribe.
+ * Usan las mismas comprobaciones: no son reglas nuevas.
+ */
+export function requisitosDeClave(clave: string): RequisitoClave[] {
+  const caracteres = clave.split('');
+  return [
+    { id: 'largo', etiqueta: 'Al menos 8 caracteres', cumplido: clave.length >= LARGO_MINIMO_CLAVE },
+    { id: 'mayuscula', etiqueta: 'Una letra mayúscula', cumplido: caracteres.some(esMayuscula) },
+    { id: 'minuscula', etiqueta: 'Una letra minúscula', cumplido: caracteres.some(esMinuscula) },
+    { id: 'numero', etiqueta: 'Un número', cumplido: caracteres.some(esDigito) },
+    {
+      id: 'especial',
+      etiqueta: 'Un carácter especial',
+      cumplido: caracteres.some((c) => ESPECIALES.includes(c)),
+    },
+  ];
+}
+
+export const AVISO_DATOS_PERSONALES_CLAVE =
+  'No incluyas tu nombre, tu correo, tu teléfono, tu año de nacimiento ni tu respuesta de seguridad.';
 
 /** Enlace al aviso de privacidad en el sitio web (EXPO_PUBLIC_WEB_URL), o null si no está configurado. */
 export function urlAvisoPrivacidad(): string | null {

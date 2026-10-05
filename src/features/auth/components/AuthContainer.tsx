@@ -1,6 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
-import { CircleAlert, CircleCheck, Check, ChevronDown } from 'lucide-react-native';
-import { useId, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { Circle, CircleAlert, CircleCheck, Check, ChevronDown } from 'lucide-react-native';
+import { useEffect, useId, useRef, useState, type ReactNode, type Ref, type RefObject } from 'react';
 import {
   KeyboardAvoidingView,
   Modal,
@@ -10,6 +10,7 @@ import {
   Text,
   View,
   useWindowDimensions,
+  type TextInput,
   type LayoutChangeEvent,
 } from 'react-native';
 import Animated, {
@@ -24,7 +25,7 @@ import Svg, { Path } from 'react-native-svg';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { Button } from '@/shared/ui/Button';
-import { Input } from '@/shared/ui/Input';
+import { Input, type EstadoCampo } from '@/shared/ui/Input';
 import { Monograma } from '@/shared/ui/Monograma';
 import { Skeleton } from '@/shared/ui/Skeleton';
 import {
@@ -34,6 +35,7 @@ import {
   curva,
   esqueleto,
   duracion,
+  escalaEntrada,
   espacio,
   fuente,
   icono,
@@ -47,9 +49,19 @@ import {
 import { useMovimientoReducido } from '@/shared/ui/useMovimientoReducido';
 import { useTheme } from '@/shared/ui/useTheme';
 
-import { TIPOS_CABELLO, type PreguntaSeguridad, type TipoCabello } from '../models/AuthModel';
+import {
+  TIPOS_CABELLO,
+  type PreguntaSeguridad,
+  type RequisitoClave,
+  type TipoCabello,
+} from '../models/AuthModel';
 import type { LoginViewModel } from '../viewmodels/useLoginViewModel';
-import type { EstadoPreguntas, RegistroViewModel } from '../viewmodels/useRegistroViewModel';
+import type {
+  CampoRegistro,
+  EstadoCorreo,
+  EstadoPreguntas,
+  RegistroViewModel,
+} from '../viewmodels/useRegistroViewModel';
 
 export type VistaAcceso = 'acceso' | 'registro';
 
@@ -63,6 +75,15 @@ interface AuthContainerProps {
 }
 
 const EASE_ENTRADA_SALIDA = Easing.bezier(...curva.entradaSalida);
+const EASE_SALIDA = Easing.bezier(...curva.salida);
+
+/** Lo que muestra el campo de correo según la verificación (solo lo que dice el endpoint). */
+const ESTADO_CORREO: Record<EstadoCorreo, EstadoCampo | null> = {
+  inactivo: null,
+  verificando: { tipo: 'verificando', texto: 'Verificando correo…' },
+  disponible: { tipo: 'exito', texto: 'Correo disponible' },
+  registrado: { tipo: 'error', texto: 'Este correo ya está registrado' },
+};
 const VISTAS: VistaAcceso[] = ['acceso', 'registro'];
 const ETIQUETA_PESTANA: Record<VistaAcceso, string> = { acceso: 'Acceso', registro: 'Registro' };
 
@@ -140,6 +161,12 @@ export function AuthContainer({
     setAlturas((previas) => (previas[v] === alto ? previas : { ...previas, [v]: alto }));
   };
 
+  // "Iniciar sesión" desde un correo ya registrado: pasa a Acceso con el correo escrito.
+  const irAAcceso = (correo: string) => {
+    login.setCorreo(correo);
+    cambiarA('acceso');
+  };
+
   const altoMayor = Math.max(alturas.acceso, alturas.registro);
   const altoVentana = ajustada ? alturas[ajustada] : altoMayor;
 
@@ -185,7 +212,7 @@ export function AuthContainer({
               <FormularioAcceso login={login} onRecuperar={onRecuperar} aviso={aviso ?? null} />
             </Panel>
             <Panel ancho={ancho} activo={vista === 'registro'} onLayout={medirVista('registro')}>
-              <FormularioRegistro registro={registro} />
+              <FormularioRegistro registro={registro} refScroll={refScroll} onIrAAcceso={irAAcceso} />
             </Panel>
           </Animated.View>
         </View>
@@ -318,7 +345,8 @@ function FormularioAcceso({
   onRecuperar: () => void;
   aviso: string | null;
 }) {
-  const { correo, setCorreo, clave, setClave, errores, errorGeneral, cargando, entrar } = login;
+  const { correo, setCorreo, salirCorreo, clave, setClave, errores, errorGeneral, cargando, entrar } =
+    login;
   return (
     <>
       <Encabezado titulo="Inicia sesión" texto="Consulta tus citas, tus pedidos y tus recordatorios." />
@@ -328,6 +356,7 @@ function FormularioAcceso({
         tipo="correo"
         valor={correo}
         onCambiar={setCorreo}
+        onSalir={salirCorreo}
         placeholder="tu@correo.com"
         error={errores.correo}
       />
@@ -356,63 +385,173 @@ function FormularioAcceso({
   );
 }
 
-function FormularioRegistro({ registro }: { registro: RegistroViewModel }) {
-  const { campos, cambiar, errores, errorGeneral, cargando, ayudaTelefono, preguntas } = registro;
+function FormularioRegistro({
+  registro,
+  refScroll,
+  onIrAAcceso,
+}: {
+  registro: RegistroViewModel;
+  refScroll: RefObject<ScrollView | null>;
+  onIrAAcceso: (correo: string) => void;
+}) {
+  const {
+    campos,
+    cambiar,
+    salir,
+    errores,
+    errorGeneral,
+    cargando,
+    estadoCorreo,
+    requisitosClave,
+    avisoDatosPersonales,
+    enfoque,
+    ayudaTelefono,
+    preguntas,
+  } = registro;
+  const reducido = useMovimientoReducido();
+  const refNombre = useRef<TextInput>(null);
+  const refCorreo = useRef<TextInput>(null);
+  const refTelefono = useRef<TextInput>(null);
+  const refClave = useRef<TextInput>(null);
+  const refConfirmacion = useRef<TextInput>(null);
+  const refNacimiento = useRef<TextInput>(null);
+  const refRespuesta = useRef<TextInput>(null);
+  const refCabello = useRef<View>(null);
+  const refPregunta = useRef<View>(null);
+  const refAviso = useRef<View>(null);
+  const enfoqueAtendido = useRef(0);
+
+  // Al enviar con errores, el foco va al primer campo con error; los que no son de texto se
+  // traen a la vista.
+  useEffect(() => {
+    // Cada pedido se atiende una sola vez (el efecto también corre si cambia "reducido").
+    if (!enfoque || enfoque.vez === enfoqueAtendido.current) {
+      return;
+    }
+    enfoqueAtendido.current = enfoque.vez;
+    const textos: Partial<Record<CampoRegistro, RefObject<TextInput | null>>> = {
+      nombre: refNombre,
+      correo: refCorreo,
+      telefono: refTelefono,
+      clave: refClave,
+      confirmacion: refConfirmacion,
+      nacimiento: refNacimiento,
+      respuesta: refRespuesta,
+    };
+    const bloques: Partial<Record<CampoRegistro, RefObject<View | null>>> = {
+      tipoCabello: refCabello,
+      pregunta: refPregunta,
+      aceptaAviso: refAviso,
+    };
+    const entrada = textos[enfoque.campo]?.current;
+    if (entrada) {
+      entrada.focus();
+      return;
+    }
+    const contenedor = bloques[enfoque.campo]?.current;
+    const scroll = refScroll.current;
+    const nativo = scroll?.getNativeScrollRef();
+    if (contenedor && scroll && nativo) {
+      contenedor.measureLayout(
+        nativo,
+        (_x, y) => scroll.scrollTo({ y: Math.max(0, y - espacio.x3), animated: !reducido }),
+        () => {
+          // Sin medida no se desplaza; el error sigue visible en el campo.
+        },
+      );
+    }
+  }, [enfoque, refScroll, reducido]);
+
+  const errorCorreo = errores.correo ?? null;
+  // Si falta un requisito de la lista (son las primeras reglas de problemaDeClave), se marca
+  // en la propia lista en lugar de repetirlo en rojo; el texto queda para las demás reglas.
+  const faltanRequisitos = requisitosClave.some((requisito) => !requisito.cumplido);
+  const marcarFaltantes = Boolean(errores.clave) && faltanRequisitos;
+  const errorClave = marcarFaltantes ? null : (errores.clave ?? null);
+  const correoRegistrado = !errorCorreo && estadoCorreo === 'registrado';
+
   return (
     <>
       <Encabezado titulo="Crea tu cuenta" texto="Reserva tus citas y compra en la tienda del salón." />
       <Input
+        ref={refNombre}
         etiqueta="Nombre completo"
         tipo="nombre"
         valor={campos.nombre}
         onCambiar={(t) => cambiar('nombre', t)}
+        onSalir={() => salir('nombre')}
         error={errores.nombre}
       />
       <Input
+        ref={refCorreo}
         etiqueta="Correo electrónico"
         tipo="correo"
         valor={campos.correo}
         onCambiar={(t) => cambiar('correo', t)}
+        onSalir={() => salir('correo')}
         placeholder="tu@correo.com"
-        error={errores.correo}
+        error={errorCorreo}
+        estado={ESTADO_CORREO[estadoCorreo]}
+        debajo={
+          correoRegistrado ? (
+            <Enlace texto="Iniciar sesión" onPress={() => onIrAAcceso(campos.correo.trim())} />
+          ) : null
+        }
       />
       <Input
+        ref={refTelefono}
         etiqueta="Teléfono"
         tipo="telefono"
         valor={campos.telefono}
         onCambiar={(t) => cambiar('telefono', t)}
+        onSalir={() => salir('telefono')}
         ayuda={ayudaTelefono}
         error={errores.telefono}
       />
       <Input
+        ref={refClave}
         etiqueta="Contraseña"
         tipo="claveNueva"
         valor={campos.clave}
         onCambiar={(t) => cambiar('clave', t)}
-        ayuda="Mínimo 8 caracteres con mayúscula, minúscula, número y carácter especial."
-        error={errores.clave}
+        onSalir={() => salir('clave')}
+        error={errorClave}
+        estado={marcarFaltantes ? { tipo: 'error', texto: 'Te faltan requisitos de la contraseña.' } : null}
+        debajo={
+          <RequisitosClave
+            requisitos={requisitosClave}
+            aviso={avisoDatosPersonales}
+            marcarFaltantes={marcarFaltantes}
+          />
+        }
       />
       <Input
+        ref={refConfirmacion}
         etiqueta="Confirmar contraseña"
         tipo="claveNueva"
         valor={campos.confirmacion}
         onCambiar={(t) => cambiar('confirmacion', t)}
+        onSalir={() => salir('confirmacion')}
         error={errores.confirmacion}
       />
       <Input
+        ref={refNacimiento}
         etiqueta="Fecha de nacimiento"
         tipo="fecha"
         valor={campos.nacimiento}
         onCambiar={(t) => cambiar('nacimiento', t)}
+        onSalir={() => salir('nacimiento')}
         placeholder="DD/MM/AAAA"
         error={errores.nacimiento}
       />
       <OpcionesCabello
+        refContenedor={refCabello}
         valor={campos.tipoCabello}
         onElegir={(v) => cambiar('tipoCabello', v)}
         error={errores.tipoCabello ?? null}
       />
       <Selector
+        refContenedor={refPregunta}
         etiqueta="Pregunta de seguridad"
         placeholder="Elige una pregunta"
         valor={campos.pregunta}
@@ -423,12 +562,14 @@ function FormularioRegistro({ registro }: { registro: RegistroViewModel }) {
         error={errores.pregunta ?? null}
       />
       <Input
+        ref={refRespuesta}
         etiqueta="Respuesta de seguridad"
         valor={campos.respuesta}
         onCambiar={(t) => cambiar('respuesta', t)}
+        onSalir={() => salir('respuesta')}
         error={errores.respuesta}
       />
-      <View>
+      <View ref={refAviso}>
         <Casilla
           marcada={campos.aceptaAviso}
           onCambiar={(v) => cambiar('aceptaAviso', v)}
@@ -447,12 +588,96 @@ function FormularioRegistro({ registro }: { registro: RegistroViewModel }) {
   );
 }
 
+/** Requisitos de la contraseña: se marcan conforme se cumplen. */
+function RequisitosClave({
+  requisitos,
+  aviso,
+  marcarFaltantes,
+}: {
+  requisitos: RequisitoClave[];
+  aviso: string;
+  marcarFaltantes: boolean;
+}) {
+  const { colores } = useTheme();
+  return (
+    <View style={styles.requisitos}>
+      {requisitos.map((requisito) => (
+        <Requisito
+          key={requisito.id}
+          etiqueta={requisito.etiqueta}
+          cumplido={requisito.cumplido}
+          resaltar={marcarFaltantes && !requisito.cumplido}
+        />
+      ))}
+      <Text style={[styles.nota, { color: colores.textoSuave }]}>{aviso}</Text>
+    </View>
+  );
+}
+
+/**
+ * Un requisito: la marca aparece en 140 ms con la curva de salida. Con movimiento reducido solo
+ * cambia la opacidad (sin escala).
+ */
+function Requisito({
+  etiqueta,
+  cumplido,
+  resaltar,
+}: {
+  etiqueta: string;
+  cumplido: boolean;
+  /** Pendiente después de salir del campo o de enviar: en color de peligro. */
+  resaltar: boolean;
+}) {
+  const { colores } = useTheme();
+  const reducido = useMovimientoReducido();
+  const progreso = useSharedValue(cumplido ? 1 : 0);
+
+  useEffect(() => {
+    progreso.set(
+      withTiming(cumplido ? 1 : 0, { duration: duracion.estadoCampo, easing: EASE_SALIDA }),
+    );
+  }, [cumplido, progreso]);
+
+  const estiloMarca = useAnimatedStyle(() => {
+    const p = progreso.get();
+    return {
+      opacity: p,
+      transform: [{ scale: reducido ? 1 : escalaEntrada + (1 - escalaEntrada) * p }],
+    };
+  });
+
+  let colorPendiente = colores.textoSuave;
+  if (resaltar) {
+    colorPendiente = colores.peligro;
+  }
+
+  return (
+    <View
+      accessible
+      accessibilityLabel={`${etiqueta}: ${cumplido ? 'cumplido' : 'pendiente'}`}
+      style={styles.requisito}
+    >
+      <View style={styles.marcaRequisito}>
+        <Circle color={colorPendiente} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
+        <Animated.View style={[StyleSheet.absoluteFill, styles.centrado, estiloMarca]}>
+          <CircleCheck color={colores.foco} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
+        </Animated.View>
+      </View>
+      <Text style={[styles.nota, { color: cumplido ? colores.texto : colorPendiente }]}>
+        {etiqueta}
+      </Text>
+    </View>
+  );
+}
+
 /** Tipo de cabello obligatorio: tres opciones excluyentes. */
 function OpcionesCabello({
+  refContenedor,
   valor,
   onElegir,
   error,
 }: {
+  refContenedor?: Ref<View>;
   valor: TipoCabello | null;
   onElegir: (valor: TipoCabello) => void;
   error: string | null;
@@ -460,7 +685,7 @@ function OpcionesCabello({
   const { colores } = useTheme();
   const id = useId();
   return (
-    <View style={styles.campo}>
+    <View ref={refContenedor} style={styles.campo}>
       <Text nativeID={`${id}-etiqueta`} style={[styles.etiqueta, { color: colores.texto }]}>
         Tipo de cabello
       </Text>
@@ -482,17 +707,15 @@ function OpcionesCabello({
               style={[
                 styles.opcionCabello,
                 {
-                  backgroundColor: elegida ? colores.accion : colores.campoFondo,
+                  backgroundColor: colores.campoFondo,
                   borderColor: colorBorde,
                 },
               ]}
             >
-              <Text
-                style={[
-                  styles.textoOpcionCabello,
-                  { color: elegida ? colores.textoSobreAccion : colores.campoTexto },
-                ]}
-              >
+              {elegida ? (
+                <Check color={colores.foco} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
+              ) : null}
+              <Text style={[styles.textoOpcionCabello, { color: colores.campoTexto }]}>
                 {opcion.etiqueta}
               </Text>
             </Pressable>
@@ -556,6 +779,7 @@ function MarcaGoogle() {
 
 /** Selector con hoja modal propia: la lista se carga del API al abrirlo. */
 function Selector({
+  refContenedor,
   etiqueta,
   placeholder,
   valor,
@@ -565,6 +789,7 @@ function Selector({
   onElegir,
   error,
 }: {
+  refContenedor?: Ref<View>;
   etiqueta: string;
   placeholder: string;
   valor: PreguntaSeguridad | null;
@@ -590,7 +815,7 @@ function Selector({
   }
 
   return (
-    <View style={styles.campo}>
+    <View ref={refContenedor} style={styles.campo}>
       <Text nativeID={`${id}-etiqueta`} style={[styles.etiqueta, { color: colores.texto }]}>
         {etiqueta}
       </Text>
@@ -711,7 +936,7 @@ function ContenidoSelector({
           <Pressable
             key={opcion.id}
             accessibilityRole="radio"
-            accessibilityState={{ selected: elegida }}
+            accessibilityState={{ checked: elegida }}
             onPress={() => onElegir(opcion)}
             style={({ pressed }) => [
               styles.opcion,
@@ -744,7 +969,7 @@ function Casilla({
   const { colores } = useTheme();
   let colorBorde = colores.campoBorde;
   if (marcada) {
-    colorBorde = colores.accion;
+    colorBorde = colores.foco;
   } else if (error) {
     colorBorde = colores.peligro;
   }
@@ -753,7 +978,6 @@ function Casilla({
       <Pressable
         accessibilityRole="checkbox"
         accessibilityState={{ checked: marcada }}
-        accessibilityHint={error ?? undefined}
         onPress={() => onCambiar(!marcada)}
         style={styles.filaCasilla}
       >
@@ -979,8 +1203,10 @@ const styles = StyleSheet.create({
   opcionCabello: {
     flex: 1,
     minHeight: toqueMinimo,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: espacio.xs,
     paddingHorizontal: espacio.s,
     borderRadius: radio.pastilla,
     borderWidth: borde.campo,
@@ -1005,5 +1231,21 @@ const styles = StyleSheet.create({
   },
   textoOpcion: {
     flex: 1,
+  },
+  requisitos: {
+    gap: espacio.xs,
+  },
+  requisito: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: espacio.s,
+  },
+  marcaRequisito: {
+    width: icono.tamanoPequeno,
+    height: icono.tamanoPequeno,
+  },
+  centrado: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

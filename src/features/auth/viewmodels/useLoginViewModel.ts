@@ -22,6 +22,8 @@ export interface ErroresLogin {
 export interface LoginViewModel {
   correo: string;
   setCorreo: (texto: string) => void;
+  /** Al salir del campo de correo: lo valida y, desde su primer error, en cada cambio. */
+  salirCorreo: () => void;
   clave: string;
   setClave: (texto: string) => void;
   errores: ErroresLogin;
@@ -61,11 +63,27 @@ function mensajeDeLogin(error: unknown): string {
 export function useLoginViewModel(): LoginViewModel {
   const { ingresar } = useAuth();
   const { push } = useRouter();
-  const [correo, setCorreo] = useState('');
+  const [correo, setCorreoCrudo] = useState('');
+  const [correoEnVivo, setCorreoEnVivo] = useState(false);
   const [clave, setClave] = useState('');
   const [errores, setErrores] = useState<ErroresLogin>(SIN_ERRORES);
   const [errorGeneral, setErrorGeneral] = useState<string | null>(null);
   const [cargando, setCargando] = useState(false);
+
+  const setCorreo = (texto: string) => {
+    setCorreoCrudo(texto);
+    if (correoEnVivo) {
+      setErrores((previos) => ({ ...previos, correo: problemaDeCorreo(texto) }));
+    }
+  };
+
+  const salirCorreo = () => {
+    const problema = problemaDeCorreo(correo);
+    setErrores((previos) => ({ ...previos, correo: problema }));
+    if (problema) {
+      setCorreoEnVivo(true);
+    }
+  };
 
   const enviar = async () => {
     const nuevos: ErroresLogin = {
@@ -74,6 +92,9 @@ export function useLoginViewModel(): LoginViewModel {
     };
     setErrores(nuevos);
     setErrorGeneral(null);
+    if (nuevos.correo) {
+      setCorreoEnVivo(true);
+    }
     if (nuevos.correo || nuevos.clave) {
       return;
     }
@@ -101,5 +122,5 @@ export function useLoginViewModel(): LoginViewModel {
     });
   };
 
-  return { correo, setCorreo, clave, setClave, errores, errorGeneral, cargando, entrar };
+  return { correo, setCorreo, salirCorreo, clave, setClave, errores, errorGeneral, cargando, entrar };
 }
