@@ -33,7 +33,7 @@ export default function ActivarView() {
           error={activar.error}
         />
         <Text style={[styles.nota, { color: colores.textoSuave }]}>El código vence en 2 minutos.</Text>
-        {activar.mensaje ? <Aviso tipo="exito" texto={activar.mensaje} /> : null}
+        <Aviso tipo="exito" texto={activar.mensaje} />
         <Button
           titulo={activar.cargando ? 'Verificando…' : 'Verificar código'}
           onPress={activar.verificar}

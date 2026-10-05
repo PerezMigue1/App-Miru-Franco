@@ -32,7 +32,7 @@ export function OtpInput({ etiqueta, valor, onCambiar, largo = 6, error }: OtpIn
   };
 
   return (
-    <View style={styles.campo}>
+    <View>
       <Text nativeID={`${id}-etiqueta`} style={[styles.etiqueta, { color: colores.texto }]}>
         {etiqueta}
       </Text>
@@ -56,33 +56,35 @@ export function OtpInput({ etiqueta, valor, onCambiar, largo = 6, error }: OtpIn
         </View>
         <TextInput
           value={valor}
+          // Sin maxLength: el límite nativo recortaría lo pegado ("123 456") antes de limpiarlo; el
+          // view model deja solo dígitos y corta al largo.
           onChangeText={onCambiar}
-          maxLength={largo}
           keyboardType="number-pad"
           textContentType="oneTimeCode"
           autoComplete="sms-otp"
           caretHidden
           accessibilityLabelledBy={`${id}-etiqueta`}
-          accessibilityHint={hayError ? (error ?? undefined) : `${largo} dígitos`}
+          accessibilityHint={`${largo} dígitos`}
           onFocus={() => setEnfocado(true)}
           onBlur={() => setEnfocado(false)}
           style={[StyleSheet.absoluteFill, styles.entrada]}
         />
       </View>
-      {hayError ? (
-        <Text accessibilityLiveRegion="polite" style={[styles.nota, { color: colores.peligro }]}>
-          {error}
-        </Text>
-      ) : null}
+      {/* Región en vivo siempre montada: el error se anuncia una vez, no también como pista. */}
+      <View
+        collapsable={false}
+        accessibilityLiveRegion="polite"
+        style={hayError ? styles.mensaje : null}
+      >
+        {hayError ? <Text style={[styles.nota, { color: colores.peligro }]}>{error}</Text> : null}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  campo: {
-    gap: espacio.s,
-  },
   etiqueta: {
+    marginBottom: espacio.s,
     fontFamily: fuente.textoMedio,
     fontSize: tipo.pequeno.tamano,
     lineHeight: tipo.pequeno.linea,
@@ -110,6 +112,9 @@ const styles = StyleSheet.create({
   // El campo real queda encima de las casillas, invisible, para recibir el toque y el teclado.
   entrada: {
     opacity: 0,
+  },
+  mensaje: {
+    marginTop: espacio.s,
   },
   nota: {
     fontFamily: fuente.texto,

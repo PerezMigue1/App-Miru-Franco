@@ -2,6 +2,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Circle, CircleAlert, CircleCheck, Check, ChevronDown } from 'lucide-react-native';
 import { useEffect, useId, useRef, useState, type ReactNode, type Ref, type RefObject } from 'react';
 import {
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Pressable,
@@ -83,6 +84,10 @@ const ESTADO_CORREO: Record<EstadoCorreo, EstadoCampo | null> = {
   verificando: { tipo: 'verificando', texto: 'Verificando correo…' },
   disponible: { tipo: 'exito', texto: 'Correo disponible' },
   registrado: { tipo: 'error', texto: 'Este correo ya está registrado' },
+  sinVerificar: {
+    tipo: 'aviso',
+    texto: 'No pudimos verificar el correo ahora; lo revisaremos al crear la cuenta',
+  },
 };
 const VISTAS: VistaAcceso[] = ['acceso', 'registro'];
 const ETIQUETA_PESTANA: Record<VistaAcceso, string> = { acceso: 'Acceso', registro: 'Registro' };
@@ -307,7 +312,7 @@ export function Enlace({
         { alignSelf: alineacion[alinear], backgroundColor: pressed ? colores.presionado : 'transparent' },
       ]}
     >
-      <Text style={[styles.textoEnlace, { color: colores.foco }]}>{texto}</Text>
+      <Text style={[styles.textoEnlace, { color: colores.enlace }]}>{texto}</Text>
     </Pressable>
   );
 }
@@ -347,30 +352,34 @@ function FormularioAcceso({
 }) {
   const { correo, setCorreo, salirCorreo, clave, setClave, errores, errorGeneral, cargando, entrar } =
     login;
+  const refClaveAcceso = useRef<TextInput>(null);
   return (
     <>
       <Encabezado titulo="Inicia sesión" texto="Consulta tus citas, tus pedidos y tus recordatorios." />
-      {aviso ? <Aviso tipo="exito" texto={aviso} /> : null}
+      <Aviso tipo="exito" texto={aviso} />
       <Input
         etiqueta="Correo electrónico"
         tipo="correo"
         valor={correo}
         onCambiar={setCorreo}
         onSalir={salirCorreo}
+        siguiente={() => refClaveAcceso.current?.focus()}
         placeholder="tu@correo.com"
         error={errores.correo}
       />
       <View>
         <Input
+          ref={refClaveAcceso}
           etiqueta="Contraseña"
           tipo="claveActual"
           valor={clave}
           onCambiar={setClave}
+          alEnviar={entrar}
           error={errores.clave}
         />
         <Enlace texto="¿Olvidaste tu contraseña?" onPress={onRecuperar} alinear="fin" />
       </View>
-      {errorGeneral ? <Aviso tipo="error" texto={errorGeneral} /> : null}
+      <Aviso tipo="error" texto={errorGeneral} />
       <Button titulo={cargando ? 'Entrando…' : 'Entrar'} onPress={entrar} cargando={cargando} />
       <Separador />
       {/* TODO(GP-05): acceso con Google; requiere cambios del backend. */}
@@ -448,19 +457,15 @@ function FormularioRegistro({
       entrada.focus();
       return;
     }
-    const contenedor = bloques[enfoque.campo]?.current;
-    const scroll = refScroll.current;
-    const nativo = scroll?.getNativeScrollRef();
-    if (contenedor && scroll && nativo) {
-      contenedor.measureLayout(
-        nativo,
-        (_x, y) => scroll.scrollTo({ y: Math.max(0, y - espacio.x3), animated: !reducido }),
-        () => {
-          // Sin medida no se desplaza; el error sigue visible en el campo.
-        },
-      );
-    }
+    traerALaVista(bloques[enfoque.campo]?.current, refScroll.current, !reducido);
   }, [enfoque, refScroll, reducido]);
+
+  // Después de la fecha siguen controles que el teclado no alcanza: se cierra y se trae a la vista
+  // el tipo de cabello.
+  const irACabello = () => {
+    Keyboard.dismiss();
+    traerALaVista(refCabello.current, refScroll.current, !reducido);
+  };
 
   const errorCorreo = errores.correo ?? null;
   // Si falta un requisito de la lista (son las primeras reglas de problemaDeClave), se marca
@@ -480,6 +485,7 @@ function FormularioRegistro({
         valor={campos.nombre}
         onCambiar={(t) => cambiar('nombre', t)}
         onSalir={() => salir('nombre')}
+        siguiente={() => refCorreo.current?.focus()}
         error={errores.nombre}
       />
       <Input
@@ -489,9 +495,11 @@ function FormularioRegistro({
         valor={campos.correo}
         onCambiar={(t) => cambiar('correo', t)}
         onSalir={() => salir('correo')}
+        siguiente={() => refTelefono.current?.focus()}
         placeholder="tu@correo.com"
         error={errorCorreo}
         estado={ESTADO_CORREO[estadoCorreo]}
+        reservarMensaje
         debajo={
           correoRegistrado ? (
             <Enlace texto="Iniciar sesión" onPress={() => onIrAAcceso(campos.correo.trim())} />
@@ -505,34 +513,9 @@ function FormularioRegistro({
         valor={campos.telefono}
         onCambiar={(t) => cambiar('telefono', t)}
         onSalir={() => salir('telefono')}
+        siguiente={() => refNacimiento.current?.focus()}
         ayuda={ayudaTelefono}
         error={errores.telefono}
-      />
-      <Input
-        ref={refClave}
-        etiqueta="Contraseña"
-        tipo="claveNueva"
-        valor={campos.clave}
-        onCambiar={(t) => cambiar('clave', t)}
-        onSalir={() => salir('clave')}
-        error={errorClave}
-        estado={marcarFaltantes ? { tipo: 'error', texto: 'Te faltan requisitos de la contraseña.' } : null}
-        debajo={
-          <RequisitosClave
-            requisitos={requisitosClave}
-            aviso={avisoDatosPersonales}
-            marcarFaltantes={marcarFaltantes}
-          />
-        }
-      />
-      <Input
-        ref={refConfirmacion}
-        etiqueta="Confirmar contraseña"
-        tipo="claveNueva"
-        valor={campos.confirmacion}
-        onCambiar={(t) => cambiar('confirmacion', t)}
-        onSalir={() => salir('confirmacion')}
-        error={errores.confirmacion}
       />
       <Input
         ref={refNacimiento}
@@ -541,6 +524,7 @@ function FormularioRegistro({
         valor={campos.nacimiento}
         onCambiar={(t) => cambiar('nacimiento', t)}
         onSalir={() => salir('nacimiento')}
+        siguiente={irACabello}
         placeholder="DD/MM/AAAA"
         error={errores.nacimiento}
       />
@@ -567,7 +551,36 @@ function FormularioRegistro({
         valor={campos.respuesta}
         onCambiar={(t) => cambiar('respuesta', t)}
         onSalir={() => salir('respuesta')}
+        siguiente={() => refClave.current?.focus()}
         error={errores.respuesta}
+      />
+      <Input
+        ref={refClave}
+        etiqueta="Contraseña"
+        tipo="claveNueva"
+        valor={campos.clave}
+        onCambiar={(t) => cambiar('clave', t)}
+        onSalir={() => salir('clave')}
+        siguiente={() => refConfirmacion.current?.focus()}
+        error={errorClave}
+        estado={marcarFaltantes ? { tipo: 'error', texto: 'Te faltan requisitos de la contraseña.' } : null}
+        debajo={
+          <RequisitosClave
+            requisitos={requisitosClave}
+            aviso={avisoDatosPersonales}
+            marcarFaltantes={marcarFaltantes}
+          />
+        }
+      />
+      <Input
+        ref={refConfirmacion}
+        etiqueta="Confirmar contraseña"
+        tipo="claveNueva"
+        valor={campos.confirmacion}
+        onCambiar={(t) => cambiar('confirmacion', t)}
+        onSalir={() => salir('confirmacion')}
+        alEnviar={registro.crearCuenta}
+        error={errores.confirmacion}
       />
       <View ref={refAviso}>
         <Casilla
@@ -578,13 +591,28 @@ function FormularioRegistro({
         />
         <Enlace texto="Leer el aviso de privacidad" onPress={registro.abrirAviso} />
       </View>
-      {errorGeneral ? <Aviso tipo="error" texto={errorGeneral} /> : null}
+      <Aviso tipo="error" texto={errorGeneral} />
       <Button
         titulo={cargando ? 'Creando cuenta…' : 'Crear cuenta'}
         onPress={registro.crearCuenta}
         cargando={cargando}
       />
     </>
+  );
+}
+
+/** Desplaza el formulario hasta un bloque que no es de texto (cabello, pregunta, aviso). */
+function traerALaVista(contenedor: View | null | undefined, scroll: ScrollView | null, animado: boolean) {
+  const nativo = scroll?.getNativeScrollRef();
+  if (!contenedor || !scroll || !nativo) {
+    return;
+  }
+  contenedor.measureLayout(
+    nativo,
+    (_x, y) => scroll.scrollTo({ y: Math.max(0, y - espacio.x3), animated: animado }),
+    () => {
+      // Sin medida no se desplaza; el error sigue visible en el campo.
+    },
   );
 }
 
@@ -722,29 +750,52 @@ function OpcionesCabello({
           );
         })}
       </View>
-      {error ? (
-        <Text accessibilityLiveRegion="polite" style={[styles.nota, { color: colores.peligro }]}>
-          {error}
-        </Text>
-      ) : null}
+      <MensajeCampo error={error} />
     </View>
   );
 }
 
-/** Mensaje de error o de éxito de un formulario, anunciado por el lector de pantalla. */
-export function Aviso({ tipo: tipoAviso, texto }: { tipo: 'error' | 'exito'; texto: string }) {
+/**
+ * Error de un control que no es Input (cabello, pregunta, casilla): región en vivo siempre montada
+ * para que TalkBack lo anuncie una vez. Vacía, queda fuera del flujo y no suma espacio.
+ */
+function MensajeCampo({ error }: { error: string | null }) {
+  const { colores } = useTheme();
+  return (
+    <View
+      collapsable={false}
+      accessibilityLiveRegion="polite"
+      style={error ? null : styles.fueraDeFlujo}
+    >
+      {error ? <Text style={[styles.nota, { color: colores.peligro }]}>{error}</Text> : null}
+    </View>
+  );
+}
+
+/**
+ * Mensaje de error o de éxito de un formulario. La región en vivo queda siempre montada para que
+ * TalkBack anuncie el texto cuando aparece; vacía, queda fuera del flujo y no suma espacio.
+ */
+export function Aviso({ tipo: tipoAviso, texto }: { tipo: 'error' | 'exito'; texto: string | null }) {
   const { colores } = useTheme();
   const esError = tipoAviso === 'error';
   const Icono = esError ? CircleAlert : CircleCheck;
   const color = esError ? colores.peligro : colores.texto;
   return (
     <View
-      accessible
+      collapsable={false}
       accessibilityLiveRegion={esError ? 'assertive' : 'polite'}
-      style={[styles.aviso, { borderColor: esError ? colores.peligro : colores.hairline }]}
+      style={texto ? null : styles.fueraDeFlujo}
     >
-      <Icono color={esError ? colores.peligro : colores.foco} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
-      <Text style={[styles.texto, styles.textoAviso, { color }]}>{texto}</Text>
+      {texto ? (
+        <View
+          accessible
+          style={[styles.aviso, { borderColor: esError ? colores.peligro : colores.hairline }]}
+        >
+          <Icono color={esError ? colores.peligro : colores.foco} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
+          <Text style={[styles.texto, styles.textoAviso, { color }]}>{texto}</Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -843,11 +894,7 @@ function Selector({
         </Text>
         <ChevronDown color={colores.campoPlaceholder} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
       </Pressable>
-      {error ? (
-        <Text accessibilityLiveRegion="polite" style={[styles.nota, { color: colores.peligro }]}>
-          {error}
-        </Text>
-      ) : null}
+      <MensajeCampo error={error} />
 
       <Modal
         visible={abierto}
@@ -996,11 +1043,7 @@ function Casilla({
         </View>
         <Text style={[styles.texto, styles.textoCasilla, { color: colores.texto }]}>{texto}</Text>
       </Pressable>
-      {error ? (
-        <Text accessibilityLiveRegion="polite" style={[styles.nota, { color: colores.peligro }]}>
-          {error}
-        </Text>
-      ) : null}
+      <MensajeCampo error={error} />
     </View>
   );
 }
@@ -1234,6 +1277,9 @@ const styles = StyleSheet.create({
   },
   requisitos: {
     gap: espacio.xs,
+  },
+  fueraDeFlujo: {
+    position: 'absolute',
   },
   requisito: {
     flexDirection: 'row',

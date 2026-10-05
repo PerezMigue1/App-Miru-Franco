@@ -26,8 +26,8 @@ export default function RecuperarView() {
           placeholder="tu@correo.com"
           error={recuperar.errorCorreo}
         />
-        {recuperar.mensaje ? <Aviso tipo="exito" texto={recuperar.mensaje} /> : null}
-        {recuperar.error ? <Aviso tipo="error" texto={recuperar.error} /> : null}
+        <Aviso tipo="exito" texto={recuperar.mensaje} />
+        <Aviso tipo="error" texto={recuperar.error} />
         <Button
           titulo={recuperar.cargando ? 'Enviando…' : 'Enviar enlace'}
           onPress={recuperar.enviar}

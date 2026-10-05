@@ -49,8 +49,11 @@ export type ErroresRegistro = Partial<Record<CampoRegistro, string | null>>;
 
 export type EstadoPreguntas = 'inactivo' | 'cargando' | 'listo' | 'error';
 
-/** Verificación del correo: solo lo que dice el endpoint (existe o no). */
-export type EstadoCorreo = 'inactivo' | 'verificando' | 'disponible' | 'registrado';
+/**
+ * Verificación del correo: solo lo que dice el endpoint (existe o no). 'sinVerificar': no respondió
+ * a tiempo o falló la red; no bloquea, el registro lo revisará con su 409.
+ */
+export type EstadoCorreo = 'inactivo' | 'verificando' | 'disponible' | 'registrado' | 'sinVerificar';
 
 /** Pedido a la vista de llevar el foco a un campo (cambia en cada envío con errores). */
 export interface PedidoEnfoque {
@@ -89,17 +92,20 @@ const CAMPOS_INICIALES: CamposRegistro = {
   aceptaAviso: false,
 };
 
-/** Orden visual del formulario: el foco va al primero de esta lista que tenga error. */
+/**
+ * Orden visual del formulario: el foco va al primero de esta lista que tenga error. La contraseña
+ * va después de los datos con los que la regla del backend la compara.
+ */
 const ORDEN: CampoRegistro[] = [
   'nombre',
   'correo',
   'telefono',
-  'clave',
-  'confirmacion',
   'nacimiento',
   'tipoCabello',
   'pregunta',
   'respuesta',
+  'clave',
+  'confirmacion',
   'aceptaAviso',
 ];
 
@@ -197,6 +203,8 @@ export function useRegistroViewModel(): RegistroViewModel {
   // Verificación del correo: temporizador, número de solicitud (descarta respuestas viejas),
   // correo ya consultado y si la pantalla sigue montada. En refs: no provocan renders.
   const temporizador = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Límite de espera de la verificación: si vence, el registro deja de estar bloqueado.
+  const limite = useRef<ReturnType<typeof setTimeout> | null>(null);
   const solicitudCorreo = useRef(0);
   const correoConsultado = useRef<string | null>(null);
   const montado = useRef(true);
@@ -209,12 +217,22 @@ export function useRegistroViewModel(): RegistroViewModel {
     }
   };
 
+  const limpiarLimite = () => {
+    if (limite.current) {
+      clearTimeout(limite.current);
+      limite.current = null;
+    }
+  };
+
   useEffect(() => {
     montado.current = true;
     return () => {
       montado.current = false;
       if (temporizador.current) {
         clearTimeout(temporizador.current);
+      }
+      if (limite.current) {
+        clearTimeout(limite.current);
       }
     };
   }, []);
@@ -229,11 +247,23 @@ export function useRegistroViewModel(): RegistroViewModel {
     solicitudCorreo.current += 1;
     const solicitud = solicitudCorreo.current;
     setEstadoCorreo('verificando');
+    // Si no responde a tiempo, deja de bloquear. No se incrementa la solicitud ni se libera el correo
+    // consultado: si la respuesta llega tarde y el correo no cambió, se aplica igual.
+    limpiarLimite();
+    limite.current = setTimeout(() => {
+      limite.current = null;
+      if (!montado.current || solicitud !== solicitudCorreo.current) {
+        return;
+      }
+      setErrorGeneral((previo) => (previo === ESPERA_VERIFICACION ? null : previo));
+      setEstadoCorreo('sinVerificar');
+    }, duracion.limiteVerificacionCorreo);
     verificarCorreo(email)
       .then((respuesta) => {
         if (!montado.current || solicitud !== solicitudCorreo.current) {
           return;
         }
+        limpiarLimite();
         setErrorGeneral((previo) => (previo === ESPERA_VERIFICACION ? null : previo));
         if (respuesta?.existe === true) {
           setEstadoCorreo('registrado');
@@ -249,14 +279,17 @@ export function useRegistroViewModel(): RegistroViewModel {
         if (!montado.current || solicitud !== solicitudCorreo.current) {
           return;
         }
+        limpiarLimite();
         setErrorGeneral((previo) => (previo === ESPERA_VERIFICACION ? null : previo));
+        // Se puede volver a intentar al salir del campo; mientras, no se bloquea el registro.
         correoConsultado.current = null;
-        setEstadoCorreo('inactivo');
+        setEstadoCorreo('sinVerificar');
       });
   };
 
   const programarVerificacion = (valor: string) => {
     limpiarTemporizador();
+    limpiarLimite();
     solicitudCorreo.current += 1;
     correoConsultado.current = null;
     setEstadoCorreo('inactivo');
@@ -384,6 +417,7 @@ export function useRegistroViewModel(): RegistroViewModel {
         // El correo ya tiene cuenta: se muestra en el propio campo, como la verificación.
         if (montado.current) {
           limpiarTemporizador();
+          limpiarLimite();
           solicitudCorreo.current += 1;
           correoConsultado.current = email;
           setEstadoCorreo('registrado');
