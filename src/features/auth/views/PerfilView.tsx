@@ -56,7 +56,7 @@ export default function PerfilView() {
       )}
 
       <View style={[styles.grupo, { borderColor: colores.hairline }]}>
-        {/* TODO: editar datos y foto de perfil (issue por asignar). */}
+        {/* TODO(GP-05.2): editar datos y foto de perfil. */}
         <ListRow icono={UserPen} titulo="Editar perfil" accessibilityHint="Disponible próximamente" />
         <ListRow icono={CalendarDays} titulo="Mis citas" onPress={abrirCitas} />
         {/* TODO(GP-06): historial de pedidos de la tienda. */}

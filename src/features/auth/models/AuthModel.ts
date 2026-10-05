@@ -110,6 +110,8 @@ const LARGO_TELEFONO = 10;
 const LARGO_CODIGO = 6;
 const LARGO_MINIMO_CLAVE = 8;
 const LARGO_MINIMO_TEXTO = 2;
+/** El backend solo compara datos personales de 3 caracteres o más. */
+const LARGO_MINIMO_DATO = 3;
 const EDAD_MINIMA = 18;
 const ESPECIALES = '!@#$%^&*()_+-=[]{};\':"\\|,.<>/?';
 const PATRONES_TECLADO = ['qwerty', 'asdfgh', 'zxcvbn', '123456', '654321'];
@@ -240,17 +242,28 @@ interface DatosPersonales {
 }
 
 /**
- * Reglas de contraseña del backend, tomadas de la web: mínimo 8 caracteres con mayúscula,
- * minúscula, número y carácter especial, sin datos personales ni patrones simples.
+ * Regla del backend (password.validator.ts): con todo en minúsculas, la contraseña no puede
+ * contener el dato, y solo si el dato tiene 3 caracteres o más.
+ */
+function contieneDato(claveMinusculas: string, dato: string): boolean {
+  const valor = dato.toLowerCase();
+  return valor.length >= LARGO_MINIMO_DATO && claveMinusculas.includes(valor);
+}
+
+/**
+ * Reglas de contraseña del backend: mínimo 8 caracteres con mayúscula, minúscula, número y
+ * carácter especial, sin datos personales ni patrones simples. Los datos personales se comparan
+ * tal como se envían: nombre completo, usuario del correo, teléfono, año y día de nacimiento
+ * (AAAA y DD de AAAA-MM-DD) y respuesta de seguridad.
  * Devuelve el primer problema, o null si es válida.
  */
 export function problemaDeClave(clave: string, datos: DatosPersonales = {}): string | null {
   const caracteres = clave.split('');
   const minusculas = clave.toLowerCase();
   const consecutivos = tieneConsecutivos(clave);
-  const fecha = datos.fechaNacimiento?.split('-') ?? [];
-  const usuarioCorreo = datos.email?.split('@')[0]?.toLowerCase() ?? '';
-  const telefono = soloDigitos(datos.telefono ?? '');
+  const [anio = '', , dia = ''] = (datos.fechaNacimiento ?? '').split('-');
+  const usuarioCorreo = normalizarCorreo(datos.email ?? '').split('@')[0] ?? '';
+  const telefono = normalizarTelefono(datos.telefono ?? '');
   const reglas: [boolean, string][] = [
     [clave.length < LARGO_MINIMO_CLAVE, 'La contraseña debe tener al menos 8 caracteres'],
     [!caracteres.some(esMayuscula), 'Debe incluir al menos una letra mayúscula'],
@@ -260,18 +273,15 @@ export function problemaDeClave(clave: string, datos: DatosPersonales = {}): str
       !caracteres.some((c) => ESPECIALES.includes(c)),
       'Debe incluir al menos un carácter especial (!@#$%^&*()_+-=[]{}|;:\'",.<>?/)',
     ],
+    [contieneDato(minusculas, (datos.nombre ?? '').trim()), 'La contraseña no puede contener tu nombre'],
+    [contieneDato(minusculas, usuarioCorreo), 'La contraseña no puede contener tu email'],
+    [contieneDato(minusculas, telefono), 'La contraseña no puede contener tu teléfono'],
     [
-      Boolean(datos.nombre?.trim()) && minusculas.includes((datos.nombre ?? '').trim().toLowerCase()),
-      'La contraseña no puede contener tu nombre',
-    ],
-    [Boolean(usuarioCorreo) && minusculas.includes(usuarioCorreo), 'La contraseña no puede contener tu email'],
-    [Boolean(telefono) && clave.includes(telefono), 'La contraseña no puede contener tu teléfono'],
-    [
-      fecha.length === 3 && (clave.includes(fecha[0]) || clave.includes(String(Number(fecha[2])))),
+      contieneDato(minusculas, anio) || contieneDato(minusculas, dia),
       'La contraseña no puede contener tu fecha de nacimiento',
     ],
     [
-      Boolean(datos.respuesta?.trim()) && minusculas.includes((datos.respuesta ?? '').trim().toLowerCase()),
+      contieneDato(minusculas, (datos.respuesta ?? '').trim()),
       'La contraseña no puede contener la respuesta de tu pregunta de seguridad',
     ],
     [
