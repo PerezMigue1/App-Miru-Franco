@@ -287,6 +287,17 @@ export const fila = {
   alto: 56,
 } as const;
 
+/** Hoja modal del selector: alto máximo de la lista antes de desplazarse. */
+export const hoja = {
+  altoLista: 320,
+} as const;
+
+/** Casillas del código de verificación (OtpInput). */
+export const codigo = {
+  ancho: toqueMinimo,
+  alto: 56,
+} as const;
+
 /** Casilla de verificación. */
 export const casilla = {
   tamano: 24,

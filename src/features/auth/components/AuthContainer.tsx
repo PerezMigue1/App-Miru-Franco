@@ -1,7 +1,8 @@
 import { StatusBar } from 'expo-status-bar';
-import { Check, ChevronDown } from 'lucide-react-native';
-import { useId, useRef, useState, type ReactNode } from 'react';
+import { CircleAlert, CircleCheck, Check, ChevronDown } from 'lucide-react-native';
+import { useId, useRef, useState, type ReactNode, type RefObject } from 'react';
 import {
+  KeyboardAvoidingView,
   Modal,
   Pressable,
   ScrollView,
@@ -25,11 +26,13 @@ import { scheduleOnRN } from 'react-native-worklets';
 import { Button } from '@/shared/ui/Button';
 import { Input } from '@/shared/ui/Input';
 import { Monograma } from '@/shared/ui/Monograma';
+import { Skeleton } from '@/shared/ui/Skeleton';
 import {
   acceso,
   borde,
   casilla,
   curva,
+  esqueleto,
   duracion,
   espacio,
   fuente,
@@ -37,37 +40,47 @@ import {
   pantalla,
   radio,
   tipo,
+  hoja,
   toqueMinimo,
   tracking,
 } from '@/shared/ui/tokens';
 import { useMovimientoReducido } from '@/shared/ui/useMovimientoReducido';
 import { useTheme } from '@/shared/ui/useTheme';
 
+import { TIPOS_CABELLO, type PreguntaSeguridad, type TipoCabello } from '../models/AuthModel';
+import type { LoginViewModel } from '../viewmodels/useLoginViewModel';
+import type { EstadoPreguntas, RegistroViewModel } from '../viewmodels/useRegistroViewModel';
+
 export type VistaAcceso = 'acceso' | 'registro';
 
 interface AuthContainerProps {
   vistaInicial: VistaAcceso;
-  onEntrar: () => void;
+  login: LoginViewModel;
+  registro: RegistroViewModel;
   onRecuperar: () => void;
+  /** Aviso de éxito sobre el formulario de acceso (por ejemplo, cuenta activada). */
+  aviso?: string | null;
 }
 
 const EASE_ENTRADA_SALIDA = Easing.bezier(...curva.entradaSalida);
 const VISTAS: VistaAcceso[] = ['acceso', 'registro'];
 const ETIQUETA_PESTANA: Record<VistaAcceso, string> = { acceso: 'Acceso', registro: 'Registro' };
 
-// TODO(GP-05): cargar las preguntas de seguridad del API; mientras tanto la lista queda vacía.
-const PREGUNTAS_SEGURIDAD: string[] = [];
-
 /**
  * Acceso y registro (DESIGN.md, piezas de marca): panel carbón compacto con el monograma y
  * pestañas con indicador dorado. Los dos formularios quedan montados y el contenido se desliza
  * en horizontal 680 ms; cambiar de vista no navega ni recarga la pantalla. Con movimiento
- * reducido el cambio es inmediato y solo se funde la opacidad. Solo visual: los campos guardan
- * su texto y nada más (la lógica es de GP-05).
+ * reducido el cambio es inmediato y solo se funde la opacidad. El estado de cada formulario vive
+ * en su viewmodel (useLoginViewModel y useRegistroViewModel).
  */
-export function AuthContainer({ vistaInicial, onEntrar, onRecuperar }: AuthContainerProps) {
+export function AuthContainer({
+  vistaInicial,
+  login,
+  registro,
+  onRecuperar,
+  aviso,
+}: AuthContainerProps) {
   const { colores } = useTheme();
-  const { bottom } = useSafeAreaInsets();
   const { width: ancho } = useWindowDimensions();
   const reducido = useMovimientoReducido();
   const [vista, setVista] = useState<VistaAcceso>(vistaInicial);
@@ -131,15 +144,7 @@ export function AuthContainer({ vistaInicial, onEntrar, onRecuperar }: AuthConta
   const altoVentana = ajustada ? alturas[ajustada] : altoMayor;
 
   return (
-    <View style={[styles.raiz, { backgroundColor: colores.fondo }]}>
-      <StatusBar style="light" />
-      <ScrollView
-        ref={refScroll}
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingBottom: bottom + espacio.x3 }}
-      >
-        <PanelMarca />
-
+    <PantallaAuth refScroll={refScroll}>
         <View
           accessibilityRole="tablist"
           style={[styles.pestanas, { borderBottomColor: colores.hairline }]}
@@ -177,15 +182,43 @@ export function AuthContainer({ vistaInicial, onEntrar, onRecuperar }: AuthConta
         <View style={[styles.ventana, altoVentana > 0 ? { height: altoVentana } : null]}>
           <Animated.View style={[styles.carril, { width: ancho * VISTAS.length }, estiloCarril]}>
             <Panel ancho={ancho} activo={vista === 'acceso'} onLayout={medirVista('acceso')}>
-              <FormularioAcceso onEntrar={onEntrar} onRecuperar={onRecuperar} />
+              <FormularioAcceso login={login} onRecuperar={onRecuperar} aviso={aviso ?? null} />
             </Panel>
             <Panel ancho={ancho} activo={vista === 'registro'} onLayout={medirVista('registro')}>
-              <FormularioRegistro />
+              <FormularioRegistro registro={registro} />
             </Panel>
           </Animated.View>
         </View>
+    </PantallaAuth>
+  );
+}
+
+/**
+ * Pantalla de acceso: panel de marca bajo la barra de estado, contenido que respeta la barra de
+ * navegación y se desplaza sobre el teclado (edge-to-edge en Android: el teclado no redimensiona
+ * la ventana, así que se compensa con padding).
+ */
+export function PantallaAuth({
+  children,
+  refScroll,
+}: {
+  children: ReactNode;
+  refScroll?: RefObject<ScrollView | null>;
+}) {
+  const { colores } = useTheme();
+  const { bottom } = useSafeAreaInsets();
+  return (
+    <KeyboardAvoidingView behavior="padding" style={[styles.raiz, { backgroundColor: colores.fondo }]}>
+      <StatusBar style="light" />
+      <ScrollView
+        ref={refScroll}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: bottom + espacio.x3 }}
+      >
+        <PanelMarca />
+        {children}
       </ScrollView>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -276,24 +309,40 @@ function Panel({
   );
 }
 
-function FormularioAcceso({ onEntrar, onRecuperar }: { onEntrar: () => void; onRecuperar: () => void }) {
-  const [correo, setCorreo] = useState('');
-  const [clave, setClave] = useState('');
+function FormularioAcceso({
+  login,
+  onRecuperar,
+  aviso,
+}: {
+  login: LoginViewModel;
+  onRecuperar: () => void;
+  aviso: string | null;
+}) {
+  const { correo, setCorreo, clave, setClave, errores, errorGeneral, cargando, entrar } = login;
   return (
     <>
       <Encabezado titulo="Inicia sesión" texto="Consulta tus citas, tus pedidos y tus recordatorios." />
+      {aviso ? <Aviso tipo="exito" texto={aviso} /> : null}
       <Input
         etiqueta="Correo electrónico"
         tipo="correo"
         valor={correo}
         onCambiar={setCorreo}
         placeholder="tu@correo.com"
+        error={errores.correo}
       />
       <View>
-        <Input etiqueta="Contraseña" tipo="claveActual" valor={clave} onCambiar={setClave} />
+        <Input
+          etiqueta="Contraseña"
+          tipo="claveActual"
+          valor={clave}
+          onCambiar={setClave}
+          error={errores.clave}
+        />
         <Enlace texto="¿Olvidaste tu contraseña?" onPress={onRecuperar} alinear="fin" />
       </View>
-      <Button titulo="Entrar" onPress={onEntrar} />
+      {errorGeneral ? <Aviso tipo="error" texto={errorGeneral} /> : null}
+      <Button titulo={cargando ? 'Entrando…' : 'Entrar'} onPress={entrar} cargando={cargando} />
       <Separador />
       {/* TODO(GP-05): acceso con Google; requiere cambios del backend. */}
       <Button
@@ -307,65 +356,173 @@ function FormularioAcceso({ onEntrar, onRecuperar }: { onEntrar: () => void; onR
   );
 }
 
-function FormularioRegistro() {
-  const [nombre, setNombre] = useState('');
-  const [correo, setCorreo] = useState('');
-  const [telefono, setTelefono] = useState('');
-  const [clave, setClave] = useState('');
-  const [confirmacion, setConfirmacion] = useState('');
-  const [nacimiento, setNacimiento] = useState('');
-  const [pregunta, setPregunta] = useState<string | null>(null);
-  const [respuesta, setRespuesta] = useState('');
-  const [aceptaAviso, setAceptaAviso] = useState(false);
-
+function FormularioRegistro({ registro }: { registro: RegistroViewModel }) {
+  const { campos, cambiar, errores, errorGeneral, cargando, ayudaTelefono, preguntas } = registro;
   return (
     <>
       <Encabezado titulo="Crea tu cuenta" texto="Reserva tus citas y compra en la tienda del salón." />
-      <Input etiqueta="Nombre completo" tipo="nombre" valor={nombre} onCambiar={setNombre} />
+      <Input
+        etiqueta="Nombre completo"
+        tipo="nombre"
+        valor={campos.nombre}
+        onCambiar={(t) => cambiar('nombre', t)}
+        error={errores.nombre}
+      />
       <Input
         etiqueta="Correo electrónico"
         tipo="correo"
-        valor={correo}
-        onCambiar={setCorreo}
+        valor={campos.correo}
+        onCambiar={(t) => cambiar('correo', t)}
         placeholder="tu@correo.com"
+        error={errores.correo}
       />
       <Input
         etiqueta="Teléfono"
         tipo="telefono"
-        valor={telefono}
-        onCambiar={setTelefono}
-        ayuda="10 dígitos, sin espacios."
+        valor={campos.telefono}
+        onCambiar={(t) => cambiar('telefono', t)}
+        ayuda={ayudaTelefono}
+        error={errores.telefono}
       />
-      <Input etiqueta="Contraseña" tipo="claveNueva" valor={clave} onCambiar={setClave} />
+      <Input
+        etiqueta="Contraseña"
+        tipo="claveNueva"
+        valor={campos.clave}
+        onCambiar={(t) => cambiar('clave', t)}
+        ayuda="Mínimo 8 caracteres con mayúscula, minúscula, número y carácter especial."
+        error={errores.clave}
+      />
       <Input
         etiqueta="Confirmar contraseña"
         tipo="claveNueva"
-        valor={confirmacion}
-        onCambiar={setConfirmacion}
+        valor={campos.confirmacion}
+        onCambiar={(t) => cambiar('confirmacion', t)}
+        error={errores.confirmacion}
       />
       <Input
         etiqueta="Fecha de nacimiento"
         tipo="fecha"
-        valor={nacimiento}
-        onCambiar={setNacimiento}
+        valor={campos.nacimiento}
+        onCambiar={(t) => cambiar('nacimiento', t)}
         placeholder="DD/MM/AAAA"
+        error={errores.nacimiento}
+      />
+      <OpcionesCabello
+        valor={campos.tipoCabello}
+        onElegir={(v) => cambiar('tipoCabello', v)}
+        error={errores.tipoCabello ?? null}
       />
       <Selector
         etiqueta="Pregunta de seguridad"
         placeholder="Elige una pregunta"
-        valor={pregunta}
-        opciones={PREGUNTAS_SEGURIDAD}
-        onElegir={setPregunta}
+        valor={campos.pregunta}
+        opciones={preguntas.lista}
+        estado={preguntas.estado}
+        onCargar={preguntas.cargar}
+        onElegir={(p) => cambiar('pregunta', p)}
+        error={errores.pregunta ?? null}
       />
-      <Input etiqueta="Respuesta de seguridad" valor={respuesta} onCambiar={setRespuesta} />
-      <Casilla
-        marcada={aceptaAviso}
-        onCambiar={setAceptaAviso}
-        texto="Acepto el aviso de privacidad"
+      <Input
+        etiqueta="Respuesta de seguridad"
+        valor={campos.respuesta}
+        onCambiar={(t) => cambiar('respuesta', t)}
+        error={errores.respuesta}
       />
-      {/* TODO(GP-05): conectar el registro real; por ahora el formulario es solo visual. */}
-      <Button titulo="Crear cuenta" accessibilityHint="Disponible próximamente" />
+      <View>
+        <Casilla
+          marcada={campos.aceptaAviso}
+          onCambiar={(v) => cambiar('aceptaAviso', v)}
+          texto="Acepto el aviso de privacidad"
+          error={errores.aceptaAviso ?? null}
+        />
+        <Enlace texto="Leer el aviso de privacidad" onPress={registro.abrirAviso} />
+      </View>
+      {errorGeneral ? <Aviso tipo="error" texto={errorGeneral} /> : null}
+      <Button
+        titulo={cargando ? 'Creando cuenta…' : 'Crear cuenta'}
+        onPress={registro.crearCuenta}
+        cargando={cargando}
+      />
     </>
+  );
+}
+
+/** Tipo de cabello obligatorio: tres opciones excluyentes. */
+function OpcionesCabello({
+  valor,
+  onElegir,
+  error,
+}: {
+  valor: TipoCabello | null;
+  onElegir: (valor: TipoCabello) => void;
+  error: string | null;
+}) {
+  const { colores } = useTheme();
+  const id = useId();
+  return (
+    <View style={styles.campo}>
+      <Text nativeID={`${id}-etiqueta`} style={[styles.etiqueta, { color: colores.texto }]}>
+        Tipo de cabello
+      </Text>
+      <View accessibilityRole="radiogroup" accessibilityLabelledBy={`${id}-etiqueta`} style={styles.opcionesCabello}>
+        {TIPOS_CABELLO.map((opcion) => {
+          const elegida = opcion.valor === valor;
+          let colorBorde = colores.campoBorde;
+          if (elegida) {
+            colorBorde = colores.foco;
+          } else if (error) {
+            colorBorde = colores.peligro;
+          }
+          return (
+            <Pressable
+              key={opcion.valor}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: elegida }}
+              onPress={() => onElegir(opcion.valor)}
+              style={[
+                styles.opcionCabello,
+                {
+                  backgroundColor: elegida ? colores.accion : colores.campoFondo,
+                  borderColor: colorBorde,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.textoOpcionCabello,
+                  { color: elegida ? colores.textoSobreAccion : colores.campoTexto },
+                ]}
+              >
+                {opcion.etiqueta}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      {error ? (
+        <Text accessibilityLiveRegion="polite" style={[styles.nota, { color: colores.peligro }]}>
+          {error}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+/** Mensaje de error o de éxito de un formulario, anunciado por el lector de pantalla. */
+export function Aviso({ tipo: tipoAviso, texto }: { tipo: 'error' | 'exito'; texto: string }) {
+  const { colores } = useTheme();
+  const esError = tipoAviso === 'error';
+  const Icono = esError ? CircleAlert : CircleCheck;
+  const color = esError ? colores.peligro : colores.texto;
+  return (
+    <View
+      accessible
+      accessibilityLiveRegion={esError ? 'assertive' : 'polite'}
+      style={[styles.aviso, { borderColor: esError ? colores.peligro : colores.hairline }]}
+    >
+      <Icono color={esError ? colores.peligro : colores.foco} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
+      <Text style={[styles.texto, styles.textoAviso, { color }]}>{texto}</Text>
+    </View>
   );
 }
 
@@ -397,25 +554,40 @@ function MarcaGoogle() {
   );
 }
 
-/** Selector con hoja modal propia (la lista se llena en GP-05). */
+/** Selector con hoja modal propia: la lista se carga del API al abrirlo. */
 function Selector({
   etiqueta,
   placeholder,
   valor,
   opciones,
+  estado,
+  onCargar,
   onElegir,
+  error,
 }: {
   etiqueta: string;
   placeholder: string;
-  valor: string | null;
-  opciones: string[];
-  onElegir: (opcion: string) => void;
+  valor: PreguntaSeguridad | null;
+  opciones: PreguntaSeguridad[];
+  estado: EstadoPreguntas;
+  onCargar: () => void;
+  onElegir: (opcion: PreguntaSeguridad) => void;
+  error: string | null;
 }) {
   const { colores } = useTheme();
   const { bottom } = useSafeAreaInsets();
   const id = useId();
   const [abierto, setAbierto] = useState(false);
   const cerrar = () => setAbierto(false);
+  const abrir = () => {
+    setAbierto(true);
+    onCargar();
+  };
+
+  let colorBorde = colores.campoBorde;
+  if (error) {
+    colorBorde = colores.peligro;
+  }
 
   return (
     <View style={styles.campo}>
@@ -426,12 +598,12 @@ function Selector({
         accessibilityRole="button"
         accessibilityLabelledBy={`${id}-etiqueta`}
         accessibilityHint="Abre la lista de preguntas"
-        onPress={() => setAbierto(true)}
+        onPress={abrir}
         style={({ pressed }) => [
           styles.selector,
           {
             backgroundColor: colores.campoFondo,
-            borderColor: pressed ? colores.foco : colores.campoBorde,
+            borderColor: pressed ? colores.foco : colorBorde,
           },
         ]}
       >
@@ -442,10 +614,15 @@ function Selector({
             { color: valor ? colores.campoTexto : colores.campoPlaceholder },
           ]}
         >
-          {valor ?? placeholder}
+          {valor ? valor.pregunta : placeholder}
         </Text>
         <ChevronDown color={colores.campoPlaceholder} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
       </Pressable>
+      {error ? (
+        <Text accessibilityLiveRegion="polite" style={[styles.nota, { color: colores.peligro }]}>
+          {error}
+        </Text>
+      ) : null}
 
       <Modal
         visible={abierto}
@@ -470,32 +647,16 @@ function Selector({
             <Text accessibilityRole="header" style={[styles.tituloHoja, { color: colores.texto }]}>
               {etiqueta}
             </Text>
-            {opciones.length === 0 ? (
-              <Text style={[styles.texto, { color: colores.textoSuave }]}>
-                Todavía no hay preguntas de seguridad disponibles.
-              </Text>
-            ) : (
-              opciones.map((opcion) => (
-                <Pressable
-                  key={opcion}
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected: opcion === valor }}
-                  onPress={() => {
-                    onElegir(opcion);
-                    cerrar();
-                  }}
-                  style={({ pressed }) => [
-                    styles.opcion,
-                    { backgroundColor: pressed ? colores.presionado : 'transparent' },
-                  ]}
-                >
-                  <Text style={[styles.texto, { color: colores.texto }]}>{opcion}</Text>
-                  {opcion === valor ? (
-                    <Check color={colores.foco} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
-                  ) : null}
-                </Pressable>
-              ))
-            )}
+            <ContenidoSelector
+              estado={estado}
+              opciones={opciones}
+              valor={valor}
+              onReintentar={onCargar}
+              onElegir={(opcion) => {
+                onElegir(opcion);
+                cerrar();
+              }}
+            />
             <Button titulo="Cerrar" variante="secundario" onPress={cerrar} />
           </View>
         </View>
@@ -504,39 +665,119 @@ function Selector({
   );
 }
 
+function ContenidoSelector({
+  estado,
+  opciones,
+  valor,
+  onReintentar,
+  onElegir,
+}: {
+  estado: EstadoPreguntas;
+  opciones: PreguntaSeguridad[];
+  valor: PreguntaSeguridad | null;
+  onReintentar: () => void;
+  onElegir: (opcion: PreguntaSeguridad) => void;
+}) {
+  const { colores } = useTheme();
+  if (estado === 'cargando' || estado === 'inactivo') {
+    return (
+      <View accessible accessibilityLabel="Cargando preguntas de seguridad" style={styles.cargandoHoja}>
+        <Skeleton estilo={styles.lineaHoja} />
+        <Skeleton estilo={styles.lineaHoja} />
+        <Skeleton estilo={styles.lineaHojaCorta} />
+      </View>
+    );
+  }
+  if (estado === 'error') {
+    return (
+      <>
+        <Aviso tipo="error" texto="No pudimos cargar las preguntas. Revisa tu conexión." />
+        <Button titulo="Reintentar" variante="secundario" onPress={onReintentar} />
+      </>
+    );
+  }
+  if (opciones.length === 0) {
+    return (
+      <Text style={[styles.texto, { color: colores.textoSuave }]}>
+        Todavía no hay preguntas de seguridad disponibles.
+      </Text>
+    );
+  }
+  return (
+    <ScrollView style={styles.listaHoja}>
+      {opciones.map((opcion) => {
+        const elegida = opcion.id === valor?.id;
+        return (
+          <Pressable
+            key={opcion.id}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: elegida }}
+            onPress={() => onElegir(opcion)}
+            style={({ pressed }) => [
+              styles.opcion,
+              { backgroundColor: pressed ? colores.presionado : 'transparent' },
+            ]}
+          >
+            <Text style={[styles.texto, styles.textoOpcion, { color: colores.texto }]}>{opcion.pregunta}</Text>
+            {elegida ? (
+              <Check color={colores.foco} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
+            ) : null}
+          </Pressable>
+        );
+      })}
+    </ScrollView>
+  );
+}
+
 /** Casilla de verificación hecha con Pressable. */
 function Casilla({
   marcada,
   onCambiar,
   texto,
+  error,
 }: {
   marcada: boolean;
   onCambiar: (marcada: boolean) => void;
   texto: string;
+  error: string | null;
 }) {
   const { colores } = useTheme();
+  let colorBorde = colores.campoBorde;
+  if (marcada) {
+    colorBorde = colores.accion;
+  } else if (error) {
+    colorBorde = colores.peligro;
+  }
   return (
-    <Pressable
-      accessibilityRole="checkbox"
-      accessibilityState={{ checked: marcada }}
-      onPress={() => onCambiar(!marcada)}
-      style={styles.filaCasilla}
-    >
-      <View
-        style={[
-          styles.casilla,
-          {
-            borderColor: marcada ? colores.accion : colores.campoBorde,
-            backgroundColor: marcada ? colores.accion : colores.campoFondo,
-          },
-        ]}
+    <View>
+      <Pressable
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: marcada }}
+        accessibilityHint={error ?? undefined}
+        onPress={() => onCambiar(!marcada)}
+        style={styles.filaCasilla}
       >
-        {marcada ? (
-          <Check color={colores.textoSobreAccion} size={icono.tamanoPequeno} strokeWidth={icono.trazoMarca} />
-        ) : null}
-      </View>
-      <Text style={[styles.texto, styles.textoCasilla, { color: colores.texto }]}>{texto}</Text>
-    </Pressable>
+        <View
+          style={[
+            styles.casilla,
+            {
+              borderColor: colorBorde,
+              backgroundColor: marcada ? colores.accion : colores.campoFondo,
+            },
+          ]}
+        >
+          {marcada ? (
+            <Check color={colores.textoSobreAccion} size={icono.tamanoPequeno} strokeWidth={icono.trazoMarca} />
+          ) : null}
+        </View>
+        <Text style={[styles.texto, styles.textoCasilla, { color: colores.texto }]}>{texto}</Text>
+      </Pressable>
+      {error ? (
+        <Text accessibilityLiveRegion="polite" style={[styles.nota, { color: colores.peligro }]}>
+          {error}
+        </Text>
+      ) : null}
+    </View>
   );
 }
 
@@ -635,6 +876,17 @@ const styles = StyleSheet.create({
     lineHeight: tipo.pequeno.linea,
     textDecorationLine: 'underline',
   },
+  aviso: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: espacio.m,
+    padding: espacio.l,
+    borderRadius: radio.campo,
+    borderWidth: borde.hairline,
+  },
+  textoAviso: {
+    flex: 1,
+  },
   separador: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -713,6 +965,45 @@ const styles = StyleSheet.create({
     borderWidth: borde.campo,
   },
   textoCasilla: {
+    flex: 1,
+  },
+  nota: {
+    fontFamily: fuente.texto,
+    fontSize: tipo.etiqueta.tamano,
+    lineHeight: tipo.etiqueta.linea,
+  },
+  opcionesCabello: {
+    flexDirection: 'row',
+    gap: espacio.s,
+  },
+  opcionCabello: {
+    flex: 1,
+    minHeight: toqueMinimo,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: espacio.s,
+    borderRadius: radio.pastilla,
+    borderWidth: borde.campo,
+  },
+  textoOpcionCabello: {
+    fontFamily: fuente.textoMedio,
+    fontSize: tipo.pequeno.tamano,
+    lineHeight: tipo.pequeno.linea,
+  },
+  cargandoHoja: {
+    gap: espacio.m,
+  },
+  lineaHoja: {
+    height: toqueMinimo,
+  },
+  lineaHojaCorta: {
+    width: esqueleto.anchoMedio,
+    height: toqueMinimo,
+  },
+  listaHoja: {
+    maxHeight: hoja.altoLista,
+  },
+  textoOpcion: {
     flex: 1,
   },
 });
