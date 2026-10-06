@@ -1,5 +1,6 @@
-import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
+import { BackHandler } from 'react-native';
 
 import { soloDigitos } from '@/shared/ui/digitos';
 import { useCandado } from '@/shared/ui/useCandado';
@@ -13,6 +14,7 @@ import {
   mensajeDelServidor,
 } from '../models/AuthModel';
 import { reenviarCodigo, verificarCodigo } from '../models/authService';
+import type { RutaAcceso } from './useRetornoActivacion';
 
 const ESPERA_REENVIO_S = 60;
 const LARGO_CODIGO = 6;
@@ -52,8 +54,14 @@ function mensajeDeVerificacion(error: unknown): string {
 /**
  * Activación de la cuenta con el código de 6 dígitos (vence en 2 minutos). Entre reenvíos hay una
  * espera visible de 60 segundos; si se llega justo después del registro, la espera ya corre.
+ * Toda salida (éxito, "Volver" o Atrás de Android) regresa a la pantalla de acceso que la abrió,
+ * con el correo, para que muestre Acceso y reinicie el registro.
  */
-export function useActivarViewModel(email: string, recienEnviado: boolean): ActivarViewModel {
+export function useActivarViewModel(
+  email: string,
+  recienEnviado: boolean,
+  volverA: RutaAcceso,
+): ActivarViewModel {
   const { dismissTo } = useRouter();
   const [codigo, setCodigoCrudo] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -61,6 +69,35 @@ export function useActivarViewModel(email: string, recienEnviado: boolean): Acti
   const [cargando, setCargando] = useState(false);
   const [reenviando, setReenviando] = useState(false);
   const [espera, setEspera] = useState(recienEnviado ? ESPERA_REENVIO_S : 0);
+
+  /**
+   * Regresa a la pantalla de acceso que abrió la activación (sin crear otra si ya está en la pila;
+   * si no está, la reemplaza). "vuelta" cambia cada vez para que el regreso se atienda siempre.
+   */
+  const regresar = useCallback(
+    (activada: boolean) => {
+      dismissTo({
+        pathname: volverA,
+        params: {
+          correo: email,
+          vuelta: String(Date.now()),
+          ...(activada ? { activada: '1' } : {}),
+        },
+      });
+    },
+    [dismissTo, email, volverA],
+  );
+
+  // El Atrás de Android sale por el mismo camino que "Volver a iniciar sesión".
+  useFocusEffect(
+    useCallback(() => {
+      const suscripcion = BackHandler.addEventListener('hardwareBackPress', () => {
+        regresar(false);
+        return true;
+      });
+      return () => suscripcion.remove();
+    }, [regresar]),
+  );
 
   useEffect(() => {
     if (espera <= 0) {
@@ -93,7 +130,7 @@ export function useActivarViewModel(email: string, recienEnviado: boolean): Acti
         setError(MENSAJE_CODIGO_INCORRECTO);
         return;
       }
-      dismissTo({ pathname: '/login', params: { activada: '1' } });
+      regresar(true);
     } catch (fallo) {
       setError(mensajeDeVerificacion(fallo));
     } finally {
@@ -142,7 +179,7 @@ export function useActivarViewModel(email: string, recienEnviado: boolean): Acti
     candadoReenvio(enviarReenvio);
   };
 
-  const volver = () => dismissTo('/login');
+  const volver = () => regresar(false);
 
   return {
     email,

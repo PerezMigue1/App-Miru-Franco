@@ -8,12 +8,21 @@ import { useTheme } from '@/shared/ui/useTheme';
 
 import { Aviso, Encabezado, Enlace, PantallaAuth } from '../components/AuthContainer';
 import { useActivarViewModel } from '../viewmodels/useActivarViewModel';
+import { rutaAcceso } from '../viewmodels/useRetornoActivacion';
 
 /** Activación de la cuenta con el código que llegó al correo. */
 export default function ActivarView() {
   const { colores } = useTheme();
-  const { email, enviado } = useLocalSearchParams<{ email?: string; enviado?: string }>();
-  const activar = useActivarViewModel(typeof email === 'string' ? email : '', enviado === '1');
+  const { email, enviado, volverA } = useLocalSearchParams<{
+    email?: string;
+    enviado?: string;
+    volverA?: string;
+  }>();
+  const activar = useActivarViewModel(
+    typeof email === 'string' ? email : '',
+    enviado === '1',
+    rutaAcceso(volverA),
+  );
 
   return (
     <PantallaAuth>

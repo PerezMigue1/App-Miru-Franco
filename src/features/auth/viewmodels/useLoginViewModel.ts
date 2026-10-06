@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 import { useState } from 'react';
 
 import { useCandado } from '@/shared/ui/useCandado';
@@ -15,6 +15,7 @@ import {
   problemaDeCorreo,
 } from '../models/AuthModel';
 import { useAuth } from './useAuth';
+import { rutaAcceso } from './useRetornoActivacion';
 
 export interface ErroresLogin {
   correo: string | null;
@@ -32,6 +33,8 @@ export interface LoginViewModel {
   errorGeneral: string | null;
   cargando: boolean;
   entrar: () => void;
+  /** Al regresar de la activación: el correo escrito y nada más (sin contraseña ni errores). */
+  prepararAcceso: (correo: string) => void;
 }
 
 const SIN_ERRORES: ErroresLogin = { correo: null, clave: null };
@@ -65,6 +68,7 @@ function mensajeDeLogin(error: unknown): string {
 export function useLoginViewModel(): LoginViewModel {
   const { ingresar } = useAuth();
   const { push } = useRouter();
+  const ruta = usePathname();
   const [correo, setCorreoCrudo] = useState('');
   const [correoEnVivo, setCorreoEnVivo] = useState(false);
   const [clave, setClave] = useState('');
@@ -106,7 +110,8 @@ export function useLoginViewModel(): LoginViewModel {
       await ingresar(email, clave);
     } catch (error) {
       if (esCuentaSinActivar(error)) {
-        push({ pathname: '/activar', params: { email } });
+        // La activación regresa a esta misma pantalla de acceso.
+        push({ pathname: '/activar', params: { email, volverA: rutaAcceso(ruta) } });
       } else {
         setErrorGeneral(mensajeDeLogin(error));
       }
@@ -124,5 +129,24 @@ export function useLoginViewModel(): LoginViewModel {
     candado(enviar);
   };
 
-  return { correo, setCorreo, salirCorreo, clave, setClave, errores, errorGeneral, cargando, entrar };
+  const prepararAcceso = (texto: string) => {
+    setCorreoCrudo(texto);
+    setCorreoEnVivo(false);
+    setClave('');
+    setErrores(SIN_ERRORES);
+    setErrorGeneral(null);
+  };
+
+  return {
+    correo,
+    setCorreo,
+    salirCorreo,
+    clave,
+    setClave,
+    errores,
+    errorGeneral,
+    cargando,
+    entrar,
+    prepararAcceso,
+  };
 }

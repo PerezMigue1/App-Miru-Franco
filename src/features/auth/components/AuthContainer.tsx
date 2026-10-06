@@ -75,6 +75,7 @@ import {
   type RequisitoClave,
 } from '../models/AuthModel';
 import type { LoginViewModel } from '../viewmodels/useLoginViewModel';
+import type { RetornoActivacion } from '../viewmodels/useRetornoActivacion';
 import type {
   CampoRegistro,
   EstadoCorreo,
@@ -92,6 +93,8 @@ interface AuthContainerProps {
   onRecuperar: () => void;
   /** Aviso de éxito sobre el formulario de acceso (por ejemplo, cuenta activada). */
   aviso?: string | null;
+  /** Regreso desde la activación: muestra Acceso con el correo y reinicia el registro. */
+  retorno?: RetornoActivacion | null;
 }
 
 const EASE_ENTRADA_SALIDA = Easing.bezier(...curva.entradaSalida);
@@ -151,6 +154,7 @@ export function AuthContainer({
   registro,
   onRecuperar,
   aviso,
+  retorno,
 }: AuthContainerProps) {
   const { colores } = useTheme();
   const { width: ancho } = useWindowDimensions();
@@ -209,6 +213,24 @@ export function AuthContainer({
       ),
     );
   };
+
+  // Al regresar de la activación (con o sin éxito) esta pantalla puede ser la misma instancia que
+  // abrió la activación, con su estado: se muestra Acceso con el correo escrito, sin animación, y
+  // el registro vuelve a cero (incluidos los datos de salud). Cada regreso se atiende una vez.
+  const retornoAtendido = useRef<string | null>(null);
+  useEffect(() => {
+    if (!retorno || retorno.vez === retornoAtendido.current) {
+      return;
+    }
+    retornoAtendido.current = retorno.vez;
+    registro.reiniciar();
+    login.prepararAcceso(retorno.correo);
+    setVista('acceso');
+    setAjustada('acceso');
+    progreso.set(VISTAS.indexOf('acceso'));
+    opacidadContenido.set(1);
+    refScroll.current?.scrollTo({ y: 0, animated: false });
+  }, [retorno, registro, login, progreso, opacidadContenido]);
 
   const medirVista = (v: VistaAcceso) => (e: LayoutChangeEvent) => {
     const alto = e.nativeEvent.layout.height;

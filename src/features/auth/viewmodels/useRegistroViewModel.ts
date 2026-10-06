@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 import { openBrowserAsync } from 'expo-web-browser';
 import { useEffect, useRef, useState } from 'react';
 
@@ -39,6 +39,7 @@ import {
   type TipoCabello,
 } from '../models/AuthModel';
 import { obtenerPreguntasSeguridad, registrarUsuario, verificarCorreo } from '../models/authService';
+import { rutaAcceso } from './useRetornoActivacion';
 
 export interface CamposRegistro {
   nombre: string;
@@ -122,6 +123,11 @@ export interface RegistroViewModel {
   abrirTerminos: () => void;
   /** Paso 2: "Finalizar registro". */
   crearCuenta: () => void;
+  /**
+   * Registro desde cero (al regresar de la activación): paso 1, campos vacíos, datos de salud y
+   * consentimiento borrados, y la verificación del correo cancelada.
+   */
+  reiniciar: () => void;
 }
 
 const CAMPOS_INICIALES: CamposRegistro = {
@@ -328,6 +334,7 @@ type Temporizador = ReturnType<typeof setTimeout>;
  */
 export function useRegistroViewModel(): RegistroViewModel {
   const { push } = useRouter();
+  const ruta = usePathname();
   const [campos, setCampos] = useState<CamposRegistro>(CAMPOS_INICIALES);
   const [errores, setErrores] = useState<ErroresRegistro>({});
   const [enVivo, setEnVivo] = useState<Partial<Record<CampoRegistro, boolean>>>({});
@@ -750,7 +757,8 @@ export function useRegistroViewModel(): RegistroViewModel {
       }
       // Los datos de salud ya viajaron: no se conservan ni en memoria.
       setCampos((previos) => ({ ...previos, alergias: '', consienteDatosSensibles: false }));
-      push({ pathname: '/activar', params: { email, enviado: '1' } });
+      // La activación regresa a esta misma pantalla de acceso.
+      push({ pathname: '/activar', params: { email, enviado: '1', volverA: rutaAcceso(ruta) } });
     } catch (error) {
       if (estadoHttp(error) === 409) {
         // El correo ya tiene cuenta: se muestra en el propio campo, en el paso 1 (solo si el
@@ -788,6 +796,22 @@ export function useRegistroViewModel(): RegistroViewModel {
     irAPaso(1);
   };
 
+  const reiniciar = () => {
+    // Cancela la espera, los reintentos y los límites del correo, y descarta respuestas en vuelo.
+    abrirRonda(null);
+    // Un "Continuar" que siguiera esperando ya no avanza.
+    cambios.current += 1;
+    ultimoCorreo.current = '';
+    setCampos(CAMPOS_INICIALES);
+    setErrores({});
+    setEnVivo({});
+    setErrorGeneral(null);
+    setNavegacion({ paso: 1, direccion: 1 });
+    setVerificandoCorreo(false);
+    setEstadoCorreo('inactivo');
+    setEnfoque(null);
+  };
+
   const candado = useCandado();
   const crearCuenta = () => {
     if (cargando) {
@@ -818,5 +842,6 @@ export function useRegistroViewModel(): RegistroViewModel {
     abrirAviso,
     abrirTerminos,
     crearCuenta,
+    reiniciar,
   };
 }
