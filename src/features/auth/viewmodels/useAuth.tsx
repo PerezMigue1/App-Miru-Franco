@@ -33,6 +33,14 @@ interface ContextoAuth {
    * esperar. Devuelve false si no se pudo borrar: la sesión sigue abierta.
    */
   salir: () => Promise<boolean>;
+  /** La sesión venció o el servidor la rechazó (no por "Cerrar sesión"): se avisa una vez. */
+  sesionVencida: boolean;
+  descartarAvisoSesion: () => void;
+  /**
+   * Tras editar el perfil: el nombre nuevo en memoria y en la sesión guardada, solo si la sesión
+   * sigue siendo la misma generación con la que se guardó.
+   */
+  actualizarNombre: (nombre: string, generacion: number) => void;
 }
 
 const RENOVAR_CADA_MS = 10 * 60 * 1000;
@@ -67,14 +75,25 @@ async function borrarConReintento(): Promise<boolean> {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [estado, setEstado] = useState<EstadoSesion>('cargando');
   const [usuario, setUsuario] = useState<UsuarioSesion | null>(null);
+  const [sesionVencida, setSesionVencida] = useState(false);
 
   const quedarAnonimo = useCallback(() => {
     setUsuario(null);
     setEstado('anonimo');
   }, []);
 
-  // apiClient avisa aquí cuando la sesión expira (401 sin renovación posible).
-  useEffect(() => alExpirarSesion(quedarAnonimo), [quedarAnonimo]);
+  // apiClient avisa aquí cuando la sesión expira (401 sin renovación posible): además de quedar
+  // sin sesión, se marca para avisarle a la clienta.
+  useEffect(
+    () =>
+      alExpirarSesion(() => {
+        quedarAnonimo();
+        setSesionVencida(true);
+      }),
+    [quedarAnonimo],
+  );
+
+  const descartarAvisoSesion = useCallback(() => setSesionVencida(false), []);
 
   // Restaura la sesión guardada y la valida con /api/auth/me: solo un 401 la cierra. Si mientras
   // tanto se inicia o se cierra sesión (cambia la generación), el resultado se descarta.
@@ -198,7 +217,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setUsuario(datos);
     setEstado('autenticado');
+    setSesionVencida(false);
   }, []);
+
+  const actualizarNombre = useCallback(
+    (nombre: string, generacion: number) => {
+      if (!usuario || generacion !== generacionActual()) {
+        return;
+      }
+      const nuevo = { ...usuario, nombre };
+      setUsuario(nuevo);
+      guardarUsuario(nuevo, generacion).catch(() => {
+        // La sesión guardada se corrige con el próximo /me al abrir la app.
+      });
+    },
+    [usuario],
+  );
 
   const salir = useCallback(async () => {
     // Cerrar sesión abre una generación nueva: renovaciones y /me en curso ya no escriben nada.
@@ -219,8 +253,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [quedarAnonimo]);
 
   const valor = useMemo(
-    () => ({ estado, usuario, ingresar, salir }),
-    [estado, usuario, ingresar, salir],
+    () => ({ estado, usuario, ingresar, salir, sesionVencida, descartarAvisoSesion, actualizarNombre }),
+    [estado, usuario, ingresar, salir, sesionVencida, descartarAvisoSesion, actualizarNombre],
   );
 
   return <Contexto.Provider value={valor}>{children}</Contexto.Provider>;

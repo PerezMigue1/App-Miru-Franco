@@ -119,14 +119,14 @@ function normalizarServicio(crudo: Crudo): Servicio {
 
 /** Lectura pública del catálogo: GET /api/productos. */
 export function obtenerProductos(): Promise<Producto[]> {
-  return apiGet<unknown>('/api/productos').then((respuesta) =>
+  return apiGet<unknown>('/api/productos', { publica: true }).then((respuesta) =>
     listaDe(respuesta, ['data', 'productos', 'producto']).map(normalizarProducto),
   );
 }
 
 /** Lectura pública de servicios: GET /api/servicios. */
 export function obtenerServicios(): Promise<Servicio[]> {
-  return apiGet<unknown>('/api/servicios').then((respuesta) =>
+  return apiGet<unknown>('/api/servicios', { publica: true }).then((respuesta) =>
     listaDe(respuesta, ['data', 'servicios', 'servicio']).map(normalizarServicio),
   );
 }

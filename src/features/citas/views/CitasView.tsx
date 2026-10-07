@@ -3,6 +3,8 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
+import { InvitacionSesion } from '@/features/auth/components/InvitacionSesion';
+import { useAuth } from '@/features/auth/viewmodels/useAuth';
 import { Button } from '@/shared/ui/Button';
 import { EmptyState } from '@/shared/ui/EmptyState';
 import { ScreenHeader } from '@/shared/ui/ScreenHeader';
@@ -35,6 +37,19 @@ const EASE_ENTRADA_SALIDA = Easing.bezier(...curva.entradaSalida);
 export default function CitasView() {
   const { colores } = useTheme();
   const [segmento, setSegmento] = useState<Segmento>('proximas');
+  const { estado } = useAuth();
+
+  if (estado !== 'autenticado') {
+    return (
+      <ScrollView style={{ backgroundColor: colores.fondo }} contentContainerStyle={styles.contenido}>
+        <ScreenHeader titulo="Mis citas" />
+        <InvitacionSesion
+          titulo="Reserva y sigue tus citas"
+          beneficio="Inicia sesión para agendar, pagar tu anticipo y ver tus próximas visitas."
+        />
+      </ScrollView>
+    );
+  }
 
   return (
     <ScrollView

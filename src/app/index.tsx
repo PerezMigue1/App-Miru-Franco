@@ -1,8 +1,6 @@
 import { Redirect } from 'expo-router';
 
-import { useAuth } from '@/features/auth/viewmodels/useAuth';
-
+/** La app abre en Inicio con o sin sesión: se explora libremente y Acceso se abre encima. */
 export default function Index() {
-  const { estado } = useAuth();
-  return <Redirect href={estado === 'autenticado' ? '/inicio' : '/login'} />;
+  return <Redirect href="/inicio" />;
 }

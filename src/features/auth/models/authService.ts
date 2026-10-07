@@ -1,4 +1,13 @@
-import { apiGet, apiPost, renovarSesion, type ResultadoRenovacion } from '@/shared/api/apiClient';
+import {
+  apiGet,
+  apiPatch,
+  apiPost,
+  apiPut,
+  renovarSesion,
+  type ResultadoRenovacion,
+} from '@/shared/api/apiClient';
+import { subirMultipart } from '@/shared/api/subirMultipart';
+import { getToken } from '@/shared/api/tokenStorage';
 
 import type {
   DatosRegistro,
@@ -10,6 +19,7 @@ import type {
   RespuestaVerificarCorreo,
   UsuarioSesion,
 } from './AuthModel';
+import type { CambiosPerfil, FirmaFoto } from './PerfilModel';
 
 /** Normaliza el usuario del backend (el id puede llegar como número). */
 export function normalizarUsuario(valor: unknown): UsuarioSesion | null {
@@ -42,6 +52,47 @@ export function cerrarSesionServidor(token: string): Promise<RespuestaSimple> {
 /** GET /api/auth/me. */
 export function obtenerPerfil(): Promise<RespuestaPerfil> {
   return apiGet<RespuestaPerfil>('/api/auth/me');
+}
+
+/** GET /api/auth/me con el perfil completo (datos capilares y foto), sin normalizar. */
+export function obtenerPerfilCompleto(): Promise<unknown> {
+  return apiGet<unknown>('/api/auth/me');
+}
+
+/** PATCH /api/auth/me: solo los campos que cambiaron. */
+export function actualizarPerfil(cambios: CambiosPerfil | { foto: string | null }): Promise<unknown> {
+  return apiPatch<unknown>('/api/auth/me', cambios);
+}
+
+/** POST /api/auth/me/foto/firma (máximo 10 por minuto): firma de una hora para subir la foto. */
+export function pedirFirmaFoto(): Promise<unknown> {
+  return apiPost<unknown>('/api/auth/me/foto/firma');
+}
+
+/** Sube la foto a Cloudinary con la firma, sin token de la app. Devuelve la respuesta de Cloudinary. */
+export function subirFoto(firma: FirmaFoto, archivoUri: string): Promise<unknown> {
+  return subirMultipart(firma.uploadUrl, archivoUri, firma.campos);
+}
+
+/**
+ * PUT /api/usuarios/:id/cambiar-password. Va con el token explícito: si el servidor responde 401
+ * por una contraseña actual incorrecta, eso no debe renovar ni cerrar la sesión.
+ */
+export async function cambiarContrasena(
+  id: string,
+  actualPassword: string,
+  nuevaPassword: string,
+): Promise<RespuestaSimple> {
+  const token = await getToken();
+  if (!token) {
+    // Sin sesión guardada: error genérico (no "contraseña actual incorrecta").
+    throw new Error('La sesión no está disponible.');
+  }
+  return apiPut<RespuestaSimple>(
+    `/api/usuarios/${encodeURIComponent(id)}/cambiar-password`,
+    { actualPassword, nuevaPassword },
+    { token },
+  );
 }
 
 /** GET /api/pregunta-seguridad (público). */

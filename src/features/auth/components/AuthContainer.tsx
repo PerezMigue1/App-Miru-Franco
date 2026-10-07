@@ -1,6 +1,6 @@
 import { useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Circle, CircleAlert, CircleCheck, Check, ChevronDown } from 'lucide-react-native';
+import { Circle, CircleAlert, CircleCheck, Check, ChevronDown, X } from 'lucide-react-native';
 import {
   Fragment,
   useCallback,
@@ -58,6 +58,7 @@ import {
   espacio,
   fuente,
   icono,
+  opacidad,
   pantalla,
   radio,
   tipo,
@@ -95,6 +96,8 @@ interface AuthContainerProps {
   aviso?: string | null;
   /** Regreso desde la activación: muestra Acceso con el correo y reinicia el registro. */
   retorno?: RetornoActivacion | null;
+  /** Cierra Acceso y vuelve a explorar la app. */
+  onCerrar?: () => void;
 }
 
 const EASE_ENTRADA_SALIDA = Easing.bezier(...curva.entradaSalida);
@@ -136,7 +139,7 @@ function aSiNo(valor: boolean | null): SiNo | null {
 }
 
 /** Texto de la web (CasillaDatosSalud, clienta); "Aviso de Privacidad" es el enlace. */
-const TEXTO_CONSENTIMIENTO_SALUD =
+export const TEXTO_CONSENTIMIENTO_SALUD =
   'Autorizo el uso de mis datos de salud (alergias y sensibilidad) solo para valorar si un tratamiento es seguro para mí, conforme al';
 const VISTAS: VistaAcceso[] = ['acceso', 'registro'];
 const ETIQUETA_PESTANA: Record<VistaAcceso, string> = { acceso: 'Acceso', registro: 'Registro' };
@@ -155,6 +158,7 @@ export function AuthContainer({
   onRecuperar,
   aviso,
   retorno,
+  onCerrar,
 }: AuthContainerProps) {
   const { colores } = useTheme();
   const { width: ancho } = useWindowDimensions();
@@ -247,7 +251,7 @@ export function AuthContainer({
   const altoVentana = ajustada ? alturas[ajustada] : altoMayor;
 
   return (
-    <PantallaAuth refScroll={refScroll}>
+    <PantallaAuth refScroll={refScroll} onCerrar={onCerrar}>
         <View
           accessibilityRole="tablist"
           style={[styles.pestanas, { borderBottomColor: colores.hairline }]}
@@ -309,15 +313,32 @@ export function AuthContainer({
 export function PantallaAuth({
   children,
   refScroll,
+  onCerrar,
 }: {
   children: ReactNode;
   refScroll?: RefObject<ScrollView | null>;
+  /** Botón para cerrar Acceso (se abre encima de las pestañas) y volver a explorar. */
+  onCerrar?: () => void;
 }) {
   const { colores } = useTheme();
-  const { bottom } = useSafeAreaInsets();
+  const { top, bottom } = useSafeAreaInsets();
   return (
     <KeyboardAvoidingView behavior="padding" style={[styles.raiz, { backgroundColor: colores.fondo }]}>
       <StatusBar style="light" />
+      {onCerrar ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Cerrar"
+          accessibilityHint="Vuelve a la app sin iniciar sesión"
+          onPress={onCerrar}
+          style={({ pressed }) => [
+            styles.cerrar,
+            { top: top + espacio.s, opacity: pressed ? opacidad.deshabilitado : 1 },
+          ]}
+        >
+          <X color={colores.textoSobrePanel} size={icono.tamano} strokeWidth={icono.trazo} />
+        </Pressable>
+      ) : null}
       <ScrollView
         ref={refScroll}
         keyboardShouldPersistTaps="handled"
@@ -940,7 +961,11 @@ function PasoCabello({ registro, refs }: { registro: RegistroViewModel; refs: Re
 }
 
 /** Desplaza el formulario hasta un bloque que no es de texto (cabello, pregunta, aviso). */
-function traerALaVista(contenedor: View | null | undefined, scroll: ScrollView | null, animado: boolean) {
+export function traerALaVista(
+  contenedor: View | null | undefined,
+  scroll: ScrollView | null,
+  animado: boolean,
+) {
   const nativo = scroll?.getNativeScrollRef();
   if (!contenedor || !scroll || !nativo) {
     return;
@@ -955,7 +980,7 @@ function traerALaVista(contenedor: View | null | undefined, scroll: ScrollView |
 }
 
 /** Requisitos de la contraseña: se marcan conforme se cumplen. */
-function RequisitosClave({
+export function RequisitosClave({
   requisitos,
   aviso,
   marcarFaltantes,
@@ -1062,7 +1087,7 @@ function LeyendaTerminos({ onPress }: { onPress: () => void }) {
 }
 
 /** Opciones excluyentes en pastillas (tipo de cabello, Sí/No). */
-function Opciones<T extends string>({
+export function Opciones<T extends string>({
   refContenedor,
   etiqueta,
   opciones,
@@ -1382,7 +1407,7 @@ function ContenidoSelector({
  * Casilla de verificación hecha con Pressable. Con enlace, el texto termina en un enlace (como en
  * la web); tocarlo abre el enlace sin marcar la casilla, y TalkBack lo ofrece como acción.
  */
-function Casilla({
+export function Casilla({
   marcada,
   onCambiar,
   texto,
@@ -1678,6 +1703,17 @@ const styles = StyleSheet.create({
   },
   fueraDeFlujo: {
     position: 'absolute',
+  },
+  // Sobre el panel carbón, arriba a la derecha, por encima del contenido que se desplaza.
+  cerrar: {
+    position: 'absolute',
+    zIndex: 1,
+    right: espacio.s,
+    width: toqueMinimo,
+    height: toqueMinimo,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radio.pastilla,
   },
   paso: {
     gap: espacio.xl,

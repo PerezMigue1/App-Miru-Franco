@@ -14,7 +14,7 @@ const LIMITE_RENOVACION_MS = 15 * MINUTO_MS;
 /** Desde los 10 minutos, una petición protegida renueva el token antes de salir. */
 const RENOVAR_DESDE_MS = 10 * MINUTO_MS;
 
-type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE';
+type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 export class ApiError extends Error {
   readonly status: number;
@@ -311,6 +311,10 @@ export function apiGet<T>(path: string, opciones: OpcionesSolicitud = {}): Promi
 
 export function apiPost<T>(path: string, body?: unknown, opciones: OpcionesSolicitud = {}): Promise<T> {
   return request<T>('POST', path, body, opciones);
+}
+
+export function apiPut<T>(path: string, body?: unknown, opciones: OpcionesSolicitud = {}): Promise<T> {
+  return request<T>('PUT', path, body, opciones);
 }
 
 export function apiPatch<T>(path: string, body?: unknown, opciones: OpcionesSolicitud = {}): Promise<T> {
