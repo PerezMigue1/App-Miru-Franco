@@ -31,7 +31,7 @@ const Contexto = createContext<ContextoSesionRequerida>({
  */
 export function SesionRequeridaProvider({ children }: { children: ReactNode }) {
   const { push } = useRouter();
-  const { estado } = useAuth();
+  const { estado, avisoAcceso, descartarAvisoAcceso } = useAuth();
   const [visible, setVisible] = useState(false);
   const pendiente = useRef<(() => void) | null>(null);
 
@@ -50,6 +50,21 @@ export function SesionRequeridaProvider({ children }: { children: ReactNode }) {
     pendiente.current = null;
     accion?.();
   }, [estado]);
+
+  // Tras cambiar la contraseña: ya sin sesión (Acceso vuelve a estar en la pila), se abre Acceso
+  // encima de Perfil con su aviso y el correo escrito; al entrar de nuevo, vuelve a Perfil. Vive
+  // aquí porque este proveedor envuelve toda la navegación.
+  useEffect(() => {
+    if (estado !== 'anonimo' || !avisoAcceso) {
+      return;
+    }
+    const { correo } = avisoAcceso;
+    descartarAvisoAcceso();
+    push({
+      pathname: '/login',
+      params: { motivo: 'contrasena', correo, vuelta: String(Date.now()) },
+    });
+  }, [estado, avisoAcceso, descartarAvisoAcceso, push]);
 
   const descartarPendiente = useCallback(() => {
     pendiente.current = null;

@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useId, useState, type Ref } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { borde, codigo, espacio, fuente, radio, tipo } from './tokens';
@@ -10,13 +10,28 @@ interface OtpInputProps {
   onCambiar: (texto: string) => void;
   largo?: number;
   error?: string | null;
+  /**
+   * TalkBack lee el código dígito por dígito ("1, 2, 3") en lugar de como una cifra. Apagado por
+   * defecto: la activación no cambia.
+   */
+  deletrear?: boolean;
+  /** Para enfocar el campo desde la pantalla (por ejemplo, tras un código inválido). */
+  ref?: Ref<TextInput>;
 }
 
 /**
  * Código de verificación: un campo numérico real (autocompletado del sistema y lector de pantalla)
  * dibujado como casillas. La casilla siguiente se marca con el color de foco.
  */
-export function OtpInput({ etiqueta, valor, onCambiar, largo = 6, error }: OtpInputProps) {
+export function OtpInput({
+  etiqueta,
+  valor,
+  onCambiar,
+  largo = 6,
+  error,
+  deletrear = false,
+  ref,
+}: OtpInputProps) {
   const { colores } = useTheme();
   const id = useId();
   const [enfocado, setEnfocado] = useState(false);
@@ -55,6 +70,7 @@ export function OtpInput({ etiqueta, valor, onCambiar, largo = 6, error }: OtpIn
           ))}
         </View>
         <TextInput
+          ref={ref}
           value={valor}
           // Sin maxLength: el límite nativo recortaría lo pegado ("123 456") antes de limpiarlo; el
           // view model deja solo dígitos y corta al largo.
@@ -63,7 +79,8 @@ export function OtpInput({ etiqueta, valor, onCambiar, largo = 6, error }: OtpIn
           textContentType="oneTimeCode"
           autoComplete="sms-otp"
           caretHidden
-          accessibilityLabelledBy={`${id}-etiqueta`}
+          accessibilityLabelledBy={deletrear ? undefined : `${id}-etiqueta`}
+          accessibilityLabel={deletrear ? etiquetaDeletreada(etiqueta, valor) : undefined}
           accessibilityHint={`${largo} dígitos`}
           onFocus={() => setEnfocado(true)}
           onBlur={() => setEnfocado(false)}
@@ -80,6 +97,11 @@ export function OtpInput({ etiqueta, valor, onCambiar, largo = 6, error }: OtpIn
       </View>
     </View>
   );
+}
+
+/** "Código de verificación: 1, 2, 3" para el lector de pantalla. */
+function etiquetaDeletreada(etiqueta: string, valor: string): string {
+  return valor ? `${etiqueta}: ${valor.split('').join(', ')}` : etiqueta;
 }
 
 const styles = StyleSheet.create({

@@ -11,7 +11,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/shared/ui/Button';
 import { EmptyState } from '@/shared/ui/EmptyState';
-import { Hoja } from '@/shared/ui/Hoja';
 import { Input } from '@/shared/ui/Input';
 import { Skeleton } from '@/shared/ui/Skeleton';
 import { esqueleto, espacio, fuente, pantalla, tipo, toqueMinimo, tracking } from '@/shared/ui/tokens';
@@ -20,6 +19,7 @@ import { useTheme } from '@/shared/ui/useTheme';
 
 import { Aviso, Casilla, Opciones, TEXTO_CONSENTIMIENTO_SALUD, traerALaVista } from '../components/AuthContainer';
 import { EncabezadoVolver } from '../components/EncabezadoVolver';
+import { HojaConfirmacion } from '../components/HojaConfirmacion';
 import { AYUDA_TELEFONO, TIPOS_CABELLO } from '../models/AuthModel';
 import { useEditarPerfilViewModel, type CampoPerfil } from '../viewmodels/useEditarPerfilViewModel';
 
@@ -166,14 +166,6 @@ export default function EditarPerfilView() {
               />
             </View>
           ) : null}
-          <Input
-            ref={texto('tratamientos')}
-            etiqueta="Tratamientos químicos"
-            valor={f.tratamientos}
-            onCambiar={(t) => cambiar('tratamientos', t)}
-            onSalir={() => salirDe('tratamientos')}
-            error={errores.tratamientos}
-          />
           <Casilla
             marcada={f.recibePromociones}
             onCambiar={(v) => cambiar('recibePromociones', v)}
@@ -190,15 +182,15 @@ export default function EditarPerfilView() {
         </ScrollView>
       ) : null}
 
-      <Hoja
+      <HojaConfirmacion
         visible={vm.confirmarSalida}
-        onCerrar={vm.seguirEditando}
         titulo="¿Descartar los cambios?"
         texto="Lo que cambiaste no se guardará."
-      >
-        <Button titulo="Seguir editando" onPress={vm.seguirEditando} />
-        <Button titulo="Descartar cambios" variante="secundario" onPress={vm.descartar} />
-      </Hoja>
+        accion="Descartar cambios"
+        cancelar="Seguir editando"
+        onConfirmar={vm.descartar}
+        onCancelar={vm.seguirEditando}
+      />
     </KeyboardAvoidingView>
   );
 }

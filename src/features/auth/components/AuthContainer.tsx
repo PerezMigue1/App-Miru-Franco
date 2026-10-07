@@ -393,16 +393,20 @@ export function Enlace({
   texto,
   onPress,
   alinear = 'inicio',
+  accessibilityHint,
 }: {
   texto: string;
   onPress?: () => void;
   alinear?: 'inicio' | 'centro' | 'fin';
+  /** Por ejemplo, "Se abre en el navegador". */
+  accessibilityHint?: string;
 }) {
   const { colores } = useTheme();
   const alineacion = { inicio: 'flex-start', centro: 'center', fin: 'flex-end' } as const;
   return (
     <Pressable
       accessibilityRole="link"
+      accessibilityHint={accessibilityHint}
       onPress={onPress}
       style={({ pressed }) => [
         styles.enlace,

@@ -122,7 +122,7 @@ export const temaClaro: Colores = {
   textoSuaveSobrePanel: transparencias.cremaSobreCarbon,
   oro: paleta.oro,
   oroTextoPequeno: paleta.oroSobreCarbon,
-  // --shadow-brand de la web: sombra tintada de vino del botón primario.
+  // Sombra tintada de vino del botón primario (identidad de la marca; sin variable equivalente en la web).
   sombra: paleta.vino,
   velo: transparencias.velo,
   peligro: paleta.vinoProfundo,
@@ -268,6 +268,10 @@ export const duracion = {
   verificarCorreo: 600,
   /** Si la verificación del correo no responde en este tiempo, deja de bloquear el registro. */
   limiteVerificacionCorreo: 6000,
+  /** Espera antes de poder pedir otro código de verificación (cambio de contraseña). */
+  esperaReenvioCodigo: 60000,
+  /** Paso de una cuenta regresiva visible (un segundo). */
+  cuentaRegresiva: 1000,
 } as const;
 
 /** Intervalo de lectura del giroscopio. */

@@ -17,7 +17,6 @@ import {
   mensajeDelServidor,
   problemaDeAlergias,
   problemaDeNombre,
-  problemaDeTratamientos,
   urlAvisoPrivacidad,
 } from '../models/AuthModel';
 import { actualizarPerfil, obtenerPerfilCompleto } from '../models/authService';
@@ -71,7 +70,6 @@ const ORDEN: CampoPerfil[] = [
   'nacimiento',
   'alergias',
   'consiente',
-  'tratamientos',
 ];
 
 const FORMULARIO_VACIO: FormularioPerfil = {
@@ -83,7 +81,6 @@ const FORMULARIO_VACIO: FormularioPerfil = {
   colorActual: '',
   productosUsados: '',
   alergias: '',
-  tratamientos: '',
   recibePromociones: false,
 };
 
@@ -118,8 +115,6 @@ function validarCampo(
       return perfil && requiereConsentimientoPerfil(perfil, f.alergias) && !consiente
         ? ERROR_CONSENTIMIENTO_SALUD
         : null;
-    case 'tratamientos':
-      return f.tratamientos.trim() ? problemaDeTratamientos(true, f.tratamientos) : null;
     default:
       return null;
   }

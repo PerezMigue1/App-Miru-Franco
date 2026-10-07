@@ -1,48 +1,84 @@
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { openBrowserAsync } from 'expo-web-browser';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { BackHandler } from 'react-native';
 
 import { generacionActual } from '@/shared/api/tokenStorage';
-import { telefonoSinLada } from '@/shared/ui/digitos';
+import { soloDigitos, telefonoSinLada } from '@/shared/ui/digitos';
+import { duracion } from '@/shared/ui/tokens';
 import { useCandado } from '@/shared/ui/useCandado';
 
 import {
   AVISO_DATOS_PERSONALES_CLAVE,
   MENSAJE_SIN_CONEXION,
+  esCodigoValido,
   esErrorDeRed,
   estadoHttp,
   mensajeDelServidor,
   problemaDeClave,
   requisitosDeClave,
+  urlOlvidoContrasena,
   type RequisitoClave,
 } from '../models/AuthModel';
-import { cambiarContrasena, obtenerPerfilCompleto } from '../models/authService';
+import {
+  cambiarContrasenaConCodigo,
+  obtenerPerfilCompleto,
+  pedirCodigoContrasena,
+} from '../models/authService';
 import { normalizarPerfil } from '../models/PerfilModel';
 import { useAuth } from './useAuth';
 
-export type CampoContrasena = 'actual' | 'nueva' | 'confirmacion';
+export type CampoDato = 'actual' | 'nueva' | 'confirmacion';
+export type CampoContrasena = CampoDato | 'codigo';
 export type ErroresContrasena = Partial<Record<CampoContrasena, string | null>>;
 export type EstadoContrasena = 'cargando' | 'listo' | 'error';
+export type PasoContrasena = 1 | 2;
 
 export interface CambiarContrasenaViewModel {
   estado: EstadoContrasena;
   reintentar: () => void;
-  valores: Record<CampoContrasena, string>;
-  cambiar: (campo: CampoContrasena, valor: string) => void;
-  salirDe: (campo: CampoContrasena) => void;
+  paso: PasoContrasena;
+  valores: Record<CampoDato, string>;
+  cambiar: (campo: CampoDato, valor: string) => void;
+  salirDe: (campo: CampoDato) => void;
+  codigo: string;
+  setCodigo: (texto: string) => void;
   errores: ErroresContrasena;
-  errorGeneral: string | null;
+  /** Aviso general (429, 409, 502, sin conexión). */
+  aviso: string | null;
+  /** Confirmación de un código reenviado. */
+  avisoExito: string | null;
   requisitos: RequisitoClave[];
   avisoDatosPersonales: string;
-  guardando: boolean;
-  guardar: () => void;
+  vigenciaMinutos: number;
+  /** Ya hay un código vigente para esta contraseña actual: el paso 1 continúa sin pedir otro. */
+  codigoVigente: boolean;
+  enviando: boolean;
+  enviarCodigo: () => void;
+  cambiando: boolean;
+  cambiarContrasena: () => void;
+  reenviando: boolean;
+  /** Segundos que faltan para poder pedir otro código (0 = ya se puede). */
+  espera: number;
+  reenviar: () => void;
+  /** Paso 2 → paso 1 sin perder lo escrito. */
+  volverAlPaso1: () => void;
   enfoque: { campo: CampoContrasena; vez: number } | null;
+  abrirOlvido: () => void;
+  /** Flecha de volver: en el paso 2 regresa al paso 1; en el paso 1 sale de la pantalla. */
   volver: () => void;
 }
 
-const ORDEN: CampoContrasena[] = ['actual', 'nueva', 'confirmacion'];
+const DATOS: CampoDato[] = ['actual', 'nueva', 'confirmacion'];
+const LARGO_CODIGO = 6;
+const VIGENCIA_PREDETERMINADA = 10;
 const NO_COINCIDEN = 'Las contraseñas no coinciden';
 const ACTUAL_INCORRECTA = 'La contraseña actual no es correcta.';
-const IGUAL_A_LA_ANTERIOR = 'La nueva contraseña debe ser diferente a la contraseña anterior';
+const CODIGO_INVALIDO = 'El código no es válido o ya venció.';
+const CORREO_NO_ENVIADO = 'No pudimos enviar el código a tu correo. Intenta de nuevo en unos minutos.';
+const SESION_NO_CONFIRMADA = 'No pudimos confirmar tu sesión. Intenta de nuevo.';
+const CODIGO_REENVIADO = 'Te enviamos un código nuevo. Revisa tu correo.';
+const ESPERA_SEGUNDOS = duracion.esperaReenvioCodigo / duracion.cuentaRegresiva;
 
 /** Solo lo que compara la regla de la contraseña (nada de datos capilares ni de salud). */
 interface DatosCuenta {
@@ -52,11 +88,7 @@ interface DatosCuenta {
   fechaNacimiento: string;
 }
 
-function validarCampo(
-  campo: CampoContrasena,
-  v: Record<CampoContrasena, string>,
-  perfil: DatosCuenta | null,
-): string | null {
+function validarCampo(campo: CampoDato, v: Record<CampoDato, string>, perfil: DatosCuenta | null): string | null {
   switch (campo) {
     case 'actual':
       return v.actual ? null : 'Ingresa tu contraseña actual';
@@ -80,43 +112,95 @@ function validarCampo(
   }
 }
 
-/** Errores del servidor: contraseña actual, nueva igual a la anterior u otro mensaje. */
-function clasificarError(error: unknown): { campo: CampoContrasena | null; mensaje: string } {
+/** Dónde va cada error del servidor. null: la sesión se cerró (la pantalla ya no existe). */
+type DestinoError =
+  | { tipo: 'campo'; campo: CampoContrasena; mensaje: string }
+  | { tipo: 'aviso'; mensaje: string }
+  | null;
+
+/**
+ * El cliente HTTP no expone el `code` del backend: se distingue por ruta, estado y el mensaje
+ * documentado completo. En /codigo un 400 solo puede ser la contraseña actual; en /me/password, un
+ * 400 es el código, la actual o una regla de la nueva (estas se revisan antes que el código).
+ */
+function destinoDelError(error: unknown, ruta: 'codigo' | 'cambio', sesionVigente: boolean): DestinoError {
   if (esErrorDeRed(error)) {
-    return { campo: null, mensaje: MENSAJE_SIN_CONEXION };
+    return { tipo: 'aviso', mensaje: MENSAJE_SIN_CONEXION };
   }
   const estado = estadoHttp(error);
-  const mensaje = error instanceof Error ? error.message.toLowerCase() : '';
-  // Primero "igual a la anterior": ese mensaje también puede mencionar la contraseña actual.
-  if (estado === 400 && (mensaje.includes('misma') || mensaje.includes('anterior') || mensaje.includes('igual'))) {
-    return { campo: 'nueva', mensaje: IGUAL_A_LA_ANTERIOR };
+  if (estado === 401) {
+    // Si apiClient cerró la sesión, la pantalla desaparece; si no (renovación sin red), se avisa.
+    return sesionVigente ? { tipo: 'aviso', mensaje: SESION_NO_CONFIRMADA } : null;
   }
-  if (estado === 401 || (estado === 400 && mensaje.includes('actual'))) {
-    return { campo: 'actual', mensaje: ACTUAL_INCORRECTA };
+  // Un mensaje de la nueva contraseña puede mencionar "la contraseña actual" sin ser este error.
+  const mensaje = error instanceof Error ? error.message.trim().toLowerCase() : '';
+  if (estado === 400) {
+    if (ruta === 'codigo' || mensaje === ACTUAL_INCORRECTA.toLowerCase()) {
+      return { tipo: 'campo', campo: 'actual', mensaje: ACTUAL_INCORRECTA };
+    }
+    if (mensaje === CODIGO_INVALIDO.toLowerCase()) {
+      return { tipo: 'campo', campo: 'codigo', mensaje: CODIGO_INVALIDO };
+    }
+    return {
+      tipo: 'campo',
+      campo: 'nueva',
+      mensaje: mensajeDelServidor(error, 'Revisa tu contraseña nueva.'),
+    };
   }
-  // Con 5xx nunca se muestra el texto del servidor (mensajeDelServidor).
-  return { campo: null, mensaje: mensajeDelServidor(error, 'No pudimos cambiar tu contraseña. Intenta de nuevo.') };
+  if (estado === 502 && ruta === 'codigo') {
+    return { tipo: 'aviso', mensaje: CORREO_NO_ENVIADO };
+  }
+  // 409 (sin contraseña, cuenta sin activar, código en curso) y 429: el mensaje del backend. Con
+  // 5xx, mensajeDelServidor da el genérico.
+  return {
+    tipo: 'aviso',
+    mensaje: mensajeDelServidor(error, 'No pudimos cambiar tu contraseña. Intenta de nuevo.'),
+  };
 }
 
-/** Cambiar contraseña: actual, nueva (requisitos del registro) y confirmación. */
+/**
+ * Cambiar contraseña en dos pasos: datos (actual, nueva y confirmación) y código del correo. Las
+ * contraseñas y el código viven solo en este estado; al cambiarla, la sesión se cierra.
+ */
 export function useCambiarContrasenaViewModel(): CambiarContrasenaViewModel {
-  const { back, dismissTo } = useRouter();
-  const { usuario } = useAuth();
+  const { back } = useRouter();
+  const { cerrarTrasCambioDeContrasena } = useAuth();
   const [estado, setEstado] = useState<EstadoContrasena>('cargando');
   const [perfil, setPerfil] = useState<DatosCuenta | null>(null);
-  const [valores, setValores] = useState<Record<CampoContrasena, string>>({
+  const [paso, setPaso] = useState<PasoContrasena>(1);
+  const [valores, setValores] = useState<Record<CampoDato, string>>({
     actual: '',
     nueva: '',
     confirmacion: '',
   });
+  const [codigo, setCodigoCrudo] = useState('');
+  const [codigoVigente, setCodigoVigente] = useState(false);
   const [errores, setErrores] = useState<ErroresContrasena>({});
   const [enVivo, setEnVivo] = useState<Partial<Record<CampoContrasena, boolean>>>({});
-  const [errorGeneral, setErrorGeneral] = useState<string | null>(null);
-  const [guardando, setGuardando] = useState(false);
+  const [aviso, setAviso] = useState<string | null>(null);
+  const [avisoExito, setAvisoExito] = useState<string | null>(null);
+  const [vigenciaMinutos, setVigenciaMinutos] = useState(VIGENCIA_PREDETERMINADA);
+  const [enviando, setEnviando] = useState(false);
+  const [cambiando, setCambiando] = useState(false);
+  const [reenviando, setReenviando] = useState(false);
+  const [espera, setEspera] = useState(0);
   const [enfoque, setEnfoque] = useState<{ campo: CampoContrasena; vez: number } | null>(null);
   const solicitud = useRef(0);
   const vecesEnfoque = useRef(0);
-  const candado = useCandado();
+  const montado = useRef(true);
+  // Momento en que se puede volver a pedir código: la cuenta regresiva sigue el reloj aunque la app
+  // pase a segundo plano (los temporizadores se pausan).
+  const reenvioDesde = useRef(0);
+  const candadoEnvio = useCandado();
+  const candadoCambio = useCandado();
+  const candadoReenvio = useCandado();
+
+  useEffect(() => {
+    montado.current = true;
+    return () => {
+      montado.current = false;
+    };
+  }, []);
 
   // Los datos de la cuenta hacen falta para la regla de datos personales.
   const cargar = useCallback(() => {
@@ -155,9 +239,61 @@ export function useCambiarContrasenaViewModel(): CambiarContrasenaViewModel {
     };
   }, [cargar]);
 
-  const cambiar = (campo: CampoContrasena, valor: string) => {
+  // Cuenta regresiva para "Reenviar código".
+  useEffect(() => {
+    if (espera <= 0) {
+      return undefined;
+    }
+    const temporizador = setTimeout(() => {
+      const restante = Math.ceil((reenvioDesde.current - Date.now()) / duracion.cuentaRegresiva);
+      setEspera(Math.max(0, Math.min(espera - 1, restante)));
+    }, duracion.cuentaRegresiva);
+    return () => clearTimeout(temporizador);
+  }, [espera]);
+
+  const pedirEnfoque = (campo: CampoContrasena) => {
+    vecesEnfoque.current += 1;
+    setEnfoque({ campo, vez: vecesEnfoque.current });
+  };
+
+  const marcarError = (campo: CampoContrasena, mensaje: string) => {
+    setErrores((previos) => ({ ...previos, [campo]: mensaje }));
+    setEnVivo((previos) => ({ ...previos, [campo]: true }));
+    pedirEnfoque(campo);
+  };
+
+  /** Aplica un error del servidor: en su campo (volviendo al paso de ese campo) o como aviso. */
+  const aplicarError = (error: unknown, ruta: 'codigo' | 'cambio', generacion: number) => {
+    if (!montado.current) {
+      return;
+    }
+    const destino = destinoDelError(error, ruta, generacion === generacionActual());
+    if (!destino) {
+      return;
+    }
+    if (destino.tipo === 'aviso') {
+      setAviso(destino.mensaje);
+      return;
+    }
+    if (destino.campo === 'codigo') {
+      // El código se limpia y queda enfocado para escribir otro.
+      setCodigoCrudo('');
+    } else {
+      setPaso(1);
+    }
+    if (destino.campo === 'actual') {
+      setCodigoVigente(false);
+    }
+    marcarError(destino.campo, destino.mensaje);
+  };
+
+  const cambiar = (campo: CampoDato, valor: string) => {
     const nuevos = { ...valores, [campo]: valor };
     setValores(nuevos);
+    if (campo === 'actual') {
+      // El código se pidió con la contraseña actual anterior: hace falta uno nuevo.
+      setCodigoVigente(false);
+    }
     const siguientes: ErroresContrasena = { ...errores };
     if (enVivo[campo]) {
       siguientes[campo] = validarCampo(campo, nuevos, perfil);
@@ -168,7 +304,7 @@ export function useCambiarContrasenaViewModel(): CambiarContrasenaViewModel {
     setErrores(siguientes);
   };
 
-  const salirDe = (campo: CampoContrasena) => {
+  const salirDe = (campo: CampoDato) => {
     const problema = validarCampo(campo, valores, perfil);
     setErrores((previos) => ({ ...previos, [campo]: problema }));
     if (problema) {
@@ -176,68 +312,189 @@ export function useCambiarContrasenaViewModel(): CambiarContrasenaViewModel {
     }
   };
 
-  const pedirEnfoque = (campo: CampoContrasena) => {
-    vecesEnfoque.current += 1;
-    setEnfoque({ campo, vez: vecesEnfoque.current });
+  const setCodigo = (texto: string) => {
+    setCodigoCrudo(soloDigitos(texto).slice(0, LARGO_CODIGO));
+    setErrores((previos) => ({ ...previos, codigo: null }));
+  };
+
+  /** Pide el código (paso 1 o reenvío). Devuelve si se envió. */
+  const solicitarCodigo = async (): Promise<boolean> => {
+    setAviso(null);
+    setAvisoExito(null);
+    const generacion = generacionActual();
+    try {
+      const respuesta = await pedirCodigoContrasena(valores.actual);
+      if (!montado.current) {
+        return false;
+      }
+      const vigencia = respuesta?.vigenciaMinutos;
+      if (typeof vigencia === 'number' && Number.isFinite(vigencia) && vigencia > 0) {
+        setVigenciaMinutos(vigencia);
+      }
+      setCodigoCrudo('');
+      setErrores((previos) => ({ ...previos, codigo: null }));
+      setCodigoVigente(true);
+      reenvioDesde.current = Date.now() + duracion.esperaReenvioCodigo;
+      setEspera(ESPERA_SEGUNDOS);
+      return true;
+    } catch (error) {
+      aplicarError(error, 'codigo', generacion);
+      return false;
+    }
   };
 
   const enviar = async () => {
-    if (!usuario || !perfil) {
-      return;
-    }
     const nuevos: ErroresContrasena = {};
-    for (const campo of ORDEN) {
+    for (const campo of DATOS) {
       nuevos[campo] = validarCampo(campo, valores, perfil);
     }
     setErrores(nuevos);
-    setEnVivo(Object.fromEntries(ORDEN.map((campo) => [campo, Boolean(nuevos[campo])])));
-    const primero = ORDEN.find((campo) => nuevos[campo]);
+    setEnVivo(Object.fromEntries(DATOS.map((campo) => [campo, Boolean(nuevos[campo])])));
+    const primero = DATOS.find((campo) => nuevos[campo]);
     if (primero) {
       pedirEnfoque(primero);
       return;
     }
-    setErrorGeneral(null);
-    const generacion = generacionActual();
-    setGuardando(true);
+    // Si ya hay un código vigente para esta contraseña actual (se volvió a corregir la nueva), se
+    // continúa sin pedir otro: no se gasta uno de los 5 por hora ni se salta la espera.
+    if (codigoVigente && espera > 0) {
+      setAviso(null);
+      setErrores((previos) => ({ ...previos, codigo: null }));
+      setPaso(2);
+      pedirEnfoque('codigo');
+      return;
+    }
+    setEnviando(true);
     try {
-      await cambiarContrasena(usuario.id, valores.actual, valores.nueva);
-      // Las contraseñas no se quedan en memoria.
-      setValores({ actual: '', nueva: '', confirmacion: '' });
-      // Si la sesión terminó mientras tanto, la pantalla ya se cerró: no se navega.
-      if (generacion === generacionActual()) {
-        dismissTo({ pathname: '/perfil', params: { guardado: 'contrasena' } });
-      }
-    } catch (error) {
-      const { campo, mensaje } = clasificarError(error);
-      if (campo) {
-        setErrores((previos) => ({ ...previos, [campo]: mensaje }));
-        setEnVivo((previos) => ({ ...previos, [campo]: true }));
-        pedirEnfoque(campo);
-      } else {
-        setErrorGeneral(mensaje);
+      if (await solicitarCodigo()) {
+        setPaso(2);
+        pedirEnfoque('codigo');
       }
     } finally {
-      setGuardando(false);
+      if (montado.current) {
+        setEnviando(false);
+      }
     }
+  };
+
+  const reenviarCodigo = async () => {
+    setReenviando(true);
+    try {
+      if (await solicitarCodigo()) {
+        setAvisoExito(CODIGO_REENVIADO);
+        pedirEnfoque('codigo');
+      }
+    } finally {
+      if (montado.current) {
+        setReenviando(false);
+      }
+    }
+  };
+
+  const confirmar = async () => {
+    if (!esCodigoValido(codigo)) {
+      marcarError('codigo', 'El código debe tener 6 dígitos');
+      return;
+    }
+    setAviso(null);
+    setAvisoExito(null);
+    setCambiando(true);
+    // La sesión con la que se cambia: si terminó o cambió mientras tanto, no se cierra otra.
+    const generacion = generacionActual();
+    try {
+      await cambiarContrasenaConCodigo(valores.actual, valores.nueva, codigo);
+      // Las contraseñas y el código no se quedan en memoria.
+      setValores({ actual: '', nueva: '', confirmacion: '' });
+      setCodigoCrudo('');
+      if (generacion === generacionActual()) {
+        // El servidor ya cerró todas las sesiones: se borra la local y se abre Acceso con su aviso.
+        await cerrarTrasCambioDeContrasena();
+      }
+    } catch (error) {
+      aplicarError(error, 'cambio', generacion);
+    } finally {
+      if (montado.current) {
+        setCambiando(false);
+      }
+    }
+  };
+
+  const volverAlPaso1 = () => {
+    if (cambiando || reenviando) {
+      return;
+    }
+    setAviso(null);
+    setAvisoExito(null);
+    setPaso(1);
+  };
+
+  // En el paso 2, el botón Atrás de Android regresa al paso 1 (sin perder lo escrito).
+  const refVolverPaso = useRef(volverAlPaso1);
+  useEffect(() => {
+    refVolverPaso.current = volverAlPaso1;
+  });
+  useFocusEffect(
+    useCallback(() => {
+      if (paso !== 2) {
+        return undefined;
+      }
+      const suscripcion = BackHandler.addEventListener('hardwareBackPress', () => {
+        refVolverPaso.current();
+        return true;
+      });
+      return () => suscripcion.remove();
+    }, [paso]),
+  );
+
+  const abrirOlvido = () => {
+    const url = urlOlvidoContrasena();
+    if (!url) {
+      setAviso('No pudimos abrir la recuperación de contraseña.');
+      return;
+    }
+    openBrowserAsync(url).catch(() => {
+      setAviso('No pudimos abrir la recuperación de contraseña.');
+    });
   };
 
   return {
     estado,
     reintentar: cargar,
+    paso,
     valores,
     cambiar,
     salirDe,
+    codigo,
+    setCodigo,
     errores,
-    errorGeneral,
+    aviso,
+    avisoExito,
     requisitos: requisitosDeClave(valores.nueva),
     avisoDatosPersonales: AVISO_DATOS_PERSONALES_CLAVE,
-    guardando,
-    guardar: () => {
-      if (!guardando) {
-        candado(enviar);
+    vigenciaMinutos,
+    codigoVigente: codigoVigente && espera > 0,
+    enviando,
+    enviarCodigo: () => {
+      if (!enviando) {
+        candadoEnvio(enviar);
       }
     },
+    cambiando,
+    cambiarContrasena: () => {
+      if (!cambiando && !reenviando) {
+        candadoCambio(confirmar);
+      }
+    },
+    reenviando,
+    espera,
+    reenviar: () => {
+      if (!reenviando && !cambiando && espera <= 0) {
+        candadoReenvio(reenviarCodigo);
+      }
+    },
+    volverAlPaso1,
     enfoque,
-    volver: back,
+    abrirOlvido,
+    volver: paso === 2 ? volverAlPaso1 : back,
   };
 }

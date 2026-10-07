@@ -30,7 +30,6 @@ import { useAuth } from './useAuth';
 const CIERRE_FALLIDO = 'No se pudo cerrar la sesión. Intenta de nuevo';
 const AVISOS_GUARDADO: Record<string, string> = {
   perfil: 'Tus cambios se guardaron.',
-  contrasena: 'Tu contraseña se cambió.',
 };
 
 export type EstadoPerfil = 'sinSesion' | 'cargando' | 'listo' | 'error';
@@ -40,15 +39,23 @@ export interface PerfilVisible {
   nombre: string;
   email: string;
   foto: string | null;
+  /** false: la cuenta entra con Google y no puede cambiar contraseña desde aquí. */
+  tienePassword: boolean;
 }
 
 export interface PerfilViewModel {
   estado: EstadoPerfil;
   perfil: PerfilVisible | null;
   reintentar: () => void;
-  /** Aviso de éxito al volver de Editar perfil o Cambiar contraseña. */
+  /** Aviso de éxito al volver de Editar perfil. */
   avisoGuardado: string | null;
   errorCierre: string | null;
+  // Confirmaciones antes de acciones destructivas
+  confirmarQuitarFoto: boolean;
+  confirmarCierre: boolean;
+  quitarFotoConfirmada: () => void;
+  cerrarSesionConfirmada: () => void;
+  cancelarConfirmacion: () => void;
   // Foto
   opcionesFoto: boolean;
   abrirOpcionesFoto: () => void;
@@ -115,6 +122,8 @@ export function usePerfilViewModel(): PerfilViewModel {
   const [permisoDenegado, setPermisoDenegado] = useState(false);
   const [hojaApariencia, setHojaApariencia] = useState(false);
   const [avisoGuardado, setAvisoGuardado] = useState<string | null>(null);
+  const [confirmarQuitarFoto, setConfirmarQuitarFoto] = useState(false);
+  const [confirmarCierre, setConfirmarCierre] = useState(false);
   // Solo la última carga escribe el estado.
   const solicitud = useRef(0);
   const candadoCierre = useCandado();
@@ -137,7 +146,7 @@ export function usePerfilViewModel(): PerfilViewModel {
         // Solo lo que se muestra: los datos de salud no se quedan en esta pantalla. Una foto que no
         // sea de Cloudinary por https no se carga (cae al monograma).
         const foto = completo.foto && esFotoCloudinary(completo.foto) ? completo.foto : null;
-        setPerfil({ nombre: completo.nombre, email: completo.email, foto });
+        setPerfil({ nombre: completo.nombre, email: completo.email, foto, tienePassword: completo.tienePassword });
         setEstado('listo');
       })
       .catch(() => {
@@ -168,6 +177,8 @@ export function usePerfilViewModel(): PerfilViewModel {
     setOpcionesFoto(false);
     setErrorCierre(null);
     setAvisoGuardado(null);
+    setConfirmarQuitarFoto(false);
+    setConfirmarCierre(false);
     if (conSesion) {
       cargar();
     }
@@ -317,9 +328,24 @@ export function usePerfilViewModel(): PerfilViewModel {
       setOpcionesFoto(false);
       candadoFoto(subirNuevaFoto);
     },
+    // Quitar la foto se confirma antes.
     quitarFoto: () => {
       setOpcionesFoto(false);
+      setConfirmarQuitarFoto(true);
+    },
+    confirmarQuitarFoto,
+    confirmarCierre,
+    quitarFotoConfirmada: () => {
+      setConfirmarQuitarFoto(false);
       candadoFoto(quitarFotoActual);
+    },
+    cerrarSesionConfirmada: () => {
+      setConfirmarCierre(false);
+      candadoCierre(cerrar);
+    },
+    cancelarConfirmacion: () => {
+      setConfirmarQuitarFoto(false);
+      setConfirmarCierre(false);
     },
     fotoOcupada,
     errorFoto,
@@ -340,10 +366,10 @@ export function usePerfilViewModel(): PerfilViewModel {
     editarPerfil: () => push('/editar-perfil'),
     cambiarContrasena: () => push('/cambiar-contrasena'),
     abrirAviso,
-    // Mientras una foto se sube o se quita, no se cierra la sesión.
+    // Mientras una foto se sube o se quita, no se cierra la sesión; si no, se confirma antes.
     cerrarSesion: () => {
       if (!fotoOcupada) {
-        candadoCierre(cerrar);
+        setConfirmarCierre(true);
       }
     },
   };

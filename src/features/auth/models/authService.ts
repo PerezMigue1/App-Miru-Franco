@@ -2,12 +2,10 @@ import {
   apiGet,
   apiPatch,
   apiPost,
-  apiPut,
   renovarSesion,
   type ResultadoRenovacion,
 } from '@/shared/api/apiClient';
 import { subirMultipart } from '@/shared/api/subirMultipart';
-import { getToken } from '@/shared/api/tokenStorage';
 
 import type {
   DatosRegistro,
@@ -74,25 +72,29 @@ export function subirFoto(firma: FirmaFoto, archivoUri: string): Promise<unknown
   return subirMultipart(firma.uploadUrl, archivoUri, firma.campos);
 }
 
+/** Respuesta de POST /api/auth/me/password/codigo: nunca trae el código. */
+export interface RespuestaCodigoContrasena extends RespuestaSimple {
+  vigenciaMinutos?: number;
+}
+
 /**
- * PUT /api/usuarios/:id/cambiar-password. Va con el token explícito: si el servidor responde 401
- * por una contraseña actual incorrecta, eso no debe renovar ni cerrar la sesión.
+ * POST /api/auth/me/password/codigo: verifica la contraseña actual y envía un código al correo.
+ * Petición protegida normal: un 401 es una sesión vencida.
  */
-export async function cambiarContrasena(
-  id: string,
+export function pedirCodigoContrasena(actualPassword: string): Promise<RespuestaCodigoContrasena> {
+  return apiPost<RespuestaCodigoContrasena>('/api/auth/me/password/codigo', { actualPassword });
+}
+
+/**
+ * POST /api/auth/me/password: cambia la contraseña con el código. Al responder 200 el servidor
+ * revoca todas las sesiones de la cuenta, incluida la de este teléfono.
+ */
+export function cambiarContrasenaConCodigo(
   actualPassword: string,
   nuevaPassword: string,
+  codigo: string,
 ): Promise<RespuestaSimple> {
-  const token = await getToken();
-  if (!token) {
-    // Sin sesión guardada: error genérico (no "contraseña actual incorrecta").
-    throw new Error('La sesión no está disponible.');
-  }
-  return apiPut<RespuestaSimple>(
-    `/api/usuarios/${encodeURIComponent(id)}/cambiar-password`,
-    { actualPassword, nuevaPassword },
-    { token },
-  );
+  return apiPost<RespuestaSimple>('/api/auth/me/password', { actualPassword, nuevaPassword, codigo });
 }
 
 /** GET /api/pregunta-seguridad (público). */

@@ -41,6 +41,14 @@ interface ContextoAuth {
    * sigue siendo la misma generación con la que se guardó.
    */
   actualizarNombre: (nombre: string, generacion: number) => void;
+  /**
+   * Tras cambiar la contraseña: el servidor ya revocó el token, así que solo se borra la sesión
+   * local (sin /logout) y se pide abrir Acceso con su aviso. No es una sesión vencida.
+   */
+  cerrarTrasCambioDeContrasena: () => Promise<void>;
+  /** Acceso debe abrirse con su aviso y el correo escrito (tras cambiar la contraseña). */
+  avisoAcceso: { correo: string } | null;
+  descartarAvisoAcceso: () => void;
 }
 
 const RENOVAR_CADA_MS = 10 * 60 * 1000;
@@ -76,6 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [estado, setEstado] = useState<EstadoSesion>('cargando');
   const [usuario, setUsuario] = useState<UsuarioSesion | null>(null);
   const [sesionVencida, setSesionVencida] = useState(false);
+  const [avisoAcceso, setAvisoAcceso] = useState<{ correo: string } | null>(null);
 
   const quedarAnonimo = useCallback(() => {
     setUsuario(null);
@@ -94,6 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const descartarAvisoSesion = useCallback(() => setSesionVencida(false), []);
+  const descartarAvisoAcceso = useCallback(() => setAvisoAcceso(null), []);
 
   // Restaura la sesión guardada y la valida con /api/auth/me: solo un 401 la cierra. Si mientras
   // tanto se inicia o se cierra sesión (cambia la generación), el resultado se descarta.
@@ -252,9 +262,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return true;
   }, [quedarAnonimo]);
 
+  const cerrarTrasCambioDeContrasena = useCallback(async () => {
+    // Generación nueva: un 401 tardío del token revocado (renovación, /me) ya no avisa
+    // "Tu sesión terminó" ni escribe nada.
+    nuevaGeneracion();
+    // Solo el correo, para escribirlo en Acceso; nada más de la cuenta queda en memoria.
+    const correo = usuario?.email ?? '';
+    // Si el borrado local fallara, el token guardado ya no sirve: al reabrir, /me lo rechaza.
+    await borrarConReintento();
+    setSesionVencida(false);
+    setAvisoAcceso({ correo });
+    quedarAnonimo();
+  }, [usuario, quedarAnonimo]);
+
   const valor = useMemo(
-    () => ({ estado, usuario, ingresar, salir, sesionVencida, descartarAvisoSesion, actualizarNombre }),
-    [estado, usuario, ingresar, salir, sesionVencida, descartarAvisoSesion, actualizarNombre],
+    () => ({
+      estado,
+      usuario,
+      ingresar,
+      salir,
+      sesionVencida,
+      descartarAvisoSesion,
+      actualizarNombre,
+      cerrarTrasCambioDeContrasena,
+      avisoAcceso,
+      descartarAvisoAcceso,
+    }),
+    [
+      estado,
+      usuario,
+      ingresar,
+      salir,
+      sesionVencida,
+      descartarAvisoSesion,
+      actualizarNombre,
+      cerrarTrasCambioDeContrasena,
+      avisoAcceso,
+      descartarAvisoAcceso,
+    ],
   );
 
   return <Contexto.Provider value={valor}>{children}</Contexto.Provider>;

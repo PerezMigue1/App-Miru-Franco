@@ -35,6 +35,7 @@ import { useTheme } from '@/shared/ui/useTheme';
 
 import { Aviso } from '../components/AuthContainer';
 import { HojaApariencia } from '../components/HojaApariencia';
+import { HojaConfirmacion } from '../components/HojaConfirmacion';
 import { InvitacionSesion } from '../components/InvitacionSesion';
 import { usePerfilViewModel, type PerfilViewModel } from '../viewmodels/usePerfilViewModel';
 
@@ -93,6 +94,26 @@ export default function PerfilView() {
         ) : null}
         <Button titulo="Cancelar" variante="secundario" onPress={perfil.cerrarOpcionesFoto} />
       </Hoja>
+      <HojaConfirmacion
+        visible={perfil.confirmarQuitarFoto}
+        titulo="¿Quitar tu foto?"
+        texto="Tu perfil mostrará el monograma en su lugar."
+        accion="Quitar foto"
+        onConfirmar={perfil.quitarFotoConfirmada}
+        onCancelar={perfil.cancelarConfirmacion}
+      />
+      <HojaConfirmacion
+        visible={perfil.confirmarCierre}
+        titulo="¿Cerrar sesión?"
+        texto={
+          perfil.perfil?.tienePassword === false
+            ? 'Podrás volver a entrar con Google.'
+            : 'Podrás volver a entrar con tu correo y tu contraseña.'
+        }
+        accion="Cerrar sesión"
+        onConfirmar={perfil.cerrarSesionConfirmada}
+        onCancelar={perfil.cancelarConfirmacion}
+      />
     </ScrollView>
   );
 }
@@ -147,7 +168,17 @@ function ContenidoConSesion({ perfil }: { perfil: PerfilViewModel }) {
 
       <Grupo titulo="Tu cuenta">
         <ListRow icono={UserPen} titulo="Editar perfil" onPress={perfil.editarPerfil} />
-        <ListRow icono={KeyRound} titulo="Cambiar contraseña" onPress={perfil.cambiarContrasena} />
+        {datos?.tienePassword === false ? (
+          <ListRow icono={KeyRound} titulo="Cambiar contraseña" detalle="Entras con Google" deshabilitada />
+        ) : (
+          // Mientras carga no se sabe si la cuenta tiene contraseña: se habilita al tener los datos.
+          <ListRow
+            icono={KeyRound}
+            titulo="Cambiar contraseña"
+            deshabilitada={!datos}
+            onPress={perfil.cambiarContrasena}
+          />
+        )}
       </Grupo>
 
       <Grupo titulo="Tu actividad">
@@ -166,7 +197,7 @@ function Avatar({ foto, ocupada, onPress }: { foto: string | null; ocupada: bool
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={foto ? 'Cambiar foto de perfil' : 'Elegir foto de perfil'}
+      accessibilityLabel={etiquetaAvatar(foto, ocupada)}
       accessibilityState={{ busy: ocupada, disabled: ocupada }}
       disabled={ocupada}
       onPress={onPress}
@@ -200,6 +231,13 @@ function Avatar({ foto, ocupada, onPress }: { foto: string | null; ocupada: bool
       )}
     </Pressable>
   );
+}
+
+function etiquetaAvatar(foto: string | null, ocupada: boolean): string {
+  if (ocupada) {
+    return 'Guardando foto de perfil';
+  }
+  return foto ? 'Cambiar foto de perfil' : 'Elegir foto de perfil';
 }
 
 /** Grupo de filas con su título. */

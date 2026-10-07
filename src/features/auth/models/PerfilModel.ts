@@ -15,9 +15,10 @@ export interface PerfilCuenta {
   colorActual: string;
   productosUsados: string;
   alergias: string;
-  tratamientos: string;
   recibePromociones: boolean;
   foto: string | null;
+  /** false: la cuenta entra con Google y no tiene contraseña. */
+  tienePassword: boolean;
 }
 
 /** Cuerpo de PATCH /api/auth/me: solo lo que cambió; null vacía un dato opcional. */
@@ -30,7 +31,6 @@ export interface CambiosPerfil {
   colorActual?: string | null;
   productosUsados?: string | null;
   alergias?: string | null;
-  tratamientos?: string | null;
   recibePromociones?: boolean;
   /** Obligatorio (true) si se envían alergias con texto; el backend no lo guarda. */
   consienteDatosSensibles?: true;
@@ -46,7 +46,6 @@ export interface FormularioPerfil {
   colorActual: string;
   productosUsados: string;
   alergias: string;
-  tratamientos: string;
   recibePromociones: boolean;
 }
 
@@ -99,9 +98,10 @@ export function normalizarPerfil(respuesta: unknown): PerfilCuenta | null {
     colorActual: texto(capilar(usuario, 'colorActual')),
     productosUsados: texto(capilar(usuario, 'productosUsados')),
     alergias: texto(capilar(usuario, 'alergias')),
-    tratamientos: texto(capilar(usuario, 'tratamientos')),
     recibePromociones: usuario.recibePromociones === true,
     foto: foto || null,
+    // Sin el dato, se asume que tiene contraseña (no se bloquea el cambio).
+    tienePassword: usuario.tienePassword !== false,
   };
 }
 
@@ -126,7 +126,6 @@ export function formularioDesdePerfil(perfil: PerfilCuenta): FormularioPerfil {
     colorActual: perfil.colorActual,
     productosUsados: perfil.productosUsados,
     alergias: perfil.alergias,
-    tratamientos: perfil.tratamientos,
     recibePromociones: perfil.recibePromociones,
   };
 }
@@ -161,7 +160,8 @@ export function cambiosDelPerfil(
   if (formulario.tipoCabello && formulario.tipoCabello !== perfil.tipoCabello) {
     cambios.tipoCabello = formulario.tipoCabello;
   }
-  const textos = ['colorNatural', 'colorActual', 'productosUsados', 'alergias', 'tratamientos'] as const;
+  // Tratamientos no se envía: el backend no guarda ese dato.
+  const textos = ['colorNatural', 'colorActual', 'productosUsados', 'alergias'] as const;
   for (const campo of textos) {
     const nuevo = opcional(formulario[campo]);
     if (nuevo !== opcional(perfil[campo])) {

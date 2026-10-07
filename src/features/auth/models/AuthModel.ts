@@ -380,6 +380,11 @@ export function urlTerminos(): string | null {
   return urlDelSitio('/terminos-y-condiciones');
 }
 
+/** Recuperación de contraseña en el sitio web (para quien no recuerda la actual). */
+export function urlOlvidoContrasena(): string | null {
+  return urlDelSitio('/forgot-password');
+}
+
 export function problemaDeNombre(nombre: string): string | null {
   if (!nombre.trim()) {
     return 'El nombre completo es requerido';
