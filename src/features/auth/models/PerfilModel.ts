@@ -15,6 +15,9 @@ export interface PerfilCuenta {
   colorActual: string;
   productosUsados: string;
   alergias: string;
+  /** null: /me no trae la respuesta (la clienta aún no la ha dado). */
+  tratamientosQuimicos: boolean | null;
+  tratamientos: string;
   recibePromociones: boolean;
   foto: string | null;
   /** false: la cuenta entra con Google y no tiene contraseña. */
@@ -31,6 +34,10 @@ export interface CambiosPerfil {
   colorActual?: string | null;
   productosUsados?: string | null;
   alergias?: string | null;
+  /** Con false, el backend guarda tratamientos en null. */
+  tratamientosQuimicos?: boolean;
+  /** Solo con tratamientosQuimicos en true (hasta 1000 caracteres). */
+  tratamientos?: string;
   recibePromociones?: boolean;
   /** Obligatorio (true) si se envían alergias con texto; el backend no lo guarda. */
   consienteDatosSensibles?: true;
@@ -46,6 +53,8 @@ export interface FormularioPerfil {
   colorActual: string;
   productosUsados: string;
   alergias: string;
+  tratamientosQuimicos: boolean | null;
+  tratamientos: string;
   recibePromociones: boolean;
 }
 
@@ -63,6 +72,10 @@ function tipoCabelloDe(valor: unknown): TipoCabello | null {
     return 'liso';
   }
   return t === 'ondulado' || t === 'rizado' ? t : null;
+}
+
+function siNoDe(valor: unknown): boolean | null {
+  return typeof valor === 'boolean' ? valor : null;
 }
 
 /** Busca un dato capilar plano (como lo lee la web) o dentro de perfilCapilar. */
@@ -98,6 +111,8 @@ export function normalizarPerfil(respuesta: unknown): PerfilCuenta | null {
     colorActual: texto(capilar(usuario, 'colorActual')),
     productosUsados: texto(capilar(usuario, 'productosUsados')),
     alergias: texto(capilar(usuario, 'alergias')),
+    tratamientosQuimicos: siNoDe(capilar(usuario, 'tratamientosQuimicos')),
+    tratamientos: texto(capilar(usuario, 'tratamientos')),
     recibePromociones: usuario.recibePromociones === true,
     foto: foto || null,
     // Sin el dato, se asume que tiene contraseña (no se bloquea el cambio).
@@ -126,6 +141,8 @@ export function formularioDesdePerfil(perfil: PerfilCuenta): FormularioPerfil {
     colorActual: perfil.colorActual,
     productosUsados: perfil.productosUsados,
     alergias: perfil.alergias,
+    tratamientosQuimicos: perfil.tratamientosQuimicos,
+    tratamientos: perfil.tratamientos,
     recibePromociones: perfil.recibePromociones,
   };
 }
@@ -136,9 +153,32 @@ function opcional(valor: string): string | null {
 }
 
 /**
+ * Tratamientos químicos que cambiaron. "No" se envía sin texto; al pasar a Sí va con el texto recortado;
+ * si sigue en Sí, solo el texto cuando cambió. Sin respuesta en /me y sin tocar, no se envía nada.
+ */
+export function cambiosDeTratamientos(
+  perfil: PerfilCuenta,
+  formulario: FormularioPerfil,
+): Pick<CambiosPerfil, 'tratamientosQuimicos' | 'tratamientos'> {
+  const { tratamientosQuimicos } = formulario;
+  if (tratamientosQuimicos === null) {
+    return {};
+  }
+  const cambio = tratamientosQuimicos !== perfil.tratamientosQuimicos;
+  if (!tratamientosQuimicos) {
+    return cambio ? { tratamientosQuimicos: false } : {};
+  }
+  const tratamientos = formulario.tratamientos.trim();
+  if (cambio) {
+    return { tratamientosQuimicos: true, tratamientos };
+  }
+  return tratamientos === perfil.tratamientos.trim() ? {} : { tratamientos };
+}
+
+/**
  * Solo lo que cambió respecto al perfil cargado. Teléfono sin lada y a 10 dígitos, fecha en
- * AAAA-MM-DD (ya validada), opcionales vacíos como null y el consentimiento solo si se envían
- * alergias con texto.
+ * AAAA-MM-DD (ya validada), opcionales vacíos como null, tratamientos como en
+ * cambiosDeTratamientos y el consentimiento solo si se envían alergias con texto.
  */
 export function cambiosDelPerfil(
   perfil: PerfilCuenta,
@@ -160,7 +200,6 @@ export function cambiosDelPerfil(
   if (formulario.tipoCabello && formulario.tipoCabello !== perfil.tipoCabello) {
     cambios.tipoCabello = formulario.tipoCabello;
   }
-  // Tratamientos no se envía: el backend no guarda ese dato.
   const textos = ['colorNatural', 'colorActual', 'productosUsados', 'alergias'] as const;
   for (const campo of textos) {
     const nuevo = opcional(formulario[campo]);
@@ -168,6 +207,7 @@ export function cambiosDelPerfil(
       cambios[campo] = nuevo;
     }
   }
+  Object.assign(cambios, cambiosDeTratamientos(perfil, formulario));
   if (formulario.recibePromociones !== perfil.recibePromociones) {
     cambios.recibePromociones = formulario.recibePromociones;
   }

@@ -272,6 +272,8 @@ export const duracion = {
   esperaReenvioCodigo: 60000,
   /** Paso de una cuenta regresiva visible (un segundo). */
   cuentaRegresiva: 1000,
+  /** Sesión móvil: el acceso se renueva antes de salir si le falta menos que esto para vencer. */
+  margenRenovacion: 60000,
 } as const;
 
 /** Intervalo de lectura del giroscopio. */

@@ -3,6 +3,7 @@ import { openBrowserAsync } from 'expo-web-browser';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BackHandler } from 'react-native';
 
+import { ApiError } from '@/shared/api/apiClient';
 import { generacionActual } from '@/shared/api/tokenStorage';
 import { soloDigitos, telefonoSinLada } from '@/shared/ui/digitos';
 import { duracion } from '@/shared/ui/tokens';
@@ -118,10 +119,42 @@ type DestinoError =
   | { tipo: 'aviso'; mensaje: string }
   | null;
 
+/** `code` estables del backend para pedir el código y cambiar la contraseña. */
+const CODIGOS = {
+  actualIncorrecta: 'PASSWORD_ACTUAL_INCORRECTA',
+  codigoInvalido: 'CODIGO_INVALIDO',
+  correoNoEnviado: 'CORREO_NO_ENVIADO',
+  cuentaSinPassword: 'CUENTA_SIN_PASSWORD',
+  cuentaNoConfirmada: 'CUENTA_NO_CONFIRMADA',
+  codigoEnCurso: 'CODIGO_EN_CURSO',
+  demasiadosCodigos: 'DEMASIADOS_CODIGOS',
+} as const;
+
+const ERROR_GENERICO = 'No pudimos cambiar tu contraseña. Intenta de nuevo.';
+
+/** Destino de un `code` conocido; undefined si no se conoce (se decide por el estado HTTP). */
+function destinoDelCode(code: string | undefined, error: unknown): DestinoError | undefined {
+  switch (code) {
+    case CODIGOS.actualIncorrecta:
+      return { tipo: 'campo', campo: 'actual', mensaje: ACTUAL_INCORRECTA };
+    case CODIGOS.codigoInvalido:
+      return { tipo: 'campo', campo: 'codigo', mensaje: CODIGO_INVALIDO };
+    case CODIGOS.correoNoEnviado:
+      return { tipo: 'aviso', mensaje: CORREO_NO_ENVIADO };
+    case CODIGOS.cuentaSinPassword:
+    case CODIGOS.cuentaNoConfirmada:
+    case CODIGOS.codigoEnCurso:
+    case CODIGOS.demasiadosCodigos:
+      return { tipo: 'aviso', mensaje: mensajeDelServidor(error, ERROR_GENERICO) };
+    default:
+      return undefined;
+  }
+}
+
 /**
- * El cliente HTTP no expone el `code` del backend: se distingue por ruta, estado y el mensaje
- * documentado completo. En /codigo un 400 solo puede ser la contraseña actual; en /me/password, un
- * 400 es el código, la actual o una regla de la nueva (estas se revisan antes que el código).
+ * Se clasifica por el `code` del backend; nunca por el texto del mensaje. Un 401 va primero (es
+ * de la sesión, traiga o no `code`). Sin `code` conocido se usa el estado HTTP y la ruta: en
+ * /codigo un 400 es la contraseña actual; en /me/password, una regla de la nueva.
  */
 function destinoDelError(error: unknown, ruta: 'codigo' | 'cambio', sesionVigente: boolean): DestinoError {
   if (esErrorDeRed(error)) {
@@ -132,14 +165,16 @@ function destinoDelError(error: unknown, ruta: 'codigo' | 'cambio', sesionVigent
     // Si apiClient cerró la sesión, la pantalla desaparece; si no (renovación sin red), se avisa.
     return sesionVigente ? { tipo: 'aviso', mensaje: SESION_NO_CONFIRMADA } : null;
   }
-  // Un mensaje de la nueva contraseña puede mencionar "la contraseña actual" sin ser este error.
-  const mensaje = error instanceof Error ? error.message.trim().toLowerCase() : '';
+  const porCode = destinoDelCode(error instanceof ApiError ? error.code : undefined, error);
+  if (porCode !== undefined) {
+    return porCode;
+  }
+  if (estado === 502 && ruta === 'codigo') {
+    return { tipo: 'aviso', mensaje: CORREO_NO_ENVIADO };
+  }
   if (estado === 400) {
-    if (ruta === 'codigo' || mensaje === ACTUAL_INCORRECTA.toLowerCase()) {
+    if (ruta === 'codigo') {
       return { tipo: 'campo', campo: 'actual', mensaje: ACTUAL_INCORRECTA };
-    }
-    if (mensaje === CODIGO_INVALIDO.toLowerCase()) {
-      return { tipo: 'campo', campo: 'codigo', mensaje: CODIGO_INVALIDO };
     }
     return {
       tipo: 'campo',
@@ -147,15 +182,8 @@ function destinoDelError(error: unknown, ruta: 'codigo' | 'cambio', sesionVigent
       mensaje: mensajeDelServidor(error, 'Revisa tu contraseña nueva.'),
     };
   }
-  if (estado === 502 && ruta === 'codigo') {
-    return { tipo: 'aviso', mensaje: CORREO_NO_ENVIADO };
-  }
-  // 409 (sin contraseña, cuenta sin activar, código en curso) y 429: el mensaje del backend. Con
-  // 5xx, mensajeDelServidor da el genérico.
-  return {
-    tipo: 'aviso',
-    mensaje: mensajeDelServidor(error, 'No pudimos cambiar tu contraseña. Intenta de nuevo.'),
-  };
+  // 409, 429 y 5xx sin `code` conocido: el mensaje del backend; con 5xx, el genérico.
+  return { tipo: 'aviso', mensaje: mensajeDelServidor(error, ERROR_GENERICO) };
 }
 
 /**

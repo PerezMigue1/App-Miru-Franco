@@ -17,7 +17,15 @@ import { esqueleto, espacio, fuente, pantalla, tipo, toqueMinimo, tracking } fro
 import { useMovimientoReducido } from '@/shared/ui/useMovimientoReducido';
 import { useTheme } from '@/shared/ui/useTheme';
 
-import { Aviso, Casilla, Opciones, TEXTO_CONSENTIMIENTO_SALUD, traerALaVista } from '../components/AuthContainer';
+import {
+  Aviso,
+  Casilla,
+  OPCIONES_SI_NO,
+  Opciones,
+  TEXTO_CONSENTIMIENTO_SALUD,
+  aSiNo,
+  traerALaVista,
+} from '../components/AuthContainer';
 import { EncabezadoVolver } from '../components/EncabezadoVolver';
 import { HojaConfirmacion } from '../components/HojaConfirmacion';
 import { AYUDA_TELEFONO, TIPOS_CABELLO } from '../models/AuthModel';
@@ -32,7 +40,7 @@ export default function EditarPerfilView() {
   const { formulario: f, cambiar, salirDe, errores } = vm;
   const refScroll = useRef<ScrollView>(null);
   const refsTexto = useRef<Partial<Record<CampoPerfil, TextInput | null>>>({});
-  const refConsentimiento = useRef<View>(null);
+  const refsBloque = useRef<Partial<Record<CampoPerfil, View | null>>>({});
   const enfoqueAtendido = useRef(0);
 
   // Al guardar con errores, el foco va al primer campo con error.
@@ -46,11 +54,16 @@ export default function EditarPerfilView() {
       entrada.focus();
       return;
     }
-    traerALaVista(refConsentimiento.current, refScroll.current, !reducido);
+    // Controles sin teclado (consentimiento, Sí/No): se desplaza hasta ellos.
+    traerALaVista(refsBloque.current[vm.enfoque.campo], refScroll.current, !reducido);
   }, [vm.enfoque, reducido]);
 
   const texto = (campo: CampoPerfil) => (instancia: TextInput | null) => {
     refsTexto.current[campo] = instancia;
+  };
+
+  const bloque = (campo: CampoPerfil) => (instancia: View | null) => {
+    refsBloque.current[campo] = instancia;
   };
 
   return (
@@ -156,7 +169,7 @@ export default function EditarPerfilView() {
             error={errores.alergias}
           />
           {vm.pideConsentimiento ? (
-            <View ref={refConsentimiento}>
+            <View ref={bloque('consiente')}>
               <Casilla
                 marcada={vm.consiente}
                 onCambiar={vm.setConsiente}
@@ -166,6 +179,28 @@ export default function EditarPerfilView() {
               />
             </View>
           ) : null}
+          {/* La pregunta y su detalle van juntos: más cerca entre sí que del resto. */}
+          <View style={styles.grupo}>
+            <Opciones
+              refContenedor={bloque('tratamientosQuimicos')}
+              etiqueta="¿Has tenido tratamientos químicos?"
+              opciones={OPCIONES_SI_NO}
+              valor={aSiNo(f.tratamientosQuimicos)}
+              onElegir={(v) => cambiar('tratamientosQuimicos', v === 'si')}
+              error={errores.tratamientosQuimicos ?? null}
+            />
+            {f.tratamientosQuimicos ? (
+              <Input
+                ref={texto('tratamientos')}
+                etiqueta="Especifica los tratamientos"
+                valor={f.tratamientos}
+                onCambiar={(t) => cambiar('tratamientos', t)}
+                onSalir={() => salirDe('tratamientos')}
+                placeholder="Ej. Alaciado con keratina"
+                error={errores.tratamientos}
+              />
+            ) : null}
+          </View>
           <Casilla
             marcada={f.recibePromociones}
             onCambiar={(v) => cambiar('recibePromociones', v)}
@@ -202,6 +237,9 @@ const styles = StyleSheet.create({
   cuerpo: {
     paddingHorizontal: pantalla.margen,
     gap: espacio.xl,
+  },
+  grupo: {
+    gap: espacio.m,
   },
   seccion: {
     marginTop: espacio.s,

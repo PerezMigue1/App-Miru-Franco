@@ -1,6 +1,6 @@
 import * as SecureStore from 'expo-secure-store';
 
-/** Token, momento de emisión y usuario en una sola entrada: se guardan o se borran juntos. */
+/** Token, momento de emisión, usuario y refreshToken en una sola entrada: se guardan o se borran juntos. */
 const CLAVE_SESION = 'auth_sesion';
 /** Formato anterior (tres entradas separadas). Si aparece, se borra y la sesión se da por cerrada. */
 const CLAVES_ANTERIORES = ['auth_token', 'auth_token_emitido', 'auth_usuario'] as const;
@@ -18,6 +18,18 @@ export interface SesionGuardada {
   /** Momento (ms) en que la app recibió el token: con él se decide cuándo renovarlo. */
   emitidoEn: number;
   usuario: UsuarioGuardado;
+  /** Sesión móvil: renueva el acceso en /api/auth/movil/renovar. Una sesión sin él usa el camino anterior. */
+  refreshToken?: string;
+  /** Vencimiento del refreshToken (ms epoch), si el servidor lo envió. */
+  refreshExpiraEn?: number;
+}
+
+/** Tokens que entrega una renovación móvil: se guardan juntos o no se guarda ninguno. */
+export interface TokensRenovados {
+  token: string;
+  refreshToken: string;
+  refreshExpiraEn?: number;
+  emitidoEn: number;
 }
 
 /**
@@ -53,6 +65,24 @@ function esTexto(valor: unknown): valor is string {
   return typeof valor === 'string';
 }
 
+function esMarcaValida(valor: number): boolean {
+  return Number.isFinite(valor) && valor > 0;
+}
+
+/**
+ * Normaliza un vencimiento del servidor a ms epoch: número (si es menor que 1e12 son segundos) o
+ * texto ISO. Devuelve undefined si no se puede leer.
+ */
+export function aMarcaDeTiempo(valor: unknown): number | undefined {
+  let ms = Number.NaN;
+  if (typeof valor === 'number') {
+    ms = valor < 1e12 ? valor * 1000 : valor;
+  } else if (typeof valor === 'string' && valor.trim()) {
+    ms = Date.parse(valor.trim());
+  }
+  return esMarcaValida(ms) ? ms : undefined;
+}
+
 function aUsuario(valor: unknown): UsuarioGuardado | null {
   if (typeof valor !== 'object' || valor === null) {
     return null;
@@ -68,12 +98,23 @@ function aSesion(valor: unknown): SesionGuardada | null {
   if (typeof valor !== 'object' || valor === null) {
     return null;
   }
-  const { token, emitidoEn, usuario } = valor as Record<string, unknown>;
+  const { token, emitidoEn, usuario, refreshToken, refreshExpiraEn } = valor as Record<string, unknown>;
   const datos = aUsuario(usuario);
   if (!esTexto(token) || !token || typeof emitidoEn !== 'number' || !Number.isFinite(emitidoEn)) {
     return null;
   }
-  return emitidoEn > 0 && datos ? { token, emitidoEn, usuario: datos } : null;
+  if (emitidoEn <= 0 || !datos) {
+    return null;
+  }
+  const sesion: SesionGuardada = { token, emitidoEn, usuario: datos };
+  // Opcionales: una sesión guardada antes de la renovación móvil sigue siendo válida sin ellos.
+  if (esTexto(refreshToken) && refreshToken) {
+    sesion.refreshToken = refreshToken;
+  }
+  if (typeof refreshExpiraEn === 'number' && esMarcaValida(refreshExpiraEn)) {
+    sesion.refreshExpiraEn = refreshExpiraEn;
+  }
+  return sesion;
 }
 
 /** El formato anterior se revisa una vez por arranque: la app ya no lo escribe. */
@@ -187,6 +228,34 @@ export function reemplazarToken(
   });
 }
 
+/**
+ * Guarda el acceso y el refreshToken de una renovación móvil, solo si la generación no cambió y el
+ * refreshToken guardado sigue siendo el que se envió a renovar.
+ */
+export function reemplazarTokens(
+  refreshAnterior: string,
+  nuevos: TokensRenovados,
+  generacionEsperada: number,
+): Promise<boolean> {
+  return enCola(async () => {
+    const actual = await leer();
+    if (generacionEsperada !== generacion || !actual || actual.refreshToken !== refreshAnterior) {
+      return false;
+    }
+    const sesion: SesionGuardada = {
+      token: nuevos.token,
+      emitidoEn: nuevos.emitidoEn,
+      usuario: actual.usuario,
+      refreshToken: nuevos.refreshToken,
+    };
+    if (nuevos.refreshExpiraEn !== undefined) {
+      sesion.refreshExpiraEn = nuevos.refreshExpiraEn;
+    }
+    await escribir(sesion);
+    return true;
+  });
+}
+
 /** Actualiza los datos de la clienta si la sesión sigue siendo la misma generación. */
 export function guardarUsuario(usuario: UsuarioGuardado, generacionEsperada: number): Promise<boolean> {
   return enCola(async () => {
@@ -228,10 +297,10 @@ export function borrarSesionSi(token: string, generacionEsperada: number): Promi
 
 /**
  * Cierra la sesión guardada si la generación sigue siendo la esperada, aunque una renovación haya
- * cambiado el token mientras tanto (renovar no cambia la generación). Devuelve el token cerrado,
- * para revocarlo en el servidor, o null si no cerró nada.
+ * cambiado el token mientras tanto (renovar no cambia la generación). Devuelve la sesión cerrada
+ * (token y refreshToken), para revocarla en el servidor, o null si no cerró nada.
  */
-export function cerrarSesionDeGeneracion(generacionEsperada: number): Promise<string | null> {
+export function cerrarSesionDeGeneracion(generacionEsperada: number): Promise<SesionGuardada | null> {
   return enCola(async () => {
     const actual = await leer();
     if (generacionEsperada !== generacion || !actual) {
@@ -239,6 +308,6 @@ export function cerrarSesionDeGeneracion(generacionEsperada: number): Promise<st
     }
     nuevaGeneracion();
     await borrarConReintento();
-    return actual.token;
+    return actual;
   });
 }

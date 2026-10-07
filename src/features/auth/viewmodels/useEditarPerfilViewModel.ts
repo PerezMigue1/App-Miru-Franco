@@ -17,10 +17,13 @@ import {
   mensajeDelServidor,
   problemaDeAlergias,
   problemaDeNombre,
+  problemaDeTieneTratamientos,
+  problemaDeTratamientos,
   urlAvisoPrivacidad,
 } from '../models/AuthModel';
 import { actualizarPerfil, obtenerPerfilCompleto } from '../models/authService';
 import {
+  cambiosDeTratamientos,
   cambiosDelPerfil,
   formularioDesdePerfil,
   normalizarPerfil,
@@ -70,6 +73,8 @@ const ORDEN: CampoPerfil[] = [
   'nacimiento',
   'alergias',
   'consiente',
+  'tratamientosQuimicos',
+  'tratamientos',
 ];
 
 const FORMULARIO_VACIO: FormularioPerfil = {
@@ -81,6 +86,8 @@ const FORMULARIO_VACIO: FormularioPerfil = {
   colorActual: '',
   productosUsados: '',
   alergias: '',
+  tratamientosQuimicos: null,
+  tratamientos: '',
   recibePromociones: false,
 };
 
@@ -114,6 +121,15 @@ function validarCampo(
     case 'consiente':
       return perfil && requiereConsentimientoPerfil(perfil, f.alergias) && !consiente
         ? ERROR_CONSENTIMIENTO_SALUD
+        : null;
+    // Solo se valida lo que se va a enviar: sin respuesta en /me y sin tocar, no bloquea el guardado.
+    case 'tratamientosQuimicos':
+      return perfil && cambiosDeTratamientos(perfil, f).tratamientosQuimicos !== undefined
+        ? problemaDeTieneTratamientos(f.tratamientosQuimicos)
+        : null;
+    case 'tratamientos':
+      return perfil && cambiosDeTratamientos(perfil, f).tratamientos !== undefined
+        ? problemaDeTratamientos(f.tratamientosQuimicos, f.tratamientos)
         : null;
     default:
       return null;
@@ -196,13 +212,18 @@ export function useEditarPerfilViewModel(): EditarPerfilViewModel {
   const pideConsentimiento = perfil ? requiereConsentimientoPerfil(perfil, formulario.alergias) : false;
 
   const cambiar = <K extends keyof FormularioPerfil>(campo: K, valor: FormularioPerfil[K]) => {
-    const nuevo = { ...formulario, [campo]: valor };
+    // Con No, el detalle se oculta y no se envía, pero se conserva: si vuelve a Sí, reaparece.
+    const nuevo: FormularioPerfil = { ...formulario, [campo]: valor };
     setFormulario(nuevo);
     if (enVivo[campo]) {
       setErrores((previos) => ({ ...previos, [campo]: validarCampo(campo, nuevo, perfil, consiente) }));
     }
     if (campo === 'alergias' && enVivo.consiente) {
       setErrores((previos) => ({ ...previos, consiente: validarCampo('consiente', nuevo, perfil, consiente) }));
+    }
+    if (campo === 'tratamientosQuimicos') {
+      const tratamientos = enVivo.tratamientos ? validarCampo('tratamientos', nuevo, perfil, consiente) : null;
+      setErrores((previos) => ({ ...previos, tratamientos }));
     }
   };
 

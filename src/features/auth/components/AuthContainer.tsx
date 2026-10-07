@@ -125,13 +125,13 @@ const PASOS: { numero: PasoRegistro; etiqueta: string }[] = [
   { numero: 2, etiqueta: 'Tu cabello' },
 ];
 
-type SiNo = 'si' | 'no';
-const OPCIONES_SI_NO: { valor: SiNo; etiqueta: string }[] = [
+export type SiNo = 'si' | 'no';
+export const OPCIONES_SI_NO: { valor: SiNo; etiqueta: string }[] = [
   { valor: 'no', etiqueta: 'No' },
   { valor: 'si', etiqueta: 'Sí' },
 ];
 
-function aSiNo(valor: boolean | null): SiNo | null {
+export function aSiNo(valor: boolean | null): SiNo | null {
   if (valor === null) {
     return null;
   }
