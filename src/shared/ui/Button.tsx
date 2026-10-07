@@ -26,6 +26,8 @@ interface ButtonProps {
   icono?: ReactNode;
   posicionIcono?: 'inicio' | 'fin';
   deshabilitado?: boolean;
+  /** Operación en curso: no responde al toque y se anuncia como ocupado, sin atenuarse. */
+  cargando?: boolean;
   accessibilityHint?: string;
 }
 
@@ -39,6 +41,7 @@ export function Button({
   icono,
   posicionIcono = 'fin',
   deshabilitado = false,
+  cargando = false,
   accessibilityHint,
 }: ButtonProps) {
   const { colores } = useTheme();
@@ -59,9 +62,9 @@ export function Button({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityState={{ disabled: deshabilitado }}
+      accessibilityState={{ disabled: deshabilitado || cargando, busy: cargando }}
       accessibilityHint={accessibilityHint}
-      disabled={deshabilitado}
+      disabled={deshabilitado || cargando}
       onPress={onPress}
       onPressIn={hundir}
       onPressOut={soltar}

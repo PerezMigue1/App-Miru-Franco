@@ -3,29 +3,37 @@
  * colores y medidas: las pantallas y componentes solo leen de aquí.
  */
 
-/** Paleta de marca. Sin colores nuevos: todos salen de DESIGN.md sección 2. */
+/**
+ * Paleta: cada valor sale de una variable del sitio web (.referencia-web/src/app/styles), que es la
+ * fuente de verdad. Entre paréntesis, la variable de origen.
+ */
 export const paleta = {
-  lino: '#DCC8B6',
-  terracota: '#B38E6F',
-  arena: '#d0b29c',
-  vino: '#710014',
-  oro: '#9f6d1f',
-  oroFoco: '#c4954d',
-  oroSobreCarbon: '#b07a28',
-  carbon: '#161616',
-  carbonMedio: '#1f1f1f',
-  carbonClaro: '#2a2a2a',
-  crema: '#F2F1ED',
-  bordeCampoClaro: '#8a7667',
-  bordeCampoOscuro: '#6e6e6e',
-  placeholderClaro: '#6b5a4e',
-  placeholderOscuro: '#b8a597',
-  /** Texto de peligro del sistema web (--danger-texto). */
-  peligroClaro: '#600011',
-  peligroOscuro: '#e0748f',
+  lino: '#DCC8B6', // --fondo-general (claro)
+  terracota: '#B38E6F', // --tarjetas-paneles (claro), --texto-secundario (oscuro)
+  arena: '#d0b29c', // --fondos-suaves (claro)
+  vino: '#710014', // --botones-principales, --mf-foco (claro)
+  vinoProfundo: '#600011', // --menu-texto-principal, --danger-texto (claro)
+  oro: '#9f6d1f', // --logo-branding
+  oroFoco: '#c4954d', // --mf-foco, --oro-sobre-carbon, --nav-activo-icono (oscuro)
+  oroSobreCarbon: '#b07a28', // --oro-sobre-carbon (claro)
+  carbon: '#161616', // --header-footer, --fondo-general (oscuro)
+  carbonMedio: '#1f1f1f', // --fondos-suaves, --input-bg, --mf-banda (oscuro)
+  carbonClaro: '#2a2a2a', // --texto-cuerpo, --encabezados-alterno (claro), --tarjetas-paneles (oscuro)
+  crema: '#F2F1ED', // --input-bg, --texto-fondo-oscuro (claro), --btn-secundario-texto (oscuro)
+  blanco: '#ffffff', // --menu-texto-principal, --texto-fondo-oscuro (oscuro)
+  textoSecundario: '#4a4541', // --texto-secundario (claro)
+  bordeCampoClaro: '#8a7667', // --campo-borde (claro)
+  bordeCampoOscuro: '#6e6e6e', // --campo-borde (oscuro)
+  placeholderClaro: '#6b5a4e', // --campo-placeholder (claro)
+  placeholderOscuro: '#b8a597', // --campo-placeholder (oscuro)
+  peligroOscuro: '#e0748f', // --danger-texto (oscuro)
+  exitoClaro: '#242d1b', // --success-texto (claro)
+  exitoOscuro: '#82a163', // --success-texto (oscuro)
+  avisoClaro: '#37280b', // --warning-texto = --oro-texto (claro)
+  avisoOscuro: '#D98E04', // --warning-texto = --warning (oscuro)
 } as const;
 
-/** Resplandor detrás de cada frasco del hero (solo para eso). */
+/** Resplandor detrás de cada frasco del hero (solo para eso). Valores de fluidosHero.ts de la web. */
 export const colorFluido = {
   goji: '#7a1a1f',
   argan: '#d99a4e',
@@ -33,15 +41,16 @@ export const colorFluido = {
   hialuronico: '#d9728f',
 } as const;
 
-/** Variantes con transparencia de la paleta (texto secundario, velos y sombras tintadas). */
+/** Colores con transparencia, también tomados de la web. */
 const transparencias = {
-  carbonTexto: 'rgba(22, 22, 22, 0.78)',
-  carbonTenue: 'rgba(22, 22, 22, 0.12)',
-  cremaTexto: 'rgba(242, 241, 237, 0.74)',
-  cremaTenue: 'rgba(242, 241, 237, 0.12)',
-  oroHairline: 'rgba(159, 109, 31, 0.45)',
-  carbonPresionado: 'rgba(22, 22, 22, 0.08)',
-  cremaPresionado: 'rgba(242, 241, 237, 0.1)',
+  cremaCuerpo: 'rgba(242, 241, 237, 0.88)', // --texto-cuerpo (oscuro)
+  cremaSobreCarbon: 'rgba(242, 241, 237, 0.8)', // --texto-fondo-oscuro-80 (claro)
+  blancoSobreCarbon: 'rgba(255, 255, 255, 0.8)', // --texto-fondo-oscuro-80 (oscuro)
+  lineaClaro: 'rgba(113, 0, 20, 0.14)', // --mf-linea (claro)
+  lineaOscuro: 'rgba(255, 255, 255, 0.08)', // --mf-linea (oscuro)
+  presionadoClaro: 'rgba(113, 0, 20, 0.05)', // --nav-hover-bg (claro)
+  presionadoOscuro: 'rgba(255, 255, 255, 0.04)', // --nav-hover-bg (oscuro)
+  // Sin variable equivalente en la web (se conserva y se reporta): velo del visor y de las hojas.
   velo: 'rgba(22, 22, 22, 0.94)',
 } as const;
 
@@ -57,7 +66,7 @@ export interface Colores {
   /** Único acento de acción. */
   accion: string;
   textoSobreAccion: string;
-  /** Botón secundario: texto oscuro sobre terracota. */
+  /** Botón secundario. */
   secundario: string;
   textoSobreSecundario: string;
   foco: string;
@@ -81,69 +90,80 @@ export interface Colores {
   peligro: string;
   /** Fondo de una fila mientras se presiona. */
   presionado: string;
+  /** Confirmación de un estado (por ejemplo, "Correo disponible"). */
+  exito: string;
+  /** Estado en espera o que pide atención sin ser error. */
+  aviso: string;
+  /** Enlaces de texto. */
+  enlace: string;
 }
 
 export const temaClaro: Colores = {
   fondo: paleta.lino,
   superficie: paleta.terracota,
   superficieSecundaria: paleta.arena,
-  texto: paleta.carbon,
-  textoSuave: transparencias.carbonTexto,
+  texto: paleta.carbonClaro,
+  textoSuave: paleta.textoSecundario,
   accion: paleta.vino,
   textoSobreAccion: paleta.crema,
   secundario: paleta.terracota,
-  textoSobreSecundario: paleta.carbon,
+  textoSobreSecundario: paleta.carbonClaro,
   foco: paleta.vino,
-  hairline: transparencias.oroHairline,
+  hairline: transparencias.lineaClaro,
   campoFondo: paleta.crema,
   campoBorde: paleta.bordeCampoClaro,
-  campoTexto: paleta.carbon,
+  campoTexto: paleta.vinoProfundo,
   campoPlaceholder: paleta.placeholderClaro,
   barraFondo: paleta.lino,
   iconoActivo: paleta.vino,
-  iconoInactivo: transparencias.carbonTexto,
+  iconoInactivo: paleta.carbonClaro,
   panel: paleta.carbon,
   textoSobrePanel: paleta.crema,
-  textoSuaveSobrePanel: transparencias.cremaTexto,
+  textoSuaveSobrePanel: transparencias.cremaSobreCarbon,
   oro: paleta.oro,
   oroTextoPequeno: paleta.oroSobreCarbon,
+  // --shadow-brand de la web: sombra tintada de vino del botón primario.
   sombra: paleta.vino,
   velo: transparencias.velo,
-  peligro: paleta.peligroClaro,
-  presionado: transparencias.carbonPresionado,
+  peligro: paleta.vinoProfundo,
+  presionado: transparencias.presionadoClaro,
+  exito: paleta.exitoClaro,
+  aviso: paleta.avisoClaro,
+  enlace: paleta.vinoProfundo,
 };
 
 export const temaOscuro: Colores = {
   fondo: paleta.carbon,
-  superficie: paleta.carbonMedio,
-  superficieSecundaria: paleta.carbonClaro,
-  texto: paleta.crema,
-  textoSuave: transparencias.cremaTexto,
+  superficie: paleta.carbonClaro,
+  superficieSecundaria: paleta.carbonMedio,
+  texto: transparencias.cremaCuerpo,
+  textoSuave: paleta.terracota,
   accion: paleta.vino,
-  textoSobreAccion: paleta.crema,
-  secundario: paleta.terracota,
-  textoSobreSecundario: paleta.carbon,
+  textoSobreAccion: paleta.blanco,
+  secundario: paleta.carbonClaro,
+  textoSobreSecundario: paleta.crema,
   foco: paleta.oroFoco,
-  hairline: transparencias.oroHairline,
-  // Campo oscuro: el placeholder #b8a597 y el borde #6e6e6e de DESIGN.md solo cumplen
-  // contraste sobre una superficie oscura (sobre crema el placeholder daría 2.1:1).
-  campoFondo: paleta.carbonClaro,
+  hairline: transparencias.lineaOscuro,
+  campoFondo: paleta.carbonMedio,
   campoBorde: paleta.bordeCampoOscuro,
-  campoTexto: paleta.crema,
+  campoTexto: paleta.blanco,
   campoPlaceholder: paleta.placeholderOscuro,
   barraFondo: paleta.carbonMedio,
-  // Oro de foco y selección (DESIGN.md): el oro de marca daría 3.7:1 en etiquetas pequeñas.
   iconoActivo: paleta.oroFoco,
-  iconoInactivo: transparencias.cremaTexto,
+  iconoInactivo: paleta.terracota,
   panel: paleta.carbon,
-  textoSobrePanel: paleta.crema,
-  textoSuaveSobrePanel: transparencias.cremaTexto,
+  textoSobrePanel: paleta.blanco,
+  textoSuaveSobrePanel: transparencias.blancoSobreCarbon,
   oro: paleta.oro,
-  oroTextoPequeno: paleta.oroSobreCarbon,
+  oroTextoPequeno: paleta.oroFoco,
+  // La web usa negro puro en sombras oscuras; DESIGN.md lo prohíbe, así que se conserva carbón.
   sombra: paleta.carbon,
   velo: transparencias.velo,
   peligro: paleta.peligroOscuro,
-  presionado: transparencias.cremaPresionado,
+  presionado: transparencias.presionadoOscuro,
+  exito: paleta.exitoOscuro,
+  aviso: paleta.avisoOscuro,
+  enlace: paleta.blanco,
 };
 
 /** Ritmo de 4px. */
@@ -242,6 +262,12 @@ export const duracion = {
   parallax: 600,
   /** Medio ciclo del pulso de los skeletons. */
   pulso: 900,
+  /** Cambio de estado de un campo (verificando, disponible, requisito cumplido): igual que presionar. */
+  estadoCampo: 140,
+  /** Espera tras dejar de escribir el correo antes de verificar si ya está registrado. */
+  verificarCorreo: 600,
+  /** Si la verificación del correo no responde en este tiempo, deja de bloquear el registro. */
+  limiteVerificacionCorreo: 6000,
 } as const;
 
 /** Intervalo de lectura del giroscopio. */
@@ -249,6 +275,9 @@ export const intervaloSensor = 50;
 
 /** Escala al presionar: se hunde sin animar desde escala 0. */
 export const escalaPresionado = 0.97;
+
+/** Escala desde la que entra un ícono de estado (nunca desde 0). */
+export const escalaEntrada = 0.9;
 
 export const opacidad = {
   deshabilitado: 0.45,
@@ -287,10 +316,32 @@ export const fila = {
   alto: 56,
 } as const;
 
+/** Hoja modal del selector: alto máximo de la lista antes de desplazarse. */
+export const hoja = {
+  altoLista: 320,
+} as const;
+
+/** Casillas del código de verificación (OtpInput). */
+export const codigo = {
+  ancho: toqueMinimo,
+  alto: 56,
+} as const;
+
 /** Casilla de verificación. */
 export const casilla = {
   tamano: 24,
 } as const;
+
+/** Indicador de pasos de un flujo (registro): diámetro del círculo con el número. */
+export const pasoFlujo = {
+  circulo: 28,
+} as const;
+
+/**
+ * Reintentos de la verificación del correo cuando no hubo respuesta (o no hubo red): esperas
+ * antes de cada uno, en ms. Con el correo sin cambios; al agotarse, el registro decide con su 409.
+ */
+export const reintentosCorreo = [5000, 10000, 20000] as const;
 
 /** Skeletons: alto de las líneas de texto y ancho de la línea corta. */
 export const esqueleto = {

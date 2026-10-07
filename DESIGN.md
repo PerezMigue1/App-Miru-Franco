@@ -10,12 +10,13 @@ Un salón de autor, no un SaaS: superficies de terracota y lino, vino profundo c
 - **Terracota** `#B38E6F`: superficie de tarjeta, siempre con sombra tintada.
 - **Arena** `#d0b29c`: superficies secundarias, marcos de imagen y skeletons.
 - **Vino** `#710014`: único acento de acción. Un botón primario por pantalla.
-- **Oro** `#9f6d1f`: hairlines, ornamento e íconos activos en modo oscuro. Nunca texto largo.
+- **Oro** `#9f6d1f`: ornamento. Nunca texto largo. En modo oscuro, los íconos activos y el foco usan `#c4954d`.
 - **Carbón** `#161616`: barras, panel de marca y placeholders. Sin negro puro.
-- **Modo oscuro** (sigue la preferencia del sistema): grises neutros `#161616`, `#1f1f1f` y `#2a2a2a` con el mismo vino y oro.
-- **Campos de formulario:** fondo `#F2F1ED`, borde `#8a7667` (claro) o `#6e6e6e` (oscuro), placeholder `#6b5a4e` (claro) o `#b8a597` (oscuro).
+- **Modo oscuro** (sigue la preferencia del sistema): fondo `#161616`, tarjetas `#2a2a2a` y superficies suaves y campos `#1f1f1f`, con el mismo vino y oro.
+- **Campos de formulario:** fondo `#F2F1ED` (claro) o `#1f1f1f` (oscuro), texto `#600011` (claro) o `#ffffff` (oscuro), borde `#8a7667` (claro) o `#6e6e6e` (oscuro), placeholder `#6b5a4e` (claro) o `#b8a597` (oscuro).
 - **Foco y selección:** vino `#710014` en claro y oro `#c4954d` en oscuro.
-- **Oro sobre carbón** para texto pequeño: `#b07a28` (4.9:1). El oro de marca queda para ornamento, íconos y texto grande.
+- **Oro sobre carbón** para texto pequeño: `#b07a28` en claro (4.9:1) y `#c4954d` en oscuro. El oro de marca queda para ornamento, íconos y texto grande.
+- **Texto, líneas y estados** (variables del sitio web, claro / oscuro): texto `#2a2a2a` / crema al 88 %, texto secundario `#4a4541` / `#b38e6f`, líneas vino al 14 % / blanco al 8 %, error `#600011` / `#e0748f`, éxito `#242d1b` / `#82a163`, aviso `#37280b` / `#D98E04` y enlaces `#600011` / `#ffffff`.
 - **Colores de los fluidos del hero** (solo para el resplandor detrás de cada frasco): Goji `#7a1a1f`, Argán `#d99a4e`, Platino `#5b3fd6`, Hialurónico `#d9728f`.
 
 ## 3. Tipografía

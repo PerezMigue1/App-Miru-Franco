@@ -11,6 +11,7 @@ import { useEffect } from 'react';
 import { StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
+import { AuthProvider, useAuth } from '@/features/auth/viewmodels/useAuth';
 import { IntroGrieta } from '@/shared/ui/IntroGrieta';
 import { useTheme } from '@/shared/ui/useTheme';
 
@@ -19,7 +20,6 @@ SplashScreen.preventAutoHideAsync().catch(() => {
 });
 
 export default function RootLayout() {
-  const { colores } = useTheme();
   const [fuentesCargadas, errorFuentes] = useFonts({
     PlayfairDisplay_600SemiBold,
     PlayfairDisplay_700Bold,
@@ -29,7 +29,20 @@ export default function RootLayout() {
     GreatVibes_400Regular,
   });
   // Con error de carga la app sigue con la fuente del sistema en lugar de quedarse en el splash.
-  const listo = fuentesCargadas || errorFuentes != null;
+  const fuentesListas = fuentesCargadas || errorFuentes != null;
+
+  // La sesión se restaura en paralelo a la carga de fuentes.
+  return (
+    <AuthProvider>
+      <Navegacion fuentesListas={fuentesListas} />
+    </AuthProvider>
+  );
+}
+
+function Navegacion({ fuentesListas }: { fuentesListas: boolean }) {
+  const { colores } = useTheme();
+  const { estado } = useAuth();
+  const listo = fuentesListas && estado !== 'cargando';
 
   useEffect(() => {
     if (listo) {
@@ -47,7 +60,16 @@ export default function RootLayout() {
     <GestureHandlerRootView style={[styles.raiz, { backgroundColor: colores.fondo }]}>
       <Stack
         screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colores.fondo } }}
-      />
+      >
+        <Stack.Screen name="index" />
+        {/* Acceso solo sin sesión; las pestañas solo con sesión. */}
+        <Stack.Protected guard={estado === 'anonimo'}>
+          <Stack.Screen name="(auth)" />
+        </Stack.Protected>
+        <Stack.Protected guard={estado === 'autenticado'}>
+          <Stack.Screen name="(cliente)" />
+        </Stack.Protected>
+      </Stack>
       <IntroGrieta />
     </GestureHandlerRootView>
   );

@@ -1,13 +1,25 @@
 import { useRouter } from 'expo-router';
 
 import { AuthContainer } from '../components/AuthContainer';
+import { useLoginViewModel } from '../viewmodels/useLoginViewModel';
+import { useRegistroViewModel } from '../viewmodels/useRegistroViewModel';
+import { useRetornoActivacion } from '../viewmodels/useRetornoActivacion';
 
 export default function LoginView() {
-  const { push, replace } = useRouter();
-
-  // TODO(GP-05): se reemplaza por el inicio de sesión real; por ahora "Entrar" solo navega a las pestañas.
-  const entrar = () => replace('/inicio');
+  const login = useLoginViewModel();
+  const registro = useRegistroViewModel();
+  const { aviso, retorno } = useRetornoActivacion();
+  const { push } = useRouter();
   const recuperar = () => push('/recuperar');
 
-  return <AuthContainer vistaInicial="acceso" onEntrar={entrar} onRecuperar={recuperar} />;
+  return (
+    <AuthContainer
+      vistaInicial="acceso"
+      login={login}
+      registro={registro}
+      onRecuperar={recuperar}
+      aviso={aviso}
+      retorno={retorno}
+    />
+  );
 }
