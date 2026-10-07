@@ -1,7 +1,20 @@
 import { CalendarPlus } from 'lucide-react-native';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  type LayoutChangeEvent,
+} from 'react-native';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { Button } from '@/shared/ui/Button';
 import { EmptyState } from '@/shared/ui/EmptyState';
@@ -22,6 +35,8 @@ import {
 import { useMovimientoReducido } from '@/shared/ui/useMovimientoReducido';
 import { useTheme } from '@/shared/ui/useTheme';
 
+import { useServicios } from '../viewmodels/useServicios';
+
 type Segmento = 'proximas' | 'historial';
 
 const SEGMENTOS: { valor: Segmento; etiqueta: string }[] = [
@@ -31,29 +46,60 @@ const SEGMENTOS: { valor: Segmento; etiqueta: string }[] = [
 
 const EASE_ENTRADA_SALIDA = Easing.bezier(...curva.entradaSalida);
 
-/** Mis citas: solo presentación; las citas reales llegan en GP-06. */
 export default function CitasView() {
   const { colores } = useTheme();
+
+  const {
+    serviciosFiltrados,
+    cargando,
+    error,
+    busqueda,
+    setBusqueda,
+    recargar,
+  } = useServicios();
+
   const [segmento, setSegmento] = useState<Segmento>('proximas');
 
   return (
     <ScrollView
       style={{ backgroundColor: colores.fondo }}
       contentContainerStyle={styles.contenido}
+      keyboardShouldPersistTaps="handled"
     >
       <ScreenHeader titulo="Mis citas" />
+
       <View style={styles.cuerpo}>
-        <View style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombra }]}>
-          <Text accessibilityRole="header" style={[styles.tituloTarjeta, { color: colores.texto }]}>
+        <View
+          style={[
+            styles.tarjeta,
+            {
+              backgroundColor: colores.superficie,
+              shadowColor: colores.sombra,
+            },
+          ]}
+        >
+          <Text
+            accessibilityRole="header"
+            style={[
+              styles.tituloTarjeta,
+              { color: colores.texto },
+            ]}
+          >
             Reserva tu próxima visita
           </Text>
-          <Text style={[styles.texto, { color: colores.texto }]}>
+
+          <Text
+            style={[
+              styles.texto,
+              { color: colores.texto },
+            ]}
+          >
             Elige el servicio, el día y la hora que mejor te acomoden.
           </Text>
-          {/* TODO(GP-06): abrir el flujo de reserva. */}
+
           <Button
             titulo="Reservar cita"
-            accessibilityHint="Disponible próximamente"
+            accessibilityHint="Selecciona un servicio para comenzar"
             icono={
               <CalendarPlus
                 color={colores.textoSobreAccion}
@@ -65,7 +111,167 @@ export default function CitasView() {
           />
         </View>
 
-        <ControlSegmentado valor={segmento} onCambiar={setSegmento} />
+        <View style={styles.seccionServicios}>
+          <Text
+            accessibilityRole="header"
+            style={[
+              styles.tituloSeccion,
+              { color: colores.texto },
+            ]}
+          >
+            Servicios disponibles
+          </Text>
+
+          <TextInput
+            value={busqueda}
+            onChangeText={setBusqueda}
+            placeholder="Buscar servicio..."
+            placeholderTextColor={colores.textoSuave}
+            accessibilityLabel="Buscar servicio"
+            style={[
+              styles.buscador,
+              {
+                backgroundColor: colores.superficie,
+                color: colores.texto,
+              },
+            ]}
+          />
+
+          {cargando ? (
+            <Text
+              style={[
+                styles.textoEstado,
+                { color: colores.textoSuave },
+              ]}
+            >
+              Cargando servicios...
+            </Text>
+          ) : error ? (
+            <View style={styles.errorContenedor}>
+              <Text
+                style={[
+                  styles.texto,
+                  { color: colores.texto },
+                ]}
+              >
+                {error}
+              </Text>
+
+              <Button
+                titulo="Reintentar"
+                onPress={() => {
+                  void recargar();
+                }}
+              />
+            </View>
+          ) : serviciosFiltrados.length === 0 ? (
+            <EmptyState
+              titulo="No se encontraron servicios"
+              mensaje={
+                busqueda.trim().length > 0
+                  ? 'Intenta buscar con otro nombre o categoría.'
+                  : 'Actualmente no hay servicios disponibles.'
+              }
+            />
+          ) : (
+            <View style={styles.listaServicios}>
+              {serviciosFiltrados.map((servicio) => (
+                <View
+                  key={String(servicio.id)}
+                  style={[
+                    styles.servicioCard,
+                    {
+                      backgroundColor: colores.superficie,
+                      shadowColor: colores.sombra,
+                    },
+                  ]}
+                >
+                  <View style={styles.servicioEncabezado}>
+                    <View style={styles.servicioInformacion}>
+                      <Text
+                        style={[
+                          styles.servicioNombre,
+                          { color: colores.texto },
+                        ]}
+                      >
+                        {servicio.nombre}
+                      </Text>
+
+                      {servicio.categoria ? (
+                        <Text
+                          style={[
+                            styles.categoria,
+                            { color: colores.textoSuave },
+                          ]}
+                        >
+                          {servicio.categoria}
+                        </Text>
+                      ) : null}
+                    </View>
+                  </View>
+
+                  {servicio.descripcion ? (
+                    <Text
+                      style={[
+                        styles.texto,
+                        { color: colores.textoSuave },
+                      ]}
+                    >
+                      {servicio.descripcion}
+                    </Text>
+                  ) : null}
+
+                  <View style={styles.servicioPie}>
+                    <Text
+                      style={[
+                        styles.servicioMeta,
+                        { color: colores.texto },
+                      ]}
+                    >
+                      {servicio.precio ?? 'Precio no disponible'}
+                    </Text>
+
+                    {servicio.duracion ? (
+                      <Text
+                        style={[
+                          styles.servicioMetaSecundario,
+                          { color: colores.textoSuave },
+                        ]}
+                      >
+                        {servicio.duracion}
+                      </Text>
+                    ) : null}
+                  </View>
+
+                  {servicio.especialistas &&
+                  servicio.especialistas.length > 0 ? (
+                    <Text
+                      style={[
+                        styles.especialistasTexto,
+                        { color: colores.textoSuave },
+                      ]}
+                    >
+                      {servicio.especialistas.length}{' '}
+                      {servicio.especialistas.length === 1
+                        ? 'especialista disponible'
+                        : 'especialistas disponibles'}
+                    </Text>
+                  ) : null}
+
+                  <Button
+                    titulo="Seleccionar servicio"
+                    accessibilityHint={`Selecciona ${servicio.nombre} para continuar con la reserva`}
+                  />
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+
+        <ControlSegmentado
+          valor={segmento}
+          onCambiar={setSegmento}
+        />
 
         {segmento === 'proximas' ? (
           <EmptyState
@@ -83,7 +289,6 @@ export default function CitasView() {
   );
 }
 
-/** Control segmentado con indicador que se desliza 240 ms (inmediato con movimiento reducido). */
 function ControlSegmentado({
   valor,
   onCambiar,
@@ -93,54 +298,94 @@ function ControlSegmentado({
 }) {
   const { colores } = useTheme();
   const reducido = useMovimientoReducido();
+
   const [ancho, setAncho] = useState(0);
-  const posicion = useSharedValue(SEGMENTOS.findIndex((s) => s.valor === valor));
-  const anchoIndicador = (ancho - espacio.xs * 2) / SEGMENTOS.length;
+
+  const posicion = useSharedValue(
+    SEGMENTOS.findIndex((segmento) => segmento.valor === valor),
+  );
+
+  const anchoIndicador =
+    ancho > 0
+      ? (ancho - espacio.xs * 2) / SEGMENTOS.length
+      : 0;
 
   const estiloIndicador = useAnimatedStyle(() => ({
-    transform: [{ translateX: posicion.get() * anchoIndicador }],
+    transform: [
+      {
+        translateX: posicion.get() * anchoIndicador,
+      },
+    ],
   }));
 
   const elegir = (segmento: Segmento) => {
-    const indice = SEGMENTOS.findIndex((s) => s.valor === segmento);
-    posicion.set(
-      reducido ? indice : withTiming(indice, { duration: duracion.pestana, easing: EASE_ENTRADA_SALIDA }),
+    const indice = SEGMENTOS.findIndex(
+      (item) => item.valor === segmento,
     );
+
+    posicion.set(
+      reducido
+        ? indice
+        : withTiming(indice, {
+            duration: duracion.pestana,
+            easing: EASE_ENTRADA_SALIDA,
+          }),
+    );
+
     onCambiar(segmento);
   };
 
   return (
     <View
       accessibilityRole="tablist"
-      onLayout={(e: LayoutChangeEvent) => setAncho(e.nativeEvent.layout.width)}
-      style={[styles.segmentado, { backgroundColor: colores.superficieSecundaria }]}
+      onLayout={(evento: LayoutChangeEvent) =>
+        setAncho(evento.nativeEvent.layout.width)
+      }
+      style={[
+        styles.segmentado,
+        {
+          backgroundColor: colores.superficieSecundaria,
+        },
+      ]}
     >
       {ancho > 0 ? (
         <Animated.View
           style={[
             styles.indicador,
-            { width: anchoIndicador, backgroundColor: colores.fondo, shadowColor: colores.sombra },
+            {
+              width: anchoIndicador,
+              backgroundColor: colores.fondo,
+              shadowColor: colores.sombra,
+            },
             estiloIndicador,
           ]}
         />
       ) : null}
-      {SEGMENTOS.map((s) => {
-        const activo = s.valor === valor;
+
+      {SEGMENTOS.map((segmento) => {
+        const activo = segmento.valor === valor;
+
         return (
           <Pressable
-            key={s.valor}
+            key={segmento.valor}
             accessibilityRole="tab"
-            accessibilityState={{ selected: activo }}
-            onPress={() => elegir(s.valor)}
+            accessibilityState={{
+              selected: activo,
+            }}
+            onPress={() => elegir(segmento.valor)}
             style={styles.segmento}
           >
             <Text
               style={[
                 styles.textoSegmento,
-                { color: activo ? colores.texto : colores.textoSuave },
+                {
+                  color: activo
+                    ? colores.texto
+                    : colores.textoSuave,
+                },
               ]}
             >
-              {s.etiqueta}
+              {segmento.etiqueta}
             </Text>
           </Pressable>
         );
@@ -154,53 +399,174 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingBottom: espacio.x3,
   },
+
   cuerpo: {
     paddingHorizontal: pantalla.margen,
     gap: espacio.xxl,
   },
+
   tarjeta: {
     gap: espacio.m,
     padding: espacio.xl,
     borderRadius: radio.tarjeta,
+
     shadowOpacity: sombra.tarjeta.opacidad,
     shadowRadius: sombra.tarjeta.radio,
-    shadowOffset: { width: 0, height: sombra.tarjeta.desplazamientoY },
+    shadowOffset: {
+      width: 0,
+      height: sombra.tarjeta.desplazamientoY,
+    },
+
     elevation: sombra.tarjeta.elevacion,
   },
+
   tituloTarjeta: {
     fontFamily: fuente.titulo,
     fontSize: tipo.subtitulo.tamano,
     lineHeight: tipo.subtitulo.linea,
     letterSpacing: tracking.titulo,
   },
+
+  tituloSeccion: {
+    fontFamily: fuente.titulo,
+    fontSize: tipo.subtitulo.tamano,
+    lineHeight: tipo.subtitulo.linea,
+    letterSpacing: tracking.titulo,
+  },
+
   texto: {
     fontFamily: fuente.texto,
     fontSize: tipo.cuerpo.tamano,
     lineHeight: tipo.cuerpo.linea,
     marginBottom: espacio.xs,
   },
+
+  seccionServicios: {
+    gap: espacio.m,
+  },
+
+  buscador: {
+    minHeight: toqueMinimo,
+    borderRadius: radio.tarjeta,
+    paddingHorizontal: espacio.m,
+    paddingVertical: espacio.s,
+
+    fontFamily: fuente.texto,
+    fontSize: tipo.cuerpo.tamano,
+  },
+
+  textoEstado: {
+    fontFamily: fuente.texto,
+    fontSize: tipo.cuerpo.tamano,
+    lineHeight: tipo.cuerpo.linea,
+    paddingVertical: espacio.m,
+  },
+
+  errorContenedor: {
+    gap: espacio.m,
+  },
+
+  listaServicios: {
+    gap: espacio.m,
+  },
+
+  servicioCard: {
+    padding: espacio.l,
+    borderRadius: radio.tarjeta,
+    gap: espacio.s,
+
+    shadowOpacity: sombra.tarjeta.opacidad,
+    shadowRadius: sombra.tarjeta.radio,
+    shadowOffset: {
+      width: 0,
+      height: sombra.tarjeta.desplazamientoY,
+    },
+
+    elevation: sombra.tarjeta.elevacion,
+  },
+
+  servicioEncabezado: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: espacio.m,
+  },
+
+  servicioInformacion: {
+    flex: 1,
+    gap: espacio.xs,
+  },
+
+  servicioNombre: {
+    fontFamily: fuente.titulo,
+    fontSize: tipo.subtitulo.tamano,
+    lineHeight: tipo.subtitulo.linea,
+  },
+
+  categoria: {
+    fontFamily: fuente.textoMedio,
+    fontSize: tipo.pequeno.tamano,
+    lineHeight: tipo.pequeno.linea,
+  },
+
+  servicioPie: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: espacio.m,
+  },
+
+  servicioMeta: {
+    fontFamily: fuente.textoMedio,
+    fontSize: tipo.cuerpo.tamano,
+    lineHeight: tipo.cuerpo.linea,
+  },
+
+  servicioMetaSecundario: {
+    fontFamily: fuente.texto,
+    fontSize: tipo.pequeno.tamano,
+    lineHeight: tipo.pequeno.linea,
+  },
+
+  especialistasTexto: {
+    fontFamily: fuente.texto,
+    fontSize: tipo.pequeno.tamano,
+    lineHeight: tipo.pequeno.linea,
+  },
+
   segmentado: {
     flexDirection: 'row',
     padding: espacio.xs,
     borderRadius: radio.pastilla,
   },
+
   indicador: {
     position: 'absolute',
+
     top: espacio.xs,
     bottom: espacio.xs,
     left: espacio.xs,
+
     borderRadius: radio.pastilla,
+
     shadowOpacity: sombra.boton.opacidad,
     shadowRadius: sombra.boton.radio,
-    shadowOffset: { width: 0, height: sombra.boton.desplazamientoY },
+    shadowOffset: {
+      width: 0,
+      height: sombra.boton.desplazamientoY,
+    },
+
     elevation: sombra.boton.elevacion,
   },
+
   segmento: {
     flex: 1,
     minHeight: toqueMinimo,
+
     alignItems: 'center',
     justifyContent: 'center',
   },
+
   textoSegmento: {
     fontFamily: fuente.textoMedio,
     fontSize: tipo.pequeno.tamano,
