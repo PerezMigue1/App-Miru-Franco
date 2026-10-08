@@ -1,6 +1,8 @@
 import { CheckCheck } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { InvitacionSesion } from '@/features/auth/components/InvitacionSesion';
+import { useAuth } from '@/features/auth/viewmodels/useAuth';
 import { EmptyState } from '@/shared/ui/EmptyState';
 import { ScreenHeader } from '@/shared/ui/ScreenHeader';
 import {
@@ -17,6 +19,19 @@ import { useTheme } from '@/shared/ui/useTheme';
 /** Notificaciones: solo presentación; los avisos llegan con las notificaciones push. */
 export default function NotificacionesView() {
   const { colores } = useTheme();
+  const { estado } = useAuth();
+
+  if (estado !== 'autenticado') {
+    return (
+      <ScrollView style={{ backgroundColor: colores.fondo }} contentContainerStyle={styles.contenido}>
+        <ScreenHeader titulo="Notificaciones" />
+        <InvitacionSesion
+          titulo="Tus avisos en un solo lugar"
+          beneficio="Inicia sesión para recibir los recordatorios de tus citas y el estado de tus pedidos."
+        />
+      </ScrollView>
+    );
+  }
 
   return (
     <ScrollView

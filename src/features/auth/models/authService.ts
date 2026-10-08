@@ -1,4 +1,7 @@
-import { apiGet, apiPost, renovarSesion, type ResultadoRenovacion } from '@/shared/api/apiClient';
+import * as Device from 'expo-device';
+
+import { accesoPorVencer, apiGet, apiPatch, apiPost, renovarSinGuardar } from '@/shared/api/apiClient';
+import { subirMultipart } from '@/shared/api/subirMultipart';
 
 import type {
   DatosRegistro,
@@ -10,6 +13,7 @@ import type {
   RespuestaVerificarCorreo,
   UsuarioSesion,
 } from './AuthModel';
+import type { CambiosPerfil, FirmaFoto } from './PerfilModel';
 
 /** Normaliza el usuario del backend (el id puede llegar como número). */
 export function normalizarUsuario(valor: unknown): UsuarioSesion | null {
@@ -24,24 +28,103 @@ export function normalizarUsuario(valor: unknown): UsuarioSesion | null {
   return { id: idTexto, nombre: typeof nombre === 'string' ? nombre : '', email, rol };
 }
 
-/** POST /api/auth/login. Público: su 401 no dispara renovación. */
+const LARGO_MAXIMO_DISPOSITIVO = 80;
+
+/** Modelo del teléfono para que la clienta reconozca la sesión; undefined si no se conoce. */
+function nombreDispositivo(): string | undefined {
+  const modelo = Device.modelName?.trim().slice(0, LARGO_MAXIMO_DISPOSITIVO);
+  return modelo || undefined;
+}
+
+/**
+ * POST /api/auth/login con canal "movil": para el rol cliente trae también un refreshToken.
+ * Público: su 401 no dispara renovación.
+ */
 export function iniciarSesion(email: string, password: string): Promise<RespuestaLogin> {
-  return apiPost<RespuestaLogin>('/api/auth/login', { email, password }, { publica: true });
+  const dispositivo = nombreDispositivo();
+  const cuerpo = dispositivo
+    ? { email, password, canal: 'movil', dispositivo }
+    : { email, password, canal: 'movil' };
+  return apiPost<RespuestaLogin>('/api/auth/login', cuerpo, { publica: true });
 }
 
-/** POST /api/auth/refresh. Una sola renovación a la vez (la coordina apiClient). */
-export function renovarToken(): Promise<ResultadoRenovacion> {
-  return renovarSesion();
+/** Sesión que se revoca en el servidor (ya borrada o nunca guardada en el teléfono). */
+export interface SesionARevocar {
+  token: string;
+  emitidoEn: number;
+  refreshToken?: string;
 }
 
-/** POST /api/auth/logout con el token indicado; su 401 no renueva ni cierra la sesión. */
-export function cerrarSesionServidor(token: string): Promise<RespuestaSimple> {
-  return apiPost<RespuestaSimple>('/api/auth/logout', { logoutAll: false }, { token });
+/**
+ * POST /api/auth/logout con el token indicado; su 401 no renueva ni cierra la sesión. Con
+ * refreshToken revoca esa sesión móvil; como /logout rechaza un acceso vencido, si vence dentro del
+ * margen antes se renueva solo en memoria (sin guardar nada).
+ */
+export async function cerrarSesionServidor(sesion: SesionARevocar): Promise<void> {
+  if (!sesion.refreshToken) {
+    await apiPost<RespuestaSimple>('/api/auth/logout', { logoutAll: false }, { token: sesion.token });
+    return;
+  }
+  let { token, refreshToken } = sesion;
+  if (accesoPorVencer(sesion)) {
+    const nuevos = await renovarSinGuardar(refreshToken);
+    if (!nuevos) {
+      // El servidor ya no la reconoce o no respondió: no hay con qué revocarla.
+      return;
+    }
+    ({ token, refreshToken } = nuevos);
+  }
+  await apiPost<RespuestaSimple>('/api/auth/logout', { logoutAll: false, refreshToken }, { token });
 }
 
 /** GET /api/auth/me. */
 export function obtenerPerfil(): Promise<RespuestaPerfil> {
   return apiGet<RespuestaPerfil>('/api/auth/me');
+}
+
+/** GET /api/auth/me con el perfil completo (datos capilares y foto), sin normalizar. */
+export function obtenerPerfilCompleto(): Promise<unknown> {
+  return apiGet<unknown>('/api/auth/me');
+}
+
+/** PATCH /api/auth/me: solo los campos que cambiaron. */
+export function actualizarPerfil(cambios: CambiosPerfil | { foto: string | null }): Promise<unknown> {
+  return apiPatch<unknown>('/api/auth/me', cambios);
+}
+
+/** POST /api/auth/me/foto/firma (máximo 10 por minuto): firma de una hora para subir la foto. */
+export function pedirFirmaFoto(): Promise<unknown> {
+  return apiPost<unknown>('/api/auth/me/foto/firma');
+}
+
+/** Sube la foto a Cloudinary con la firma, sin token de la app. Devuelve la respuesta de Cloudinary. */
+export function subirFoto(firma: FirmaFoto, archivoUri: string): Promise<unknown> {
+  return subirMultipart(firma.uploadUrl, archivoUri, firma.campos);
+}
+
+/** Respuesta de POST /api/auth/me/password/codigo: nunca trae el código. */
+export interface RespuestaCodigoContrasena extends RespuestaSimple {
+  vigenciaMinutos?: number;
+}
+
+/**
+ * POST /api/auth/me/password/codigo: verifica la contraseña actual y envía un código al correo.
+ * Petición protegida normal: un 401 es una sesión vencida.
+ */
+export function pedirCodigoContrasena(actualPassword: string): Promise<RespuestaCodigoContrasena> {
+  return apiPost<RespuestaCodigoContrasena>('/api/auth/me/password/codigo', { actualPassword });
+}
+
+/**
+ * POST /api/auth/me/password: cambia la contraseña con el código. Al responder 200 el servidor
+ * revoca todas las sesiones de la cuenta, incluida la de este teléfono.
+ */
+export function cambiarContrasenaConCodigo(
+  actualPassword: string,
+  nuevaPassword: string,
+  codigo: string,
+): Promise<RespuestaSimple> {
+  return apiPost<RespuestaSimple>('/api/auth/me/password', { actualPassword, nuevaPassword, codigo });
 }
 
 /** GET /api/pregunta-seguridad (público). */

@@ -19,9 +19,13 @@ export interface RespuestaLogin {
   message?: string;
   token: string;
   usuario: UsuarioSesion;
+  /** Solo para el rol cliente con canal "movil": renueva el acceso en /api/auth/movil/renovar. */
+  refreshToken?: string;
+  /** Vencimiento del refreshToken: número o texto ISO, tal como llegue. */
+  refreshExpiraEn?: number | string;
 }
 
-/** POST /api/auth/refresh → 200 (en modo Bearer no trae renovarEnSegundos). */
+/** Renovación de sesiones sin refreshToken → 200 (en modo Bearer no trae renovarEnSegundos). */
 export interface RespuestaRefresh {
   success: boolean;
   token: string;
@@ -378,6 +382,11 @@ export function urlAvisoPrivacidad(): string | null {
 /** Términos y condiciones en el sitio web. */
 export function urlTerminos(): string | null {
   return urlDelSitio('/terminos-y-condiciones');
+}
+
+/** Recuperación de contraseña en el sitio web (para quien no recuerda la actual). */
+export function urlOlvidoContrasena(): string | null {
+  return urlDelSitio('/forgot-password');
 }
 
 export function problemaDeNombre(nombre: string): string | null {

@@ -39,9 +39,17 @@ type Lado = 'izq' | 'der';
  * por una grieta de papel rasgado y las dos mitades se separan para revelar la app. Dura menos de
  * 1.3 s, se salta tocando la pantalla y se omite con movimiento reducido.
  */
-export function IntroGrieta() {
+export function IntroGrieta({ onTerminar }: { onTerminar?: () => void } = {}) {
   const reducido = useMovimientoReducido();
   const [visible, setVisible] = useState(() => !introMostrada && !reducido);
+
+  // Avisa cuando la intro ya no cubre la pantalla (o si no se mostró): lo que va encima de la app,
+  // como la hoja de bienvenida, espera a este momento.
+  useEffect(() => {
+    if (!visible) {
+      onTerminar?.();
+    }
+  }, [visible, onTerminar]);
   const [tamano, setTamano] = useState<{ ancho: number; alto: number } | null>(null);
 
   const trazo = useSharedValue(0);

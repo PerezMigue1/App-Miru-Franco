@@ -25,13 +25,20 @@ export interface EstadoRetorno {
  * y si la cuenta quedó activada.
  */
 export function useRetornoActivacion(): EstadoRetorno {
-  const { activada, correo, vuelta } = useLocalSearchParams<{
+  const { activada, correo, vuelta, motivo } = useLocalSearchParams<{
     activada?: string;
     correo?: string;
     vuelta?: string;
+    motivo?: string;
   }>();
+  let aviso: string | null = null;
+  if (activada === '1') {
+    aviso = 'Tu cuenta está activada. Inicia sesión.';
+  } else if (motivo === 'contrasena') {
+    aviso = 'Tu contraseña cambió. Inicia sesión de nuevo.';
+  }
   return {
-    aviso: activada === '1' ? 'Tu cuenta está activada. Inicia sesión.' : null,
+    aviso,
     retorno:
       typeof vuelta === 'string' && vuelta
         ? { correo: typeof correo === 'string' ? correo : '', vez: vuelta }
