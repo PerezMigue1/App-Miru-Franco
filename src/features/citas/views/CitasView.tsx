@@ -33,6 +33,8 @@ import Animated, {
 
 } from 'react-native-reanimated';
 
+
+
 import { InvitacionSesion } from '@/features/auth/components/InvitacionSesion';
 
 import { useAuth } from '@/features/auth/viewmodels/useAuth';
@@ -73,9 +75,17 @@ import { useMovimientoReducido } from '@/shared/ui/useMovimientoReducido';
 
 import { useTheme } from '@/shared/ui/useTheme';
 
+
+
 import { useServicios } from '../viewmodels/useServicios';
+import type { Servicio } from '../models/Servicio';
+import { DetalleServicioView } from './DetalleServicioView';
+
+
 
 type Segmento = 'proximas' | 'historial';
+
+
 
 const SEGMENTOS: { valor: Segmento; etiqueta: string }[] = [
 
@@ -85,7 +95,11 @@ const SEGMENTOS: { valor: Segmento; etiqueta: string }[] = [
 
 ];
 
+
+
 const EASE_ENTRADA_SALIDA = Easing.bezier(...curva.entradaSalida);
+
+
 
 export default function CitasView() {
 
@@ -94,6 +108,9 @@ export default function CitasView() {
   const { estado } = useAuth();
 
   const [seleccionado, setSeleccionado] = useState<string | number | null>(null);
+  const [detalleAbierto, setDetalleAbierto] = useState<Servicio | null>(null);
+
+
 
   const {
 
@@ -111,8 +128,22 @@ export default function CitasView() {
 
   } = useServicios();
 
+
+
   const [segmento, setSegmento] = useState<Segmento>('proximas');
   const autenticado = estado === 'autenticado';
+
+  // El detalle es público; no modifica las rutas compartidas de main.
+  if (detalleAbierto !== null) {
+    return (
+      <DetalleServicioView
+        servicio={detalleAbierto}
+        onVolver={() => setDetalleAbierto(null)}
+      />
+    );
+  }
+
+
 
   return (
 
@@ -127,6 +158,8 @@ export default function CitasView() {
     >
 
       <ScreenHeader titulo={autenticado ? "Mis citas" : "Servicios y citas"} />
+
+
 
       <View style={styles.cuerpo}>
         {!autenticado ? (
@@ -174,6 +207,8 @@ export default function CitasView() {
 
           </Text>
 
+
+
           <Text
 
             style={[
@@ -189,6 +224,8 @@ export default function CitasView() {
             Elige el servicio, el día y la hora que mejor te acomoden.
 
           </Text>
+
+
 
           {seleccionado !== null ? (
 
@@ -228,6 +265,8 @@ export default function CitasView() {
 
         </View>
 
+
+
         ) : null}
 
         <View style={styles.seccionServicios}>
@@ -249,6 +288,8 @@ export default function CitasView() {
             Servicios disponibles
 
           </Text>
+
+
 
           <TextInput
 
@@ -277,6 +318,8 @@ export default function CitasView() {
             ]}
 
           />
+
+
 
           {cargando ? (
 
@@ -315,6 +358,8 @@ export default function CitasView() {
                 {error}
 
               </Text>
+
+
 
               <Button
 
@@ -403,6 +448,8 @@ export default function CitasView() {
 
                       </Text>
 
+
+
                       {servicio.categoria ? (
 
                         <Text
@@ -427,6 +474,8 @@ export default function CitasView() {
 
                   </View>
 
+
+
                   {servicio.descripcion ? (
 
                     <Text
@@ -447,6 +496,8 @@ export default function CitasView() {
 
                   ) : null}
 
+
+
                   <View style={styles.servicioPie}>
 
                     <Text
@@ -464,6 +515,8 @@ export default function CitasView() {
                       {servicio.precio ?? 'Precio no disponible'}
 
                     </Text>
+
+
 
                     {servicio.duracion ? (
 
@@ -486,6 +539,8 @@ export default function CitasView() {
                     ) : null}
 
                   </View>
+
+
 
                   {servicio.especialistas &&
 
@@ -515,6 +570,8 @@ export default function CitasView() {
 
                   ) : null}
 
+
+
                   {seleccionado === servicio.id ? (
                     <View style={styles.detalleServicio}>
                       {servicio.descripcionLarga ? (
@@ -535,13 +592,16 @@ export default function CitasView() {
 
                   <Button
 
-                    titulo={seleccionado === servicio.id ? "Servicio seleccionado" : "Seleccionar servicio"}
+                    titulo="Ver detalles"
 
                     variante={seleccionado === servicio.id ? "secundario" : "primario"}
 
-                    onPress={() => setSeleccionado(servicio.id)}
+                    onPress={() => {
+                      setSeleccionado(servicio.id);
+                      setDetalleAbierto(servicio);
+                    }}
 
-                    accessibilityHint={`Selecciona ${servicio.nombre} para una futura reserva`}
+                    accessibilityHint={`Consulta los detalles de ${servicio.nombre}`}
 
                   />
 
@@ -555,6 +615,8 @@ export default function CitasView() {
 
         </View>
 
+
+
         {autenticado ? (
           <>
         <Text accessibilityRole="header" style={[styles.tituloSeccion, { color: colores.texto }]}>
@@ -567,6 +629,8 @@ export default function CitasView() {
           onCambiar={setSegmento}
 
         />
+
+
 
         {segmento === 'proximas' ? (
 
@@ -600,6 +664,8 @@ export default function CitasView() {
 
 }
 
+
+
 function ControlSegmentado({
 
   valor,
@@ -618,13 +684,19 @@ function ControlSegmentado({
 
   const reducido = useMovimientoReducido();
 
+
+
   const [ancho, setAncho] = useState(0);
+
+
 
   const posicion = useSharedValue(
 
     SEGMENTOS.findIndex((segmento) => segmento.valor === valor),
 
   );
+
+
 
   const anchoIndicador =
 
@@ -633,6 +705,8 @@ function ControlSegmentado({
       ? (ancho - espacio.xs * 2) / SEGMENTOS.length
 
       : 0;
+
+
 
   const estiloIndicador = useAnimatedStyle(() => ({
 
@@ -648,6 +722,8 @@ function ControlSegmentado({
 
   }));
 
+
+
   const elegir = (segmento: Segmento) => {
 
     const indice = SEGMENTOS.findIndex(
@@ -655,6 +731,8 @@ function ControlSegmentado({
       (item) => item.valor === segmento,
 
     );
+
+
 
     posicion.set(
 
@@ -672,9 +750,13 @@ function ControlSegmentado({
 
     );
 
+
+
     onCambiar(segmento);
 
   };
+
+
 
   return (
 
@@ -728,9 +810,13 @@ function ControlSegmentado({
 
       ) : null}
 
+
+
       {SEGMENTOS.map((segmento) => {
 
         const activo = segmento.valor === valor;
+
+
 
         return (
 
@@ -788,19 +874,9 @@ function ControlSegmentado({
 
 }
 
+
+
 const styles = StyleSheet.create({
-  imagenServicio: {
-    width: '100%',
-    height: 180,
-    borderRadius: radio.tarjeta,
-    marginBottom: espacio.s,
-  },
-  detalleServicio: {
-    gap: espacio.s,
-    padding: espacio.m,
-    borderRadius: radio.tarjeta,
-    backgroundColor: 'transparent',
-  },
 
   contenido: {
 
@@ -810,6 +886,8 @@ const styles = StyleSheet.create({
 
   },
 
+
+
   cuerpo: {
 
     paddingHorizontal: pantalla.margen,
@@ -818,6 +896,8 @@ const styles = StyleSheet.create({
 
   },
 
+
+
   tarjeta: {
 
     gap: espacio.m,
@@ -825,6 +905,8 @@ const styles = StyleSheet.create({
     padding: espacio.xl,
 
     borderRadius: radio.tarjeta,
+
+
 
     shadowOpacity: sombra.tarjeta.opacidad,
 
@@ -838,9 +920,13 @@ const styles = StyleSheet.create({
 
     },
 
+
+
     elevation: sombra.tarjeta.elevacion,
 
   },
+
+
 
   tituloTarjeta: {
 
@@ -854,6 +940,8 @@ const styles = StyleSheet.create({
 
   },
 
+
+
   tituloSeccion: {
 
     fontFamily: fuente.titulo,
@@ -865,6 +953,8 @@ const styles = StyleSheet.create({
     letterSpacing: tracking.titulo,
 
   },
+
+
 
   texto: {
 
@@ -878,11 +968,15 @@ const styles = StyleSheet.create({
 
   },
 
+
+
   seccionServicios: {
 
     gap: espacio.m,
 
   },
+
+
 
   buscador: {
 
@@ -894,11 +988,15 @@ const styles = StyleSheet.create({
 
     paddingVertical: espacio.s,
 
+
+
     fontFamily: fuente.texto,
 
     fontSize: tipo.cuerpo.tamano,
 
   },
+
+
 
   textoEstado: {
 
@@ -912,17 +1010,23 @@ const styles = StyleSheet.create({
 
   },
 
+
+
   errorContenedor: {
 
     gap: espacio.m,
 
   },
 
+
+
   listaServicios: {
 
     gap: espacio.m,
 
   },
+
+
 
   servicioCard: {
 
@@ -931,6 +1035,8 @@ const styles = StyleSheet.create({
     borderRadius: radio.tarjeta,
 
     gap: espacio.s,
+
+
 
     shadowOpacity: sombra.tarjeta.opacidad,
 
@@ -944,9 +1050,13 @@ const styles = StyleSheet.create({
 
     },
 
+
+
     elevation: sombra.tarjeta.elevacion,
 
   },
+
+
 
   servicioEncabezado: {
 
@@ -960,6 +1070,8 @@ const styles = StyleSheet.create({
 
   },
 
+
+
   servicioInformacion: {
 
     flex: 1,
@@ -967,6 +1079,8 @@ const styles = StyleSheet.create({
     gap: espacio.xs,
 
   },
+
+
 
   servicioNombre: {
 
@@ -978,6 +1092,8 @@ const styles = StyleSheet.create({
 
   },
 
+
+
   categoria: {
 
     fontFamily: fuente.textoMedio,
@@ -987,6 +1103,8 @@ const styles = StyleSheet.create({
     lineHeight: tipo.pequeno.linea,
 
   },
+
+
 
   servicioPie: {
 
@@ -1000,6 +1118,8 @@ const styles = StyleSheet.create({
 
   },
 
+
+
   servicioMeta: {
 
     fontFamily: fuente.textoMedio,
@@ -1009,6 +1129,8 @@ const styles = StyleSheet.create({
     lineHeight: tipo.cuerpo.linea,
 
   },
+
+
 
   servicioMetaSecundario: {
 
@@ -1020,6 +1142,8 @@ const styles = StyleSheet.create({
 
   },
 
+
+
   especialistasTexto: {
 
     fontFamily: fuente.texto,
@@ -1029,6 +1153,8 @@ const styles = StyleSheet.create({
     lineHeight: tipo.pequeno.linea,
 
   },
+
+
 
   segmentado: {
 
@@ -1040,9 +1166,13 @@ const styles = StyleSheet.create({
 
   },
 
+
+
   indicador: {
 
     position: 'absolute',
+
+
 
     top: espacio.xs,
 
@@ -1050,7 +1180,11 @@ const styles = StyleSheet.create({
 
     left: espacio.xs,
 
+
+
     borderRadius: radio.pastilla,
+
+
 
     shadowOpacity: sombra.boton.opacidad,
 
@@ -1064,9 +1198,13 @@ const styles = StyleSheet.create({
 
     },
 
+
+
     elevation: sombra.boton.elevacion,
 
   },
+
+
 
   segmento: {
 
@@ -1074,11 +1212,15 @@ const styles = StyleSheet.create({
 
     minHeight: toqueMinimo,
 
+
+
     alignItems: 'center',
 
     justifyContent: 'center',
 
   },
+
+
 
   textoSegmento: {
 
@@ -1090,4 +1232,19 @@ const styles = StyleSheet.create({
 
   },
 
+  // Imagen del servicio en el catálogo.
+  imagenServicio: {
+    width: '100%',
+    height: 180,
+    borderRadius: radio.tarjeta,
+    resizeMode: 'cover',
+    marginBottom: espacio.s,
+  },
+
+  // Panel de información adicional del servicio seleccionado.
+  detalleServicio: {
+    gap: espacio.s,
+    padding: espacio.m,
+    borderRadius: radio.tarjeta,
+  },
 });
