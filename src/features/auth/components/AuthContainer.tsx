@@ -75,6 +75,7 @@ import {
   type PreguntaSeguridad,
   type RequisitoClave,
 } from '../models/AuthModel';
+import type { GoogleViewModel } from '../viewmodels/useGoogleViewModel';
 import type { LoginViewModel } from '../viewmodels/useLoginViewModel';
 import type { RetornoActivacion } from '../viewmodels/useRetornoActivacion';
 import type {
@@ -91,6 +92,8 @@ interface AuthContainerProps {
   vistaInicial: VistaAcceso;
   login: LoginViewModel;
   registro: RegistroViewModel;
+  /** Acceso con Google, el mismo en las dos pestañas. */
+  google: GoogleViewModel;
   onRecuperar: () => void;
   /** Aviso de éxito sobre el formulario de acceso (por ejemplo, cuenta activada). */
   aviso?: string | null;
@@ -155,6 +158,7 @@ export function AuthContainer({
   vistaInicial,
   login,
   registro,
+  google,
   onRecuperar,
   aviso,
   retorno,
@@ -182,14 +186,17 @@ export function AuthContainer({
     transform: [{ translateX: progreso.get() * anchoPestana }],
   }));
 
-  // Mientras el registro envía o espera la verificación del correo, no se cambia de pestaña.
-  const pestanasBloqueadas = registro.cargando || registro.verificandoCorreo;
+  // Mientras el registro envía, espera la verificación del correo o Google está abierto, no se
+  // cambia de pestaña.
+  const pestanasBloqueadas = registro.cargando || registro.verificandoCorreo || google.abriendo;
 
   const cambiarA = (destino: VistaAcceso) => {
     if (destino === vista || pestanasBloqueadas) {
       return;
     }
     setVista(destino);
+    // El error de Google se queda en el formulario donde se tocó el botón.
+    google.limpiarError();
     // El otro formulario empieza desde arriba, aunque se viniera del final del registro.
     refScroll.current?.scrollTo({ y: 0, animated: !reducido });
     const indice = VISTAS.indexOf(destino);
@@ -289,11 +296,17 @@ export function AuthContainer({
         <View style={[styles.ventana, altoVentana > 0 ? { height: altoVentana } : null]}>
           <Animated.View style={[styles.carril, { width: ancho * VISTAS.length }, estiloCarril]}>
             <Panel ancho={ancho} activo={vista === 'acceso'} onLayout={medirVista('acceso')}>
-              <FormularioAcceso login={login} onRecuperar={onRecuperar} aviso={aviso ?? null} />
+              <FormularioAcceso
+                login={login}
+                google={google}
+                onRecuperar={onRecuperar}
+                aviso={aviso ?? null}
+              />
             </Panel>
             <Panel ancho={ancho} activo={vista === 'registro'} onLayout={medirVista('registro')}>
               <FormularioRegistro
                 registro={registro}
+                google={google}
                 refScroll={refScroll}
                 onIrAAcceso={irAAcceso}
                 activo={vista === 'registro'}
@@ -444,16 +457,27 @@ function Panel({
 
 function FormularioAcceso({
   login,
+  google,
   onRecuperar,
   aviso,
 }: {
   login: LoginViewModel;
+  google: GoogleViewModel;
   onRecuperar: () => void;
   aviso: string | null;
 }) {
   const { correo, setCorreo, salirCorreo, clave, setClave, errores, errorGeneral, cargando, entrar } =
     login;
   const refClaveAcceso = useRef<TextInput>(null);
+  // Con Google abierto no se entra con correo (ni con la tecla del teclado); al entrar con correo,
+  // el error anterior de Google ya no aplica.
+  const entrarConCorreo = () => {
+    if (google.abriendo) {
+      return;
+    }
+    google.limpiarError();
+    entrar();
+  };
   return (
     <>
       <Encabezado titulo="Inicia sesión" texto="Consulta tus citas, tus pedidos y tus recordatorios." />
@@ -475,33 +499,56 @@ function FormularioAcceso({
           tipo="claveActual"
           valor={clave}
           onCambiar={setClave}
-          alEnviar={entrar}
+          alEnviar={entrarConCorreo}
           error={errores.clave}
         />
         <Enlace texto="¿Olvidaste tu contraseña?" onPress={onRecuperar} alinear="fin" />
       </View>
       <Aviso tipo="error" texto={errorGeneral} />
-      <Button titulo={cargando ? 'Entrando…' : 'Entrar'} onPress={entrar} cargando={cargando} />
-      <Separador />
-      {/* TODO(GP-05): acceso con Google; requiere cambios del backend. */}
       <Button
-        titulo="Continuar con Google"
-        accessibilityHint="Disponible próximamente"
+        titulo={cargando ? 'Entrando…' : 'Entrar'}
+        onPress={entrarConCorreo}
+        cargando={cargando}
+        deshabilitado={google.abriendo}
+      />
+      <AccesoGoogle google={google} ocupado={cargando} />
+    </>
+  );
+}
+
+/**
+ * Separador "o", botón "Continuar con Google" y su error, debajo del botón principal de cada
+ * formulario. "ocupado": hay otro inicio en curso en ese formulario y Google queda deshabilitado.
+ */
+function AccesoGoogle({ google, ocupado }: { google: GoogleViewModel; ocupado: boolean }) {
+  const { abriendo, error, entrar } = google;
+  return (
+    <>
+      <Separador />
+      <Button
+        titulo={abriendo ? 'Abriendo Google…' : 'Continuar con Google'}
+        accessibilityHint="Abre Google para entrar con tu cuenta"
         variante="secundario"
         posicionIcono="inicio"
         icono={<MarcaGoogle />}
+        onPress={entrar}
+        cargando={abriendo}
+        deshabilitado={ocupado}
       />
+      <Aviso tipo="error" texto={error} />
     </>
   );
 }
 
 function FormularioRegistro({
   registro,
+  google,
   refScroll,
   onIrAAcceso,
   activo,
 }: {
   registro: RegistroViewModel;
+  google: GoogleViewModel;
   refScroll: RefObject<ScrollView | null>;
   onIrAAcceso: (correo: string) => void;
   /** La pestaña Registro está a la vista. */
@@ -598,7 +645,7 @@ function FormularioRegistro({
       <IndicadorPasos paso={paso} refIndicador={refIndicador} />
       <Animated.View key={paso} entering={entrada} style={styles.paso}>
         {paso === 1 ? (
-          <PasoCuenta registro={registro} refs={ref} onIrAAcceso={onIrAAcceso} />
+          <PasoCuenta registro={registro} google={google} refs={ref} onIrAAcceso={onIrAAcceso} />
         ) : (
           <PasoCabello registro={registro} refs={ref} />
         )}
@@ -683,10 +730,12 @@ function IndicadorPasos({ paso, refIndicador }: { paso: PasoRegistro; refIndicad
 /** Paso 1, "Tu cuenta": nombre, correo, teléfono, fecha, pregunta, respuesta y contraseña. */
 function PasoCuenta({
   registro,
+  google,
   refs,
   onIrAAcceso,
 }: {
   registro: RegistroViewModel;
+  google: GoogleViewModel;
   refs: RefsRegistro;
   onIrAAcceso: (correo: string) => void;
 }) {
@@ -702,8 +751,18 @@ function PasoCuenta({
     ayudaTelefono,
     preguntas,
     verificandoCorreo,
+    cargando,
     continuar,
   } = registro;
+  // Con Google abierto no se continúa (ni con la tecla del teclado); al continuar, el error
+  // anterior de Google ya no aplica.
+  const continuarConCorreo = () => {
+    if (google.abriendo) {
+      return;
+    }
+    google.limpiarError();
+    continuar();
+  };
 
   // Si falta un requisito de la lista (son las primeras reglas de problemaDeClave), se marca
   // en la propia lista en lugar de repetirlo en rojo; el texto queda para las demás reglas.
@@ -811,15 +870,17 @@ function PasoCuenta({
         valor={campos.confirmacion}
         onCambiar={(t) => cambiar('confirmacion', t)}
         onSalir={() => salir('confirmacion')}
-        alEnviar={continuar}
+        alEnviar={continuarConCorreo}
         error={errores.confirmacion}
       />
       <Aviso tipo="error" texto={errorGeneral} />
       <Button
         titulo={verificandoCorreo ? 'Verificando correo…' : 'Continuar'}
-        onPress={continuar}
+        onPress={continuarConCorreo}
         cargando={verificandoCorreo}
+        deshabilitado={google.abriendo}
       />
+      <AccesoGoogle google={google} ocupado={verificandoCorreo || cargando} />
     </>
   );
 }

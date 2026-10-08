@@ -31,7 +31,7 @@ export function normalizarUsuario(valor: unknown): UsuarioSesion | null {
 const LARGO_MAXIMO_DISPOSITIVO = 80;
 
 /** Modelo del teléfono para que la clienta reconozca la sesión; undefined si no se conoce. */
-function nombreDispositivo(): string | undefined {
+export function nombreDispositivo(): string | undefined {
   const modelo = Device.modelName?.trim().slice(0, LARGO_MAXIMO_DISPOSITIVO);
   return modelo || undefined;
 }
