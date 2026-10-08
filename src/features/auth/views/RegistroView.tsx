@@ -1,6 +1,7 @@
 import { useNavigation, useRouter } from 'expo-router';
 
 import { AuthContainer } from '../components/AuthContainer';
+import { useGoogleViewModel } from '../viewmodels/useGoogleViewModel';
 import { useLoginViewModel } from '../viewmodels/useLoginViewModel';
 import { useRegistroViewModel } from '../viewmodels/useRegistroViewModel';
 import { useDescartarPendiente } from '../viewmodels/useRequiereSesion';
@@ -9,6 +10,7 @@ import { useRetornoActivacion } from '../viewmodels/useRetornoActivacion';
 export default function RegistroView() {
   const login = useLoginViewModel();
   const registro = useRegistroViewModel();
+  const google = useGoogleViewModel();
   const { aviso, retorno } = useRetornoActivacion();
   const { push, replace } = useRouter();
   const navegacion = useNavigation();
@@ -31,6 +33,7 @@ export default function RegistroView() {
       vistaInicial="registro"
       login={login}
       registro={registro}
+      google={google}
       onRecuperar={recuperar}
       aviso={aviso}
       retorno={retorno}

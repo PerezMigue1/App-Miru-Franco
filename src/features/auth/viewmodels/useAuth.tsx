@@ -1,3 +1,4 @@
+import * as WebBrowser from 'expo-web-browser';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { AppState } from 'react-native';
 
@@ -5,6 +6,7 @@ import {
   ApiError,
   accesoPorVencer,
   alExpirarSesion,
+  apiGet,
   esperarRenovacionEnCurso,
   renovarSesion,
   renovarSesionSiVigente,
@@ -21,7 +23,12 @@ import {
   type SesionGuardada,
 } from '@/shared/api/tokenStorage';
 
-import { ErrorRolNoPermitido, ROL_CLIENTE, type UsuarioSesion } from '../models/AuthModel';
+import {
+  ErrorRolNoPermitido,
+  ROL_CLIENTE,
+  type RespuestaPerfil,
+  type UsuarioSesion,
+} from '../models/AuthModel';
 import {
   cerrarSesionServidor,
   iniciarSesion,
@@ -29,6 +36,14 @@ import {
   obtenerPerfil,
   type SesionARevocar,
 } from '../models/authService';
+import {
+  ErrorInicioGoogle,
+  REDIRECCION_GOOGLE,
+  canjearCodigoGoogle,
+  crearPkce,
+  leerRetornoGoogle,
+  urlInicioGoogle,
+} from '../models/googleAuth';
 
 export type EstadoSesion = 'cargando' | 'autenticado' | 'anonimo';
 
@@ -37,6 +52,12 @@ interface ContextoAuth {
   usuario: UsuarioSesion | null;
   /** Inicia sesión. Lanza ApiError, ErrorDeRed o ErrorRolNoPermitido. */
   ingresar: (email: string, password: string) => Promise<void>;
+  /**
+   * Inicia sesión con Google (navegador del sistema + PKCE). Devuelve true si entró; false si la
+   * clienta canceló o cerró el navegador, o si otro inicio o un cierre de sesión ganó mientras
+   * tanto. Lanza ErrorInicioGoogle, ErrorRolNoPermitido, ApiError o ErrorDeRed.
+   */
+  ingresarConGoogle: () => Promise<boolean>;
   /**
    * Cierra la sesión: espera la renovación en curso, borra la sesión local (con un reintento) y
    * después la revoca en el servidor sin esperar (si el acceso venció, antes lo renueva solo en
@@ -76,6 +97,78 @@ function avisarCierre(sesion: SesionARevocar | null): void {
   cerrarSesionServidor(sesion).catch(() => {
     // La sesión se descarta en el dispositivo de todos modos.
   });
+}
+
+/** Sesión recién emitida por el servidor (aún sin guardar), con su refreshToken si lo trae. */
+function sesionEmitida(token: string, refreshTokenRecibido: unknown): SesionARevocar {
+  const emitidoEn = Date.now();
+  const refreshToken =
+    typeof refreshTokenRecibido === 'string' && refreshTokenRecibido ? refreshTokenRecibido : undefined;
+  return refreshToken ? { token, emitidoEn, refreshToken } : { token, emitidoEn };
+}
+
+/**
+ * Parte común de los inicios de sesión: solo una clienta entra (otro rol revoca la sesión emitida
+ * y lanza ErrorRolNoPermitido) y la sesión se guarda solo si la generación sigue vigente. Devuelve
+ * si quedó guardada; si no, la sesión emitida se revoca.
+ */
+async function guardarSesionNueva(
+  emitida: SesionARevocar,
+  usuario: UsuarioSesion,
+  refreshExpiraEnRecibido: unknown,
+  generacion: number,
+): Promise<boolean> {
+  if (usuario.rol !== ROL_CLIENTE) {
+    // No se guarda nada: se revoca la sesión recién emitida y se avisa.
+    avisarCierre(emitida);
+    throw new ErrorRolNoPermitido();
+  }
+  const sesion: SesionGuardada = { ...emitida, usuario };
+  const refreshExpiraEn = emitida.refreshToken ? aMarcaDeTiempo(refreshExpiraEnRecibido) : undefined;
+  if (refreshExpiraEn !== undefined) {
+    sesion.refreshExpiraEn = refreshExpiraEn;
+  }
+  // Si mientras tanto empezó otro inicio o un cierre de sesión, esta sesión no se guarda.
+  let guardada = false;
+  try {
+    guardada = await guardarSesion(sesion, generacion);
+  } catch (error) {
+    // No quedó guardada: se revoca la sesión recién emitida.
+    avisarCierre(emitida);
+    throw error;
+  }
+  if (!guardada) {
+    avisarCierre(emitida);
+  }
+  return guardada;
+}
+
+/**
+ * Abre Google en el navegador del sistema y espera el regreso a REDIRECCION_GOOGLE. Devuelve el
+ * code de un solo uso, o null si la clienta canceló o cerró el navegador.
+ */
+async function pedirCodigoGoogle(challenge: string): Promise<string | null> {
+  let resultado: WebBrowser.WebBrowserAuthSessionResult;
+  try {
+    resultado = await WebBrowser.openAuthSessionAsync(urlInicioGoogle(challenge), REDIRECCION_GOOGLE);
+  } catch {
+    // Sin navegador disponible u otra sesión de navegador ya abierta.
+    throw new ErrorInicioGoogle();
+  }
+  if (
+    resultado.type === WebBrowser.WebBrowserResultType.CANCEL ||
+    resultado.type === WebBrowser.WebBrowserResultType.DISMISS
+  ) {
+    return null;
+  }
+  if (resultado.type !== 'success') {
+    throw new ErrorInicioGoogle();
+  }
+  const retorno = leerRetornoGoogle(resultado.url);
+  if (retorno.tipo === 'error') {
+    throw new ErrorInicioGoogle();
+  }
+  return retorno.code;
 }
 
 /** Borra la sesión local; si falla, lo intenta una vez más. Devuelve si quedó borrada. */
@@ -237,46 +330,65 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [estado]);
 
-  const ingresar = useCallback(async (email: string, password: string) => {
-    // Iniciar sesión abre una generación nueva: lo que siga en curso de antes se descarta.
-    const generacion = nuevaGeneracion();
-    const respuesta = await iniciarSesion(email, password);
-    const datos = normalizarUsuario(respuesta?.usuario);
-    const token = typeof respuesta?.token === 'string' ? respuesta.token : '';
-    if (!datos || !token) {
-      throw new ApiError(500, 'La respuesta del servidor no trae una sesión válida.');
-    }
-    const emitidoEn = Date.now();
-    const refreshToken =
-      typeof respuesta.refreshToken === 'string' && respuesta.refreshToken ? respuesta.refreshToken : undefined;
-    const emitida: SesionARevocar = refreshToken ? { token, emitidoEn, refreshToken } : { token, emitidoEn };
-    if (datos.rol !== ROL_CLIENTE) {
-      // No se guarda nada: se revoca la sesión recién emitida y se avisa.
-      avisarCierre(emitida);
-      throw new ErrorRolNoPermitido();
-    }
-    const sesion: SesionGuardada = { ...emitida, usuario: datos };
-    const refreshExpiraEn = refreshToken ? aMarcaDeTiempo(respuesta.refreshExpiraEn) : undefined;
-    if (refreshExpiraEn !== undefined) {
-      sesion.refreshExpiraEn = refreshExpiraEn;
-    }
-    // Si mientras tanto empezó otro inicio o un cierre de sesión, esta sesión no se guarda.
-    let guardada = false;
-    try {
-      guardada = await guardarSesion(sesion, generacion);
-    } catch (error) {
-      // No quedó guardada: se revoca la sesión recién emitida.
-      avisarCierre(emitida);
-      throw error;
-    }
-    if (!guardada) {
-      avisarCierre(emitida);
-      return;
-    }
+  // Sesión ya guardada: la clienta queda dentro.
+  const entrar = useCallback((datos: UsuarioSesion) => {
     setUsuario(datos);
     setEstado('autenticado');
     setSesionVencida(false);
   }, []);
+
+  const ingresar = useCallback(
+    async (email: string, password: string) => {
+      // Iniciar sesión abre una generación nueva: lo que siga en curso de antes se descarta.
+      const generacion = nuevaGeneracion();
+      const respuesta = await iniciarSesion(email, password);
+      const datos = normalizarUsuario(respuesta?.usuario);
+      const token = typeof respuesta?.token === 'string' ? respuesta.token : '';
+      if (!datos || !token) {
+        throw new ApiError(500, 'La respuesta del servidor no trae una sesión válida.');
+      }
+      const emitida = sesionEmitida(token, respuesta.refreshToken);
+      if (await guardarSesionNueva(emitida, datos, respuesta.refreshExpiraEn, generacion)) {
+        entrar(datos);
+      }
+    },
+    [entrar],
+  );
+
+  const ingresarConGoogle = useCallback(async () => {
+    // El verifier, el code y los tokens solo viven en estas variables locales.
+    const { verifier, challenge } = await crearPkce();
+    const code = await pedirCodigoGoogle(challenge);
+    if (code === null) {
+      return false;
+    }
+    // La generación nueva se abre justo antes del canje: mientras la clienta estaba en Google no
+    // se invalidó nada de lo que siguiera en curso.
+    const generacion = nuevaGeneracion();
+    const respuesta = await canjearCodigoGoogle(code, verifier);
+    const token = typeof respuesta?.token === 'string' ? respuesta.token : '';
+    if (!token) {
+      throw new ApiError(500, 'La respuesta del servidor no trae una sesión válida.');
+    }
+    const emitida = sesionEmitida(token, respuesta.refreshToken);
+    // El canje no trae el usuario: /me con el token recién emitido (su 401 no renueva ni cierra).
+    let datos: UsuarioSesion | null = null;
+    try {
+      datos = normalizarUsuario((await apiGet<RespuestaPerfil>('/api/auth/me', { token }))?.data);
+    } catch (error) {
+      avisarCierre(emitida);
+      throw error;
+    }
+    if (!datos) {
+      avisarCierre(emitida);
+      throw new ErrorInicioGoogle();
+    }
+    const guardada = await guardarSesionNueva(emitida, datos, respuesta.refreshExpiraEn, generacion);
+    if (guardada) {
+      entrar(datos);
+    }
+    return guardada;
+  }, [entrar]);
 
   const actualizarNombre = useCallback(
     (nombre: string, generacion: number) => {
@@ -331,6 +443,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       estado,
       usuario,
       ingresar,
+      ingresarConGoogle,
       salir,
       sesionVencida,
       descartarAvisoSesion,
@@ -343,6 +456,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       estado,
       usuario,
       ingresar,
+      ingresarConGoogle,
       salir,
       sesionVencida,
       descartarAvisoSesion,
