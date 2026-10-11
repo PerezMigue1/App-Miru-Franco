@@ -12,6 +12,7 @@ import {
   crearCita,
   esHorarioOcupado,
   fechaLocal,
+  mensajeAnticipoParaClienta,
   mesDe,
   obtenerDisponibilidad,
   obtenerEspecialistas,
@@ -20,6 +21,7 @@ import {
   type Disponibilidad,
   type Especialista,
   type MesCalendario,
+  type PagoAnticipo,
   type Slot,
 } from '../models/citaModel';
 import { obtenerServicio, type Servicio } from '../models/servicioModel';
@@ -30,8 +32,9 @@ export type EstadoHorarios = 'inactivo' | 'cargando' | 'listo' | 'error';
 /**
  * Cómo se aparta la cita: 'linea' abre el pago del anticipo con Mercado Pago al reservar;
  * 'salon' solo aparta y lleva a la confirmación (también es el botón único sin anticipo).
+ * Solo si el servicio pide anticipo se manda al backend como pagoAnticipo.
  */
-export type ModoReserva = 'linea' | 'salon';
+export type ModoReserva = PagoAnticipo;
 
 /** Nombres de los pasos, en orden, para el indicador. */
 export const PASOS_RESERVA = ['Especialista', 'Día y hora', 'Confirmar'] as const;
@@ -351,6 +354,9 @@ export function useReservarCitaViewModel(servicioId: string | undefined): Reserv
             fechaHoraInicio: slot.inicio,
             fechaHoraFin: slot.fin,
             notas,
+            // Sin anticipo en el servicio no se manda: el botón único no debe dejar una cita por pagar
+            // en el salón si el backend sí lo pidiera (usa 'linea' por omisión).
+            pagoAnticipo: servicio.anticipo ? modo : undefined,
           });
           if (!montado.current) {
             return;
@@ -375,6 +381,12 @@ export function useReservarCitaViewModel(servicioId: string | undefined): Reserv
             setHorarioOcupado(true);
             irAPaso(2, -1);
             cargarHorarios(especialista.id, fecha, servicio.id);
+            return;
+          }
+          // Los 400 del anticipo traen un texto ya escrito para la clienta; cualquier otro, el genérico.
+          const mensajeAnticipo = mensajeAnticipoParaClienta(error);
+          if (mensajeAnticipo) {
+            setErrorEnvio(mensajeAnticipo);
             return;
           }
           setErrorEnvio(esErrorDeRed(error) ? MENSAJE_SIN_CONEXION : ERROR_RESERVA);

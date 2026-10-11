@@ -69,7 +69,12 @@ export default function CitaConfirmadaView() {
       >
         {listo && vm.cita ? (
           <>
-            <Confirmacion cita={vm.cita} anticipo={vm.anticipo} limite={vm.limite} />
+            <Confirmacion
+              cita={vm.cita}
+              anticipo={vm.anticipo}
+              limite={vm.limite}
+              avisoSalon={vm.avisoSalon}
+            />
             <View style={styles.acciones}>
               {pendiente ? (
                 <>
@@ -137,10 +142,13 @@ function Confirmacion({
   cita,
   anticipo,
   limite,
+  avisoSalon,
 }: {
   cita: Cita;
   anticipo: AnticipoConfirmacion;
   limite: string | null;
+  /** Anticipo pendiente en el salón: reemplaza el título y el mensaje de la confirmación. */
+  avisoSalon: string | null;
 }) {
   const { colores } = useTheme();
   const reducido = useMovimientoReducido();
@@ -171,10 +179,10 @@ function Confirmacion({
           <CircleCheck color={colores.exito} size={confirmacion.icono} strokeWidth={icono.trazo} />
         </View>
         <Text accessibilityRole="header" style={[styles.titulo, { color: colores.texto }]}>
-          Tu cita está reservada
+          {avisoSalon ? 'Tu horario está apartado' : 'Tu cita está reservada'}
         </Text>
         <Text style={[styles.mensaje, { color: colores.textoSuave }]}>
-          {MENSAJE_ANTICIPO[anticipo]}
+          {avisoSalon ?? MENSAJE_ANTICIPO[anticipo]}
         </Text>
       </View>
 
@@ -200,9 +208,9 @@ function Confirmacion({
         ) : null}
       </ResumenCita>
 
-      {anticipo === 'pendiente' ? (
+      {anticipo === 'pendiente' && !avisoSalon ? (
         <Text style={[styles.mensaje, { color: colores.textoSuave }]}>
-          Págalo en línea o en el salón. Si no se paga en 2 horas, el horario se libera.
+          Págalo en línea o en el salón. Si no se paga a tiempo, el horario se libera.
         </Text>
       ) : null}
     </Animated.View>

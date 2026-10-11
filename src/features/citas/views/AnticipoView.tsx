@@ -16,6 +16,7 @@ import {
   radio,
   tipo,
   toqueMinimo,
+  tracking,
 } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
@@ -24,7 +25,7 @@ import { ResumenCita } from '../components/ResumenCita';
 import type { Cita } from '../models/citaModel';
 import { useAnticipoViewModel, type EstadoPago } from '../viewmodels/useAnticipoViewModel';
 
-function tituloBoton(pago: EstadoPago): string {
+function tituloBoton(pago: EstadoPago, enSalon: boolean): string {
   switch (pago.tipo) {
     case 'cerrada':
       return 'Ver mis citas';
@@ -33,7 +34,8 @@ function tituloBoton(pago: EstadoPago): string {
     case 'noCompletado':
       return 'Intentar de nuevo';
     default:
-      return 'Pagar con Mercado Pago';
+      // En el salón, el botón ofrece adelantar el pago en línea con el mismo flujo.
+      return enSalon ? 'Pagar anticipo' : 'Pagar con Mercado Pago';
   }
 }
 
@@ -41,9 +43,14 @@ function tituloBoton(pago: EstadoPago): string {
 export default function AnticipoView() {
   const { colores } = useTheme();
   const { bottom } = useSafeAreaInsets();
-  const { citaId, pagar } = useLocalSearchParams<{ citaId: string; pagar?: string }>();
+  const { citaId, pagar, retorno } = useLocalSearchParams<{
+    citaId: string;
+    pagar?: string;
+    retorno?: string;
+  }>();
   // pagar=1 llega de la reserva o de la confirmación: abre Mercado Pago sin otro toque.
-  const vm = useAnticipoViewModel(citaId, pagar === '1');
+  // retorno=mp llega del regreso de Mercado Pago en arranque en frío: consulta el estado del pago.
+  const vm = useAnticipoViewModel(citaId, pagar === '1', retorno === 'mp');
 
   const listo = vm.estado === 'listo' && vm.cita != null;
   const ocupado = vm.pago.tipo === 'abriendo' || vm.pago.tipo === 'revisando';
@@ -55,11 +62,16 @@ export default function AnticipoView() {
       {listo && vm.cita ? (
         <>
           <ScrollView contentContainerStyle={styles.contenido}>
-            <Contenido cita={vm.cita} pago={vm.pago} limite={vm.limite} />
+            <Contenido
+              cita={vm.cita}
+              pago={vm.pago}
+              limite={vm.limite}
+              avisoSalon={vm.avisoSalon}
+            />
           </ScrollView>
           <View style={[styles.pie, { paddingBottom: bottom + espacio.l }]}>
             <Button
-              titulo={tituloBoton(vm.pago)}
+              titulo={tituloBoton(vm.pago, vm.avisoSalon != null)}
               onPress={vm.accionPrincipal}
               cargando={ocupado}
               accessibilityHint={
@@ -114,14 +126,32 @@ export default function AnticipoView() {
   );
 }
 
-function Contenido({ cita, pago, limite }: { cita: Cita; pago: EstadoPago; limite: string | null }) {
+function Contenido({
+  cita,
+  pago,
+  limite,
+  avisoSalon,
+}: {
+  cita: Cita;
+  pago: EstadoPago;
+  limite: string | null;
+  /** Anticipo pendiente en el salón: reemplaza la introducción. */
+  avisoSalon: string | null;
+}) {
   const { colores } = useTheme();
   const cerrada = pago.tipo === 'cerrada';
   const monto = cita.anticipoMonto ?? `$${cita.anticipoRequerido}`;
 
   return (
     <>
-      {!cerrada ? (
+      {avisoSalon ? (
+        <View style={styles.introSalon}>
+          <Text accessibilityRole="header" style={[styles.tituloSalon, { color: colores.texto }]}>
+            Tu horario está apartado
+          </Text>
+          <Text style={[styles.intro, { color: colores.textoSuave }]}>{avisoSalon}</Text>
+        </View>
+      ) : !cerrada ? (
         <Text style={[styles.intro, { color: colores.textoSuave }]}>
           Tu cita queda apartada mientras pagas. Si el anticipo no se paga a tiempo, la cita se
           cancela sola.
@@ -217,6 +247,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: pantalla.margen,
     paddingBottom: espacio.xxl,
     gap: espacio.xl,
+  },
+  introSalon: {
+    gap: espacio.s,
+  },
+  tituloSalon: {
+    fontFamily: fuente.titulo,
+    fontSize: tipo.subtitulo.tamano,
+    lineHeight: tipo.subtitulo.linea,
+    letterSpacing: tracking.titulo,
   },
   intro: {
     fontFamily: fuente.texto,

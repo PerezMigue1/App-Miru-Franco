@@ -298,8 +298,8 @@ function PasoConfirmar({ vm }: { vm: ReservarCitaViewModel }) {
           <View style={styles.anticipo}>
             <Dato etiqueta="Anticipo" valor={servicio.anticipo} cifra />
             <Text style={[styles.nota, { color: colores.texto }]}>
-              Tienes 2 horas para pagarlo; si no, el horario se libera. Se descuenta del total el día
-              de tu cita.
+              En línea tienes 2 horas para pagarlo. Se descuenta del total el día de tu cita. Si
+              cancelas, el anticipo no se devuelve; si reagendas con aviso, se respeta.
             </Text>
           </View>
         ) : null}
@@ -332,13 +332,19 @@ function PasoConfirmar({ vm }: { vm: ReservarCitaViewModel }) {
             deshabilitado={vm.modoEnvio === 'salon'}
             accessibilityHint="Reserva tu cita y abre Mercado Pago en el navegador"
           />
-          <Button
-            titulo={vm.modoEnvio === 'salon' ? 'Apartando…' : 'Apartar y pagar en el salón'}
-            variante="contorno"
-            onPress={() => vm.confirmar('salon')}
-            cargando={vm.modoEnvio === 'salon'}
-            deshabilitado={vm.modoEnvio === 'linea'}
-          />
+          <View style={styles.opcionSalon}>
+            <Button
+              titulo={vm.modoEnvio === 'salon' ? 'Apartando…' : 'Apartar y pagar en el salón'}
+              variante="contorno"
+              onPress={() => vm.confirmar('salon')}
+              cargando={vm.modoEnvio === 'salon'}
+              deshabilitado={vm.modoEnvio === 'linea'}
+            />
+            <Text style={[styles.nota, { color: colores.textoSuave }]}>
+              Llega entre 20 y 15 minutos antes para pagarlo. Si a 15 minutos de tu cita no se ha
+              pagado, se cancela.
+            </Text>
+          </View>
         </View>
       ) : (
         <Button
@@ -464,6 +470,9 @@ const styles = StyleSheet.create({
   },
   acciones: {
     gap: espacio.m,
+  },
+  opcionSalon: {
+    gap: espacio.xs,
   },
   indicadorEsqueleto: {
     height: esqueleto.lineaGrande,

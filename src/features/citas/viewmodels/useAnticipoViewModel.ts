@@ -8,6 +8,7 @@ import { ApiError } from '@/shared/api/apiClient';
 import { useCandado } from '@/shared/ui/useCandado';
 
 import {
+  avisoAnticipoEnSalon,
   crearPreferenciaAnticipo,
   limiteAnticipo,
   motivoConflictoAnticipo,
@@ -43,8 +44,13 @@ export interface AnticipoViewModel {
   estado: EstadoCargaAnticipo;
   cita: Cita | null;
   pago: EstadoPago;
-  /** "Paga antes de las 6:30 p. m." (con el día si no es hoy), o null si no hay plazo. */
+  /**
+   * "Paga antes de las 6:30 p. m." (o "Paga antes del miércoles 28 de octubre, 6:30 p. m."), o null
+   * si no hay plazo. Con el anticipo en el salón va en avisoSalon.
+   */
   limite: string | null;
+  /** Anticipo pendiente que se paga en el salón: texto con la hora límite, o null. */
+  avisoSalon: string | null;
   recargar: () => void;
   /** Acción del botón principal: pagar, volver a revisar el pago o ir a Mis citas. */
   accionPrincipal: () => void;
@@ -96,10 +102,13 @@ function esperarRegreso(): { promesa: Promise<void>; soltar: () => void } {
 /**
  * Pago del anticipo de una cita con Mercado Pago (GP-06.2; también desde Mis citas en GP-06.3).
  * Con `pagarAlAbrir` (ruta con ?pagar=1) abre Mercado Pago solo, una vez, al terminar de cargar.
+ * Con `revisarAlAbrir` (ruta con ?retorno=mp, regreso de Mercado Pago en arranque en frío) consulta
+ * el estado del pago, una vez, al terminar de cargar.
  */
 export function useAnticipoViewModel(
   citaId: string | undefined,
   pagarAlAbrir = false,
+  revisarAlAbrir = false,
 ): AnticipoViewModel {
   const router = useRouter();
   const candado = useCandado();
@@ -113,6 +122,8 @@ export function useAnticipoViewModel(
   const soltarEspera = useRef<(() => void) | null>(null);
   // El pago automático se intenta una sola vez por pantalla, aunque se recargue o se vuelva a enfocar.
   const pagoAutomaticoUsado = useRef(false);
+  // Igual para la consulta del pago al volver de Mercado Pago en arranque en frío.
+  const revisionAutomaticaUsada = useRef(false);
 
   const idLimpio = citaId?.trim() ?? '';
 
@@ -291,6 +302,20 @@ export function useAnticipoViewModel(
     candado(() => pagar(id));
   }, [pagarAlAbrir, estado, cita, pago.tipo, candado, pagar]);
 
+  // Con ?retorno=mp, la primera carga lista consulta el pago (el webhook pudo no haber llegado):
+  // aprobado pasa a la confirmación; si no, queda el estado de pago no completado o en proceso.
+  useEffect(() => {
+    if (!revisarAlAbrir || revisionAutomaticaUsada.current || estado !== 'listo' || !cita) {
+      return;
+    }
+    revisionAutomaticaUsada.current = true;
+    if (pago.tipo !== 'inicial' || !pideAnticipo(cita) || cita.id === '') {
+      return;
+    }
+    const id = cita.id;
+    candado(() => revisarEstado(id));
+  }, [revisarAlAbrir, estado, cita, pago.tipo, candado, revisarEstado]);
+
   const accionPrincipal = useCallback(() => {
     if (pago.tipo === 'cerrada') {
       verMisCitas();
@@ -303,11 +328,20 @@ export function useAnticipoViewModel(
     candado(() => (pago.tipo === 'errorRevision' ? revisarEstado(id) : pagar(id)));
   }, [candado, cita, pagar, pago.tipo, revisarEstado, verMisCitas]);
 
+  // En el salón y sin pago en curso: ni cita cerrada ni pago que Mercado Pago todavía procesa.
+  const enSalon =
+    cita != null &&
+    cita.anticipoEnSalon &&
+    pago.tipo !== 'cerrada' &&
+    !(pago.tipo === 'noCompletado' && pago.enProceso);
+  const limite = cita && !enSalon ? limiteAnticipo(cita.anticipoVenceEn) : null;
+
   return {
     estado,
     cita,
     pago,
-    limite: cita ? limiteAnticipo(cita.anticipoVenceEn) : null,
+    limite: limite ? `Paga ${limite}` : null,
+    avisoSalon: cita && enSalon ? avisoAnticipoEnSalon(cita.anticipoVenceEn) : null,
     recargar,
     accionPrincipal,
     regresar,
