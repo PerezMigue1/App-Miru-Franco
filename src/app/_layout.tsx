@@ -83,6 +83,10 @@ function Navegacion({ fuentesListas }: { fuentesListas: boolean }) {
           <Stack.Screen name="index" options={{ animation: 'none' }} />
           {/* Las pestañas se ven siempre, con o sin sesión. */}
           <Stack.Screen name="(cliente)" />
+          {/* El detalle de un servicio es público: se abre encima de las pestañas con o sin sesión. */}
+          <Stack.Screen name="servicio/[id]" />
+          {/* Mis citas es pública: sin sesión muestra la invitación a iniciar sesión. */}
+          <Stack.Screen name="mis-citas" />
           {/* Acceso se abre encima de las pestañas y solo sin sesión: al iniciar sesión el guard lo
               saca de la pila y queda a la vista la pestaña donde estaba la clienta. */}
           <Stack.Protected guard={estado !== 'autenticado'}>

@@ -1,4 +1,4 @@
-import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter, type Href } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { openBrowserAsync } from 'expo-web-browser';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -75,6 +75,7 @@ export interface PerfilViewModel {
   elegirApariencia: (preferencia: PreferenciaApariencia) => void;
   // Navegación
   editarPerfil: () => void;
+  abrirMisCitas: () => void;
   cambiarContrasena: () => void;
   abrirAviso: () => void;
   cerrarSesion: () => void;
@@ -364,6 +365,7 @@ export function usePerfilViewModel(): PerfilViewModel {
       setHojaApariencia(false);
     },
     editarPerfil: () => push('/editar-perfil'),
+    abrirMisCitas: () => push('/mis-citas' as Href),
     cambiarContrasena: () => push('/cambiar-contrasena'),
     abrirAviso,
     // Mientras una foto se sube o se quita, no se cierra la sesión; si no, se confirma antes.

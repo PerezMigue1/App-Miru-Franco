@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { obtenerServicios } from '@/features/citas/models/servicioModel';
+
 import { fotosDeServicios, type FotoGaleria } from '../models/FotoModel';
 import { seleccionarFluidos, type FluidoHero } from '../models/FluidoModel';
-import { obtenerProductos, obtenerServicios } from '../models/inicioService';
+import { obtenerProductos } from '../models/inicioService';
 
 export type EstadoInicio = 'cargando' | 'listo' | 'error';
 

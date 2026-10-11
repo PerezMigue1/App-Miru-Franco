@@ -11,26 +11,16 @@ export interface Producto {
   imagen?: string;
 }
 
-/** Servicio del salón: los campos de la interfaz Servicio de la web que usa la app. */
-export interface Servicio {
-  id: string | number;
-  nombre: string;
-  categoria?: string;
-  activo?: boolean;
-  /** Primera URL https válida del campo imagen (texto o arreglo). */
-  imagen?: string;
-}
-
-type Crudo = Record<string, unknown>;
+export type Crudo = Record<string, unknown>;
 
 const PREFIJO_HTTPS = 'https://';
 
-function esObjeto(valor: unknown): valor is Crudo {
+export function esObjeto(valor: unknown): valor is Crudo {
   return typeof valor === 'object' && valor !== null && !Array.isArray(valor);
 }
 
 /** El backend responde con un arreglo o con { data | productos | servicios: [] }. */
-function listaDe(respuesta: unknown, claves: string[]): Crudo[] {
+export function listaDe(respuesta: unknown, claves: string[]): Crudo[] {
   let lista: unknown = respuesta;
   if (esObjeto(respuesta)) {
     lista = claves.map((clave) => respuesta[clave]).find((valor) => Array.isArray(valor));
@@ -38,7 +28,7 @@ function listaDe(respuesta: unknown, claves: string[]): Crudo[] {
   return Array.isArray(lista) ? lista.filter(esObjeto) : [];
 }
 
-function texto(valor: unknown): string {
+export function texto(valor: unknown): string {
   if (typeof valor === 'string') {
     return valor.trim();
   }
@@ -48,7 +38,7 @@ function texto(valor: unknown): string {
   return '';
 }
 
-function idDe(crudo: Crudo): string | number {
+export function idDe(crudo: Crudo): string | number {
   const id = crudo.id ?? crudo._id;
   if (typeof id === 'number' || typeof id === 'string') {
     return id;
@@ -56,7 +46,7 @@ function idDe(crudo: Crudo): string | number {
   return '';
 }
 
-function urlHttps(valor: unknown): string | undefined {
+export function urlHttps(valor: unknown): string | undefined {
   if (typeof valor === 'string') {
     const url = valor.trim();
     return url.startsWith(PREFIJO_HTTPS) && url.length > PREFIJO_HTTPS.length ? url : undefined;
@@ -69,7 +59,7 @@ function urlHttps(valor: unknown): string | undefined {
 }
 
 /** El campo imagen puede ser texto o arreglo: se toma la primera URL https válida. */
-function primeraImagen(...valores: unknown[]): string | undefined {
+export function primeraImagen(...valores: unknown[]): string | undefined {
   for (const valor of valores) {
     const lista: unknown[] = Array.isArray(valor) ? valor : [valor];
     for (const elemento of lista) {
@@ -106,27 +96,9 @@ function normalizarProducto(crudo: Crudo): Producto {
   };
 }
 
-function normalizarServicio(crudo: Crudo): Servicio {
-  const categoria = texto(crudo.categoria);
-  return {
-    id: idDe(crudo),
-    nombre: texto(crudo.nombre),
-    categoria: categoria || undefined,
-    activo: typeof crudo.activo === 'boolean' ? crudo.activo : undefined,
-    imagen: primeraImagen(crudo.imagen, crudo.imagenes),
-  };
-}
-
 /** Lectura pública del catálogo: GET /api/productos. */
 export function obtenerProductos(): Promise<Producto[]> {
   return apiGet<unknown>('/api/productos', { publica: true }).then((respuesta) =>
     listaDe(respuesta, ['data', 'productos', 'producto']).map(normalizarProducto),
-  );
-}
-
-/** Lectura pública de servicios: GET /api/servicios. */
-export function obtenerServicios(): Promise<Servicio[]> {
-  return apiGet<unknown>('/api/servicios', { publica: true }).then((respuesta) =>
-    listaDe(respuesta, ['data', 'servicios', 'servicio']).map(normalizarServicio),
   );
 }
