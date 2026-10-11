@@ -53,9 +53,14 @@ export interface Cita {
   anticipoVenceEn: string | null;
   /** Cuándo se pagó el anticipo (ISO), o null. */
   anticipoPagadoEn: string | null;
+  /** La clienta eligió pagar el anticipo en el salón (plazo: 15 minutos antes del inicio). */
+  anticipoEnSalon: boolean;
   /** Notas de la clienta ('' si no hay). */
   notas: string;
 }
+
+/** Cómo se paga el anticipo al agendar: en línea con Mercado Pago o en el salón. */
+export type PagoAnticipo = 'linea' | 'salon';
 
 /**
  * Estado del anticipo para la app. El backend tiene más estados; se agrupan así:
@@ -77,6 +82,11 @@ export interface DatosNuevaCita {
   /** ISO del slot elegido (Slot.fin). */
   fechaHoraFin: string;
   notas?: string;
+  /**
+   * Cómo se pagará el anticipo. Sin valor no se manda y el backend usa 'linea'; lo ignora si la
+   * cita no pide anticipo.
+   */
+  pagoAnticipo?: PagoAnticipo;
 }
 
 // ── Normalizadores ─────────────────────────────────────────────────────────────────────────
@@ -150,6 +160,7 @@ function normalizarCita(crudo: Crudo): Cita {
     anticipoMonto: precioParaMostrar(texto(crudo.anticipoRequerido)),
     anticipoVenceEn: textoONull(crudo.anticipoVenceEn),
     anticipoPagadoEn: textoONull(crudo.anticipoPagadoEn),
+    anticipoEnSalon: crudo.anticipoEnSalon === true,
     notas: texto(crudo.notas),
   };
 }
@@ -201,7 +212,7 @@ export function obtenerDisponibilidad(params: {
 
 /**
  * Agenda la cita: POST /api/citas?propios=true. Un 400 de horario ocupado (ver esHorarioOcupado)
- * obliga a recargar la disponibilidad.
+ * obliga a recargar la disponibilidad; los 400 del anticipo se leen con mensajeAnticipoParaClienta.
  */
 export function crearCita(datos: DatosNuevaCita): Promise<Cita> {
   const notas = datos.notas?.trim();
@@ -212,6 +223,7 @@ export function crearCita(datos: DatosNuevaCita): Promise<Cita> {
     fechaHoraInicio: datos.fechaHoraInicio,
     fechaHoraFin: datos.fechaHoraFin,
     ...(notas ? { notas } : {}),
+    ...(datos.pagoAnticipo ? { pagoAnticipo: datos.pagoAnticipo } : {}),
   };
   return apiPost<unknown>('/api/citas?propios=true', cuerpo).then(citaDe);
 }
@@ -282,6 +294,26 @@ export function esHorarioOcupado(error: unknown): boolean {
 }
 
 /**
+ * 400 de crearCita por el anticipo, con mensajes del backend ya escritos para la clienta. Solo estos
+ * se muestran tal cual; cualquier otro mensaje del servidor nunca llega a la pantalla.
+ */
+export const MENSAJES_ANTICIPO_PARA_CLIENTA: readonly string[] = [
+  'Ya no da tiempo de pagar en el salón. Paga el anticipo en línea.',
+  'Ya tienes una cita por pagar en el salón. Paga su anticipo o elige pagar en línea.',
+  'Para esta cita, el anticipo se paga en línea.',
+  'Ya no da tiempo de pagar el anticipo antes de tu cita.',
+];
+
+/** El mensaje del 400 de crearCita si es uno de MENSAJES_ANTICIPO_PARA_CLIENTA; null si no. */
+export function mensajeAnticipoParaClienta(error: unknown): string | null {
+  if (!(error instanceof ApiError) || error.status !== 400) {
+    return null;
+  }
+  const mensaje = error.message.trim();
+  return MENSAJES_ANTICIPO_PARA_CLIENTA.includes(mensaje) ? mensaje : null;
+}
+
+/**
  * Motivo de un 409 de crearPreferenciaAnticipo (el backend no manda code): "ya está pagado",
  * "El plazo para pagar el anticipo terminó" o "Esta cita ya no está vigente". null si no es 409.
  */
@@ -345,7 +377,7 @@ function aFecha(valor: string | Date): Date {
   return new Date(valor);
 }
 
-/** 'YYYY-MM-DD' con el año, mes y día locales del teléfono (nunca toISOString). */
+/** 'YYYY-MM-DD' con el año, mes y día locales del teléfono (sin pasar a UTC). */
 export function fechaLocal(fecha: Date): string {
   return `${fecha.getFullYear()}-${dosDigitos(fecha.getMonth() + 1)}-${dosDigitos(fecha.getDate())}`;
 }
@@ -416,19 +448,34 @@ export function horaLegible(valor: string | Date): string {
 }
 
 /**
- * Hora límite del anticipo para mostrar: 'Paga antes de las 6:30 p. m.' o, si cae otro día (cita
- * agendada de noche), 'Paga antes de las 1:30 a. m. del domingo 19 de octubre'. null si no hay
- * plazo válido.
+ * Hora límite del anticipo para armar frases, sin conteo en horas: 'antes de las 6:30 p. m.' si
+ * vence hoy (año, mes y día locales) o 'antes del miércoles 28 de octubre, 11:15 a. m.' si vence
+ * otro día. null si no hay plazo válido.
  */
-export function limiteAnticipo(venceEn: string | null): string | null {
+export function limiteAnticipo(venceEn: string | null, ahora: Date = new Date()): string | null {
   if (!venceEn) {
     return null;
   }
-  const hora = horaLegible(venceEn);
+  const fecha = new Date(venceEn);
+  const hora = horaLegible(fecha);
   if (!hora) {
     return null;
   }
-  const fecha = new Date(venceEn);
-  const mismoDia = fechaLocal(fecha) === fechaLocal(new Date());
-  return `Paga antes de las ${mismoDia ? hora : `${hora} del ${fechaLegible(fecha)}`}`;
+  if (fechaLocal(fecha) !== fechaLocal(ahora)) {
+    return `antes del ${fechaLegible(fecha)}, ${hora}`;
+  }
+  // 'antes de la 1:15 a. m.' pero 'antes de las 11:15 a. m.'.
+  return `antes de ${fecha.getHours() % 12 === 1 ? 'la' : 'las'} ${hora}`;
+}
+
+/**
+ * Aviso de la cita con anticipo en el salón y aún sin pagar: 'Paga tu anticipo en el salón antes
+ * de las 11:15 a. m. (15 minutos antes de tu cita). También puedes pagarlo en línea.'
+ */
+export function avisoAnticipoEnSalon(venceEn: string | null, ahora: Date = new Date()): string {
+  const limite = limiteAnticipo(venceEn, ahora);
+  const plazo = limite
+    ? `${limite} (15 minutos antes de tu cita)`
+    : 'a más tardar 15 minutos antes de tu cita';
+  return `Paga tu anticipo en el salón ${plazo}. También puedes pagarlo en línea.`;
 }

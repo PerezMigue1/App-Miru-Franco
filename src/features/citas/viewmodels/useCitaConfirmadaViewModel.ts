@@ -5,6 +5,7 @@ import { BackHandler } from 'react-native';
 import { ApiError } from '@/shared/api/apiClient';
 
 import {
+  avisoAnticipoEnSalon,
   limiteAnticipo,
   obtenerCita,
   obtenerEstadoAnticipo,
@@ -24,8 +25,13 @@ export interface CitaConfirmadaViewModel {
   estado: EstadoCitaConfirmada;
   cita: Cita | null;
   anticipo: AnticipoConfirmacion;
-  /** "Paga antes de las 6:30 p. m." (con el día si no es hoy) del anticipo pendiente, o null. */
+  /**
+   * "Paga antes de las 6:30 p. m." (o "Paga antes del miércoles 28 de octubre, 6:30 p. m.") del
+   * anticipo pendiente en línea, o null. Con el anticipo en el salón va en avisoSalon.
+   */
   limite: string | null;
+  /** Anticipo pendiente que se paga en el salón: texto con la hora límite, o null. */
+  avisoSalon: string | null;
   recargar: () => void;
   /** Anticipo pendiente: abre la pantalla del anticipo, que lanza Mercado Pago al llegar. */
   pagarAnticipo: () => void;
@@ -128,11 +134,17 @@ export function useCitaConfirmadaViewModel(citaId: string | undefined): CitaConf
     }, [volverAlInicio]),
   );
 
+  // 'pendiente' ya descarta el pago aprobado o en revisión de Mercado Pago.
+  const pendiente = cita != null && anticipo === 'pendiente';
+  const enSalon = pendiente && cita.anticipoEnSalon;
+  const limite = pendiente && !enSalon ? limiteAnticipo(cita.anticipoVenceEn) : null;
+
   return {
     estado,
     cita,
     anticipo,
-    limite: cita && anticipo === 'pendiente' ? limiteAnticipo(cita.anticipoVenceEn) : null,
+    limite: limite ? `Paga ${limite}` : null,
+    avisoSalon: enSalon ? avisoAnticipoEnSalon(cita.anticipoVenceEn) : null,
     recargar,
     pagarAnticipo,
     verMisCitas,
