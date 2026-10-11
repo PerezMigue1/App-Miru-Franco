@@ -1,4 +1,4 @@
-import type { Servicio } from './inicioService';
+import type { Servicio } from '@/features/citas/models/servicioModel';
 
 /** Una foto de la galería: siempre sale de un servicio real (GET /api/servicios). */
 export interface FotoGaleria {

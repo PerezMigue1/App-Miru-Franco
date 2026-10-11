@@ -464,3 +464,11 @@ export const galeria = {
 export const visor = {
   rellenoPie: espacio.l,
 } as const;
+
+/** Catálogo y detalle de servicios. */
+export const catalogo = {
+  /** Lado de la miniatura cuadrada de cada tarjeta del catálogo. */
+  miniatura: 88,
+  /** Ancho / alto de la imagen del detalle. */
+  proporcionImagen: 4 / 3,
+} as const;

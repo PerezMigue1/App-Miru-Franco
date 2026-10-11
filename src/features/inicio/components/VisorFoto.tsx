@@ -1,5 +1,6 @@
 import { Image } from 'expo-image';
-import { X } from 'lucide-react-native';
+import { useRouter, type Href } from 'expo-router';
+import { ChevronRight, X } from 'lucide-react-native';
 import { useState } from 'react';
 import {
   FlatList,
@@ -15,10 +16,13 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
+  borde,
   espacio,
   fuente,
   icono,
   pantalla,
+  radio,
+  temaOscuro,
   tipo,
   toqueMinimo,
   tracking,
@@ -45,6 +49,7 @@ export function VisorFoto({ fotos, indice, onCerrar }: VisorFotoProps) {
   const { top, bottom } = useSafeAreaInsets();
   const [actual, setActual] = useState(indice ?? 0);
   const [indiceAbierto, setIndiceAbierto] = useState(indice);
+  const { push } = useRouter();
 
   // Al abrir con otra foto, el contador arranca en ella (ajuste durante el render).
   if (indice !== indiceAbierto) {
@@ -55,6 +60,14 @@ export function VisorFoto({ fotos, indice, onCerrar }: VisorFotoProps) {
   }
 
   const foto = fotos[actual];
+  const tieneServicio = foto ? foto.servicioId !== '' && foto.servicioId != null : false;
+  const verServicio = () => {
+    if (!foto || !tieneServicio) {
+      return;
+    }
+    onCerrar();
+    push(`/servicio/${foto.servicioId}` as Href);
+  };
   const alSoltar = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const pagina = Math.round(e.nativeEvent.contentOffset.x / width);
     setActual(Math.min(Math.max(pagina, 0), fotos.length - 1));
@@ -105,9 +118,35 @@ export function VisorFoto({ fotos, indice, onCerrar }: VisorFotoProps) {
 
         {foto ? (
           <View style={[styles.pie, { paddingBottom: bottom + visor.rellenoPie }]}>
-            <Text numberOfLines={1} style={[styles.servicio, { color: colores.textoSobrePanel }]}>
-              {foto.servicio}
-            </Text>
+            <View style={styles.filaServicio}>
+              <Text numberOfLines={1} style={[styles.servicio, { color: colores.textoSobrePanel }]}>
+                {foto.servicio}
+              </Text>
+              {tieneServicio ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Ver el servicio ${foto.servicio}`}
+                  onPress={verServicio}
+                  style={({ pressed }) => [
+                    styles.verServicio,
+                    {
+                      borderColor: colores.oroTextoPequeno,
+                      // El visor siempre es oscuro: el tono de presionado es el del tema oscuro.
+                      backgroundColor: pressed ? temaOscuro.presionado : 'transparent',
+                    },
+                  ]}
+                >
+                  <Text style={[styles.textoVerServicio, { color: colores.oroTextoPequeno }]}>
+                    Ver servicio
+                  </Text>
+                  <ChevronRight
+                    color={colores.oroTextoPequeno}
+                    size={icono.tamanoPequeno}
+                    strokeWidth={icono.trazo}
+                  />
+                </Pressable>
+              ) : null}
+            </View>
             <Text
               accessibilityLiveRegion="polite"
               style={[styles.contador, { color: colores.textoSuaveSobrePanel }]}
@@ -143,11 +182,32 @@ const styles = StyleSheet.create({
     paddingTop: visor.rellenoPie,
     gap: espacio.xxs,
   },
+  filaServicio: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: espacio.m,
+  },
   servicio: {
+    flex: 1,
     fontFamily: fuente.titulo,
     fontSize: tipo.subtitulo.tamano,
     lineHeight: tipo.subtitulo.linea,
     letterSpacing: tracking.titulo,
+  },
+  verServicio: {
+    minHeight: toqueMinimo,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: espacio.xs,
+    paddingLeft: espacio.l,
+    paddingRight: espacio.m,
+    borderRadius: radio.pastilla,
+    borderWidth: borde.hairline,
+  },
+  textoVerServicio: {
+    fontFamily: fuente.textoFuerte,
+    fontSize: tipo.pequeno.tamano,
+    lineHeight: tipo.pequeno.linea,
   },
   contador: {
     fontFamily: fuente.texto,
