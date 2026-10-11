@@ -226,10 +226,8 @@ function Contenido({
       ) : (
         <View style={styles.accion}>
           <Button
-            titulo={sesion ? 'Disponible pronto' : 'Reservar'}
-            onPress={sesion ? undefined : onReservar}
-            deshabilitado={sesion}
-            accessibilityHint={sesion ? 'La reserva desde la app llega muy pronto' : undefined}
+            titulo="Reservar"
+            onPress={onReservar}
             icono={
               <CalendarPlus
                 color={colores.textoSobreAccion}

@@ -98,6 +98,10 @@ function Navegacion({ fuentesListas }: { fuentesListas: boolean }) {
           <Stack.Protected guard={estado === 'autenticado'}>
             <Stack.Screen name="editar-perfil" />
             <Stack.Screen name="cambiar-contrasena" />
+            {/* Reserva, anticipo y confirmación (GP-06.2): solo con sesión. */}
+            <Stack.Screen name="reservar/[servicioId]" />
+            <Stack.Screen name="anticipo/[citaId]" />
+            <Stack.Screen name="cita-confirmada/[citaId]" options={{ gestureEnabled: false }} />
           </Stack.Protected>
         </Stack>
         <HojaBienvenida introTerminada={introTerminada} />

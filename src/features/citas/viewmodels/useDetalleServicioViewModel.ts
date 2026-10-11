@@ -1,3 +1,4 @@
+import { useRouter, type Href } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useAuth } from '@/features/auth/viewmodels/useAuth';
@@ -15,11 +16,13 @@ export interface DetalleServicioViewModel {
   sesion: boolean;
   /** Sin sesión, la clienta tocó Reservar: se le invita a entrar. */
   invitacionVisible: boolean;
+  /** Con sesión abre la reserva del servicio; sin sesión muestra la invitación. */
   reservar: () => void;
 }
 
 /** Detalle público de un servicio (GP-06.1). Un servicio inactivo o inexistente no se muestra. */
 export function useDetalleServicioViewModel(id: string | undefined): DetalleServicioViewModel {
+  const router = useRouter();
   const { estado: estadoSesion } = useAuth();
   const sesion = estadoSesion === 'autenticado';
   const [estado, setEstado] = useState<EstadoDetalleServicio>('cargando');
@@ -77,9 +80,14 @@ export function useDetalleServicioViewModel(id: string | undefined): DetalleServ
   const reservar = useCallback(() => {
     if (!sesion) {
       setInvitacionVisible(true);
+      return;
     }
-    // Con sesión el botón está deshabilitado hasta GP-06.2.
-  }, [sesion]);
+    const servicioId = servicio ? String(servicio.id) : (id?.trim() ?? '');
+    if (servicioId === '') {
+      return;
+    }
+    router.push(`/reservar/${encodeURIComponent(servicioId)}` as Href);
+  }, [sesion, servicio, id, router]);
 
   return { estado, servicio, recargar, sesion, invitacionVisible, reservar };
 }

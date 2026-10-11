@@ -12,7 +12,18 @@ import {
 import Animated, { Easing, FadeIn, ReduceMotion } from 'react-native-reanimated';
 
 import { soloDigitos, telefonoEscrito, telefonoPegado } from './digitos';
-import { borde, curva, duracion, espacio, fuente, icono, radio, tipo, toqueMinimo } from './tokens';
+import {
+  borde,
+  campoMultilinea,
+  curva,
+  duracion,
+  espacio,
+  fuente,
+  icono,
+  radio,
+  tipo,
+  toqueMinimo,
+} from './tokens';
 import { useTheme } from './useTheme';
 
 export type TipoInput =
@@ -58,6 +69,10 @@ interface InputProps {
   lineasReservadas?: number;
   /** Contenido extra bajo el campo (enlaces, requisitos). */
   debajo?: ReactNode;
+  /** Texto de varias líneas (notas): el campo crece y el texto empieza arriba. */
+  multilinea?: boolean;
+  /** Caracteres máximos que acepta el campo. */
+  largoMaximo?: number;
   ref?: Ref<TextInput>;
 }
 
@@ -137,6 +152,8 @@ export function Input({
   estado,
   lineasReservadas = 0,
   debajo,
+  multilinea = false,
+  largoMaximo,
   ref,
 }: InputProps) {
   const { colores } = useTheme();
@@ -200,6 +217,8 @@ export function Input({
         <TextInput
           {...AJUSTES[tipo]}
           {...teclado}
+          {...(multilinea ? { multiline: true, textAlignVertical: 'top' as const } : null)}
+          {...(largoMaximo ? { maxLength: largoMaximo } : null)}
           ref={ref}
           value={valor}
           onChangeText={cambiar}
@@ -212,7 +231,11 @@ export function Input({
           selectionColor={colores.foco}
           cursorColor={colores.foco}
           placeholderTextColor={colores.campoPlaceholder}
-          style={[styles.entrada, { color: colores.campoTexto }]}
+          style={[
+            styles.entrada,
+            multilinea ? styles.entradaMultilinea : null,
+            { color: colores.campoTexto },
+          ]}
         />
         {esClave ? (
           <Pressable
@@ -336,6 +359,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: espacio.l,
     fontFamily: fuente.texto,
     fontSize: tipo.cuerpo.tamano,
+  },
+  entradaMultilinea: {
+    minHeight: campoMultilinea.altoMinimo,
+    paddingVertical: espacio.m,
+    lineHeight: tipo.cuerpo.linea,
   },
   ojo: {
     width: toqueMinimo,
