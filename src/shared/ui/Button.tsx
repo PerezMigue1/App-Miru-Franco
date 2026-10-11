@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import {
+  borde,
   curva,
   duracion,
   escalaPresionado,
@@ -16,7 +17,8 @@ import {
 } from './tokens';
 import { useTheme } from './useTheme';
 
-type Variante = 'primario' | 'secundario';
+/** primario: vino con sombra. secundario: terracota. contorno: transparente con borde y texto de contorno. */
+type Variante = 'primario' | 'secundario' | 'contorno';
 
 interface ButtonProps {
   titulo: string;
@@ -49,8 +51,13 @@ export function Button({
   const estiloAnimado = useAnimatedStyle(() => ({ transform: [{ scale: escala.get() }] }));
 
   const primario = variante === 'primario';
-  const fondo = primario ? colores.accion : colores.secundario;
-  const colorTexto = primario ? colores.textoSobreAccion : colores.textoSobreSecundario;
+  const contorno = variante === 'contorno';
+  const fondo = primario ? colores.accion : contorno ? 'transparent' : colores.secundario;
+  const colorTexto = primario
+    ? colores.textoSobreAccion
+    : contorno
+      ? colores.contorno
+      : colores.textoSobreSecundario;
 
   const hundir = () => {
     escala.set(withTiming(escalaPresionado, { duration: duracion.presionar, easing: EASE_SALIDA }));
@@ -73,6 +80,7 @@ export function Button({
         style={[
           styles.boton,
           primario && styles.sombra,
+          contorno && [styles.contorno, { borderColor: colores.contorno }],
           { backgroundColor: fondo, shadowColor: colores.sombra },
           deshabilitado && styles.deshabilitado,
           estiloAnimado,
@@ -101,6 +109,9 @@ const styles = StyleSheet.create({
     shadowRadius: sombra.boton.radio,
     shadowOffset: { width: 0, height: sombra.boton.desplazamientoY },
     elevation: sombra.boton.elevacion,
+  },
+  contorno: {
+    borderWidth: borde.campo,
   },
   texto: {
     fontFamily: fuente.textoFuerte,

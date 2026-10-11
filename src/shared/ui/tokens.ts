@@ -96,6 +96,16 @@ export interface Colores {
   aviso: string;
   /** Enlaces de texto. */
   enlace: string;
+  /** Borde y texto del botón con borde (--menu-texto-principal de la web): 8.6:1 en claro y 18:1 en oscuro. */
+  contorno: string;
+  /**
+   * Relleno del día y del horario elegidos. Claro: vino (4.1:1 sobre terracota, 7.6:1 sobre lino).
+   * Oscuro: el vino casi desaparece sobre carbón (1.2:1), así que se usa el oro de foco oscuro
+   * (5.3:1 sobre la tarjeta #2a2a2a y 6.7:1 sobre el fondo #161616).
+   */
+  seleccion: string;
+  /** Número sobre el relleno de selección: crema sobre vino (10.9:1) y carbón sobre oro (6.7:1). */
+  textoSobreSeleccion: string;
 }
 
 export const temaClaro: Colores = {
@@ -130,6 +140,9 @@ export const temaClaro: Colores = {
   exito: paleta.exitoClaro,
   aviso: paleta.avisoClaro,
   enlace: paleta.vinoProfundo,
+  contorno: paleta.vinoProfundo,
+  seleccion: paleta.vino,
+  textoSobreSeleccion: paleta.crema,
 };
 
 export const temaOscuro: Colores = {
@@ -164,6 +177,9 @@ export const temaOscuro: Colores = {
   exito: paleta.exitoOscuro,
   aviso: paleta.avisoOscuro,
   enlace: paleta.blanco,
+  contorno: paleta.blanco,
+  seleccion: paleta.oroFoco,
+  textoSobreSeleccion: paleta.carbon,
 };
 
 /** Ritmo de 4px. */
@@ -471,4 +487,65 @@ export const catalogo = {
   miniatura: 88,
   /** Ancho / alto de la imagen del detalle. */
   proporcionImagen: 4 / 3,
+} as const;
+
+/** Campo de texto de varias líneas (por ejemplo, notas para el salón): alto mínimo de dos toques. */
+export const campoMultilinea = {
+  altoMinimo: toqueMinimo * 2,
+} as const;
+
+/** Reserva de cita (GP-06.2): calendario mensual, cuadrícula de horarios y notas. */
+export const reserva = {
+  /**
+   * Diámetro del círculo de cada día del calendario. A 360dp cada columna mide unos 42dp
+   * (320 de contenido menos el relleno de la tarjeta, entre 7), así que el círculo cabe sin scroll.
+   */
+  diaCalendario: espacio.x4,
+  /** Relleno interior de la tarjeta del calendario. */
+  rellenoCalendario: espacio.m,
+  /** Grosor del anillo que marca hoy en el calendario (el mismo 1.5 que usa la web). */
+  anilloHoy: borde.campo,
+  /** Columnas de la cuadrícula de horarios: tres caben a 360dp con chips de 48dp de alto. */
+  columnasHorario: 3,
+  /** Chips que dibuja el skeleton mientras cargan los horarios. */
+  horariosEsqueleto: 9,
+  /** Tarjetas que dibuja el skeleton mientras cargan las especialistas. */
+  especialistasEsqueleto: 3,
+  /** Caracteres máximos de las notas para el salón. */
+  largoNotas: 300,
+} as const;
+
+/**
+ * Insignias de estado (DESIGN.md: base clara teñida del color del estado con texto oscuro de su
+ * familia). Igual que `.mf-badge` de la web (sistema.css): el color del estado al 16 % sobre la
+ * base de insignia (crema en claro, carbón medio en oscuro), ya mezclado porque React Native no
+ * tiene color-mix. Contraste del texto: 7:1 o más en claro y 4.7:1 o más en oscuro.
+ */
+export const insignia = {
+  claro: {
+    /** --warning #D98E04 al 16 % sobre crema; texto --warning-texto. */
+    aviso: { fondo: '#EEE1C8', texto: paleta.avisoClaro },
+    /** --success #6E7D57 al 16 % sobre crema; texto --success-texto. */
+    exito: { fondo: '#DDDED5', texto: paleta.exitoClaro },
+    /** --logo-branding #9f6d1f al 16 % sobre crema; texto secundario. */
+    neutro: { fondo: '#E5DCCC', texto: paleta.textoSecundario },
+  },
+  oscuro: {
+    /** --warning al 16 % sobre #1f1f1f; texto --warning-texto oscuro (4.7:1). */
+    aviso: { fondo: '#3D311B', texto: paleta.avisoOscuro },
+    /** --success al 16 % sobre #1f1f1f; texto --success-texto oscuro (4.7:1). */
+    exito: { fondo: '#2C2E28', texto: paleta.exitoOscuro },
+    /** --logo-branding al 16 % sobre #1f1f1f; texto oro sobre carbón (5.1:1). */
+    neutro: { fondo: '#332B1F', texto: paleta.oroFoco },
+  },
+  rellenoHorizontal: espacio.m,
+  rellenoVertical: espacio.xs,
+} as const;
+
+/** Anticipo y confirmación de cita (GP-06.2). */
+export const confirmacion = {
+  /** Ícono de check en círculo del momento de confirmación. */
+  icono: 56,
+  /** Desplazamiento corto de la entrada del momento de confirmación (sin él con movimiento reducido). */
+  desplazamiento: espacio.l,
 } as const;
