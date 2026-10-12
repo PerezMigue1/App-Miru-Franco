@@ -1,13 +1,11 @@
 import { CalendarDays, ChevronRight, Clock, Store, UserRound } from 'lucide-react-native';
-import type { ReactNode } from 'react';
+import { memo, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 
+import { usePresion } from '@/shared/ui/movimiento';
 import { Skeleton } from '@/shared/ui/Skeleton';
 import {
-  curva,
-  duracion,
-  escalaPresionado,
   espacio,
   esqueleto,
   fuente,
@@ -32,8 +30,6 @@ import {
 } from '../models/citaModel';
 import { BadgeEstado } from './BadgeEstado';
 
-const EASE_SALIDA = Easing.bezier(...curva.salida);
-
 interface TarjetaCitaProps {
   cita: Cita;
   onPress: () => void;
@@ -47,13 +43,12 @@ function conMayuscula(texto: string): string {
 
 /**
  * Una cita de Mis citas: servicio, especialista, fecha y hora, estado de la cita y del anticipo y,
- * con el anticipo pendiente, su plazo y si se paga en el salón. Se hunde al tocarla.
+ * con el anticipo pendiente, su plazo y si se paga en el salón. Se hunde al tocarla (respuesta
+ * compartida de usePresion: 0.97 en 140 ms; con movimiento reducido solo baja la opacidad).
  */
-export function TarjetaCita({ cita, onPress, accion }: TarjetaCitaProps) {
+export const TarjetaCita = memo(function TarjetaCita({ cita, onPress, accion }: TarjetaCitaProps) {
   const { colores, oscuro } = useTheme();
-  const escala = useSharedValue(1);
-  const animado = useAnimatedStyle(() => ({ transform: [{ scale: escala.get() }] }));
-  const ajuste = { duration: duracion.presionar, easing: EASE_SALIDA };
+  const { estilo: estiloPresion, hundir, soltar } = usePresion();
 
   const servicio = cita.servicioNombre || 'Cita en el salón';
   const fecha = conMayuscula(fechaLegible(cita.fechaHoraInicio));
@@ -84,7 +79,7 @@ export function TarjetaCita({ cita, onPress, accion }: TarjetaCitaProps) {
       style={[
         styles.tarjeta,
         { backgroundColor: colores.superficie, shadowColor: colores.sombra },
-        animado,
+        estiloPresion,
       ]}
     >
       <Pressable
@@ -92,8 +87,8 @@ export function TarjetaCita({ cita, onPress, accion }: TarjetaCitaProps) {
         accessibilityLabel={etiqueta}
         accessibilityHint="Abre el detalle de la cita"
         onPress={onPress}
-        onPressIn={() => escala.set(withTiming(escalaPresionado, ajuste))}
-        onPressOut={() => escala.set(withTiming(1, ajuste))}
+        onPressIn={hundir}
+        onPressOut={soltar}
         style={styles.contenido}
       >
         {/* El Pressable ya anuncia todo en su etiqueta: el contenido no se lee por separado. */}
@@ -137,7 +132,7 @@ export function TarjetaCita({ cita, onPress, accion }: TarjetaCitaProps) {
       {accion ? <View style={styles.accion}>{accion}</View> : null}
     </Animated.View>
   );
-}
+});
 
 function Dato({ Icono, texto }: { Icono: typeof Clock; texto: string }) {
   const { colores } = useTheme();

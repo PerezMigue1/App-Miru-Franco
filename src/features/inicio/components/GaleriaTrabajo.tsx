@@ -1,23 +1,17 @@
 import { Image } from 'expo-image';
-import { useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
-import Animated, {
-  Easing,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 
 import { EmptyState } from '@/shared/ui/EmptyState';
 import { Monograma } from '@/shared/ui/Monograma';
+import { useEntradaContenido, usePresion } from '@/shared/ui/movimiento';
 import { Skeleton } from '@/shared/ui/Skeleton';
-import { curva, duracion, escalaPresionado, galeria, radio } from '@/shared/ui/tokens';
+import { duracion, galeria, radio } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
 import type { FotoGaleria } from '../models/FotoModel';
 import { VisorFoto } from './VisorFoto';
-
-const EASE_SALIDA = Easing.bezier(...curva.salida);
 
 interface Forma {
   columna: number;
@@ -72,6 +66,9 @@ function posicionesDe(total: number, ancho: number): { lista: Posicion[]; alto: 
 export function GaleriaTrabajo({ fotos }: { fotos: FotoGaleria[] }) {
   const [ancho, setAncho] = useState(0);
   const [abierta, setAbierta] = useState<number | null>(null);
+  const entrada = useEntradaContenido();
+  // Posiciones estables entre renders: así las celdas memoizadas no se repintan al abrir el visor.
+  const { lista, alto } = useMemo(() => posicionesDe(fotos.length, ancho), [fotos.length, ancho]);
 
   if (fotos.length === 0) {
     return (
@@ -82,52 +79,53 @@ export function GaleriaTrabajo({ fotos }: { fotos: FotoGaleria[] }) {
     );
   }
 
-  const { lista, alto } = posicionesDe(fotos.length, ancho);
   const medir = (e: LayoutChangeEvent) => setAncho(e.nativeEvent.layout.width);
 
   return (
     <>
-      <View onLayout={medir} style={{ height: ancho > 0 ? alto : 0 }}>
+      {/* Una sola aparición para todo el mosaico cuando llegan las fotos, no una por foto. */}
+      <Animated.View entering={entrada} onLayout={medir} style={{ height: ancho > 0 ? alto : 0 }}>
         {ancho > 0
           ? lista.map((posicion, i) => (
               <Celda
                 key={fotos[i].url}
                 foto={fotos[i]}
                 posicion={posicion}
-                onPress={() => setAbierta(i)}
+                indice={i}
+                onAbrir={setAbierta}
               />
             ))
           : null}
-      </View>
+      </Animated.View>
       <VisorFoto fotos={fotos} indice={abierta} onCerrar={() => setAbierta(null)} />
     </>
   );
 }
 
-function Celda({
+const Celda = memo(function Celda({
   foto,
   posicion,
-  onPress,
+  indice,
+  onAbrir,
 }: {
   foto: FotoGaleria;
   posicion: Posicion;
-  onPress: () => void;
+  indice: number;
+  onAbrir: (indice: number) => void;
 }) {
   const { colores } = useTheme();
-  const escala = useSharedValue(1);
-  const animado = useAnimatedStyle(() => ({ transform: [{ scale: escala.get() }] }));
-  const ajuste = { duration: duracion.presionar, easing: EASE_SALIDA };
+  const { estilo, hundir, soltar } = usePresion();
 
   return (
     <Pressable
       accessibilityRole="imagebutton"
       accessibilityLabel={`Ver foto de ${foto.servicio} en grande`}
-      onPress={onPress}
-      onPressIn={() => escala.set(withTiming(escalaPresionado, ajuste))}
-      onPressOut={() => escala.set(withTiming(1, ajuste))}
+      onPress={() => onAbrir(indice)}
+      onPressIn={hundir}
+      onPressOut={soltar}
       style={[styles.celda, posicion]}
     >
-      <Animated.View style={[styles.marco, { backgroundColor: colores.panel }, animado]}>
+      <Animated.View style={[styles.marco, { backgroundColor: colores.panel }, estilo]}>
         <Monograma tamano="pequeno" />
         <Image
           source={{ uri: foto.url }}
@@ -139,7 +137,7 @@ function Celda({
       </Animated.View>
     </Pressable>
   );
-}
+});
 
 /** Esqueleto de la galería: un bloque del mosaico en arena con pulso suave. */
 export function GaleriaEsqueleto() {

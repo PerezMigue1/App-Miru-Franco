@@ -264,12 +264,19 @@ export const sombra = {
 export const curva = {
   salida: [0.23, 1, 0.32, 1],
   entradaSalida: [0.77, 0, 0.175, 1],
+  /** Hojas inferiores: arranque rápido y asentamiento largo, sin rebote. */
+  hoja: [0.32, 0.72, 0, 1],
 } as const;
 
 /** Duraciones en milisegundos (DESIGN.md sección 7). */
 export const duracion = {
   presionar: 140,
   pestana: 240,
+  /** Aparición de listas, secciones y estados vacíos (opacidad y desplazamiento corto). */
+  aparecer: 220,
+  /** Hoja inferior: sube en este tiempo y baja más rápido de lo que sube. */
+  hojaEntrada: 240,
+  hojaSalida: 200,
   entrada: 520,
   escalonado: 60,
   acceso: 680,
@@ -305,6 +312,13 @@ export const opacidad = {
   deshabilitado: 0.45,
   /** Pulso de los skeletons. */
   pulsoMinimo: 0.55,
+  /** Respuesta al presionar con movimiento reducido: baja la opacidad en lugar de hundirse. */
+  presionadoReducido: 0.7,
+} as const;
+
+/** Desplazamiento corto de las apariciones (sin él con movimiento reducido). */
+export const movimiento = {
+  desplazamiento: espacio.s,
 } as const;
 
 export const monograma = {
@@ -546,8 +560,6 @@ export const insignia = {
 export const confirmacion = {
   /** Ícono de check en círculo del momento de confirmación. */
   icono: 56,
-  /** Desplazamiento corto de la entrada del momento de confirmación (sin él con movimiento reducido). */
-  desplazamiento: espacio.l,
 } as const;
 
 /** Cancelación de cita (GP-06.3). */

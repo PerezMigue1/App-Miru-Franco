@@ -1,15 +1,14 @@
 import { Image } from 'expo-image';
 import { ChevronRight, Clock } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 
 import { Monograma } from '@/shared/ui/Monograma';
+import { usePresion } from '@/shared/ui/movimiento';
 import { Skeleton } from '@/shared/ui/Skeleton';
 import {
   catalogo,
-  curva,
   duracion,
-  escalaPresionado,
   espacio,
   esqueleto,
   fuente,
@@ -24,7 +23,6 @@ import { useTheme } from '@/shared/ui/useTheme';
 
 import type { Servicio } from '../models/servicioModel';
 
-const EASE_SALIDA = Easing.bezier(...curva.salida);
 const SIN_PRECIO = 'Consulta el precio en el salón';
 
 interface TarjetaServicioProps {
@@ -35,9 +33,7 @@ interface TarjetaServicioProps {
 /** Un servicio del catálogo: miniatura, nombre, categoría, duración y precio. Se hunde al tocarla. */
 export function TarjetaServicio({ servicio, onPress }: TarjetaServicioProps) {
   const { colores } = useTheme();
-  const escala = useSharedValue(1);
-  const animado = useAnimatedStyle(() => ({ transform: [{ scale: escala.get() }] }));
-  const ajuste = { duration: duracion.presionar, easing: EASE_SALIDA };
+  const { estilo, hundir, soltar } = usePresion();
 
   const etiqueta = [servicio.nombre, servicio.duracion, servicio.precio ?? SIN_PRECIO]
     .filter(Boolean)
@@ -49,14 +45,14 @@ export function TarjetaServicio({ servicio, onPress }: TarjetaServicioProps) {
       accessibilityLabel={etiqueta}
       accessibilityHint="Abre el detalle del servicio"
       onPress={onPress}
-      onPressIn={() => escala.set(withTiming(escalaPresionado, ajuste))}
-      onPressOut={() => escala.set(withTiming(1, ajuste))}
+      onPressIn={hundir}
+      onPressOut={soltar}
     >
       <Animated.View
         style={[
           styles.tarjeta,
           { backgroundColor: colores.superficie, shadowColor: colores.sombra },
-          animado,
+          estilo,
         ]}
       >
         <View style={[styles.miniatura, { backgroundColor: colores.panel }]}>

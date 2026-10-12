@@ -17,6 +17,7 @@ import { useAuth } from '@/features/auth/viewmodels/useAuth';
 import { useRequiereSesion } from '@/features/auth/viewmodels/useRequiereSesion';
 import { Button } from '@/shared/ui/Button';
 import { EmptyState } from '@/shared/ui/EmptyState';
+import { usePresion } from '@/shared/ui/movimiento';
 import { SearchBar } from '@/shared/ui/SearchBar';
 import {
   borde,
@@ -49,6 +50,7 @@ export default function InicioView() {
   const { estado: estadoSesion, sesionVencida, descartarAvisoSesion } = useAuth();
   const requiereSesion = useRequiereSesion();
   const conSesion = estadoSesion === 'autenticado';
+  const presionAcceso = usePresion();
 
   // El aviso de sesión vencida aparece de golpe junto con el cambio a Inicio: se anuncia aparte para
   // que TalkBack no lo pierda.
@@ -131,12 +133,20 @@ export default function InicioView() {
             accessibilityRole="button"
             accessibilityLabel="Iniciar sesión"
             onPress={() => push('/login')}
-            style={({ pressed }) => [
-              styles.botonTexto,
-              { backgroundColor: pressed ? colores.presionado : 'transparent' },
-            ]}
+            onPressIn={presionAcceso.hundir}
+            onPressOut={presionAcceso.soltar}
           >
-            <Text style={[styles.textoBoton, { color: colores.foco }]}>Iniciar sesión</Text>
+            {({ pressed }) => (
+              <Animated.View
+                style={[
+                  styles.botonTexto,
+                  { backgroundColor: pressed ? colores.presionado : 'transparent' },
+                  presionAcceso.estilo,
+                ]}
+              >
+                <Text style={[styles.textoBoton, { color: colores.foco }]}>Iniciar sesión</Text>
+              </Animated.View>
+            )}
           </Pressable>
         )}
         <SearchBar
@@ -162,14 +172,13 @@ export default function InicioView() {
           <Text style={[styles.textoAviso, { color: colores.campoTexto }]}>
             Tu sesión terminó. Inicia sesión de nuevo.
           </Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Cerrar aviso"
+          <BotonIcono
+            icono={X}
+            etiqueta="Cerrar aviso"
             onPress={descartarAvisoSesion}
-            style={styles.botonIcono}
-          >
-            <X color={colores.campoTexto} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
-          </Pressable>
+            color={colores.campoTexto}
+            tamano={icono.tamanoPequeno}
+          />
         </View>
       ) : null}
     </View>
@@ -180,23 +189,37 @@ function BotonIcono({
   icono: Icono,
   etiqueta,
   onPress,
+  color,
+  tamano = icono.tamano,
 }: {
   icono: LucideIcon;
   etiqueta: string;
   onPress: () => void;
+  /** Por omisión, el color del texto. */
+  color?: string;
+  tamano?: number;
 }) {
   const { colores } = useTheme();
+  const { estilo, hundir, soltar } = usePresion();
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={etiqueta}
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.botonIcono,
-        { backgroundColor: pressed ? colores.presionado : 'transparent' },
-      ]}
+      onPressIn={hundir}
+      onPressOut={soltar}
     >
-      <Icono color={colores.texto} size={icono.tamano} strokeWidth={icono.trazo} />
+      {({ pressed }) => (
+        <Animated.View
+          style={[
+            styles.botonIcono,
+            { backgroundColor: pressed ? colores.presionado : 'transparent' },
+            estilo,
+          ]}
+        >
+          <Icono color={color ?? colores.texto} size={tamano} strokeWidth={icono.trazo} />
+        </Animated.View>
+      )}
     </Pressable>
   );
 }

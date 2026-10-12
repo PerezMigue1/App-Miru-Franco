@@ -13,8 +13,10 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { usePresion } from '@/shared/ui/movimiento';
 import {
   borde,
   espacio,
@@ -50,6 +52,10 @@ export function VisorFoto({ fotos, indice, onCerrar }: VisorFotoProps) {
   const [actual, setActual] = useState(indice ?? 0);
   const [indiceAbierto, setIndiceAbierto] = useState(indice);
   const { push } = useRouter();
+  const presionCerrar = usePresion();
+  const presionServicio = usePresion();
+  // El visor siempre es oscuro: el oro de texto pequeño es el del tema oscuro (AA sobre el velo).
+  const oro = temaOscuro.oroTextoPequeno;
 
   // Al abrir con otra foto, el contador arranca en ella (ajuste durante el render).
   if (indice !== indiceAbierto) {
@@ -111,13 +117,26 @@ export function VisorFoto({ fotos, indice, onCerrar }: VisorFotoProps) {
           accessibilityRole="button"
           accessibilityLabel="Cerrar galería"
           onPress={onCerrar}
+          onPressIn={presionCerrar.hundir}
+          onPressOut={presionCerrar.soltar}
           style={[styles.cerrar, { top: top + espacio.s }]}
         >
-          <X color={colores.textoSobrePanel} size={icono.tamano} strokeWidth={icono.trazo} />
+          {/* Fondo de velo propio: la X conserva el contraste aunque la foto quede debajo. */}
+          <Animated.View
+            style={[styles.botonCerrar, { backgroundColor: colores.velo }, presionCerrar.estilo]}
+          >
+            <X color={colores.textoSobrePanel} size={icono.tamano} strokeWidth={icono.trazo} />
+          </Animated.View>
         </Pressable>
 
         {foto ? (
-          <View style={[styles.pie, { paddingBottom: bottom + visor.rellenoPie }]}>
+          <View
+            style={[
+              styles.pie,
+              // Con fondo de velo, el texto del pie se lee igual sobre fotos claras.
+              { paddingBottom: bottom + visor.rellenoPie, backgroundColor: colores.velo },
+            ]}
+          >
             <View style={styles.filaServicio}>
               <Text numberOfLines={1} style={[styles.servicio, { color: colores.textoSobrePanel }]}>
                 {foto.servicio}
@@ -127,23 +146,29 @@ export function VisorFoto({ fotos, indice, onCerrar }: VisorFotoProps) {
                   accessibilityRole="button"
                   accessibilityLabel={`Ver el servicio ${foto.servicio}`}
                   onPress={verServicio}
-                  style={({ pressed }) => [
-                    styles.verServicio,
-                    {
-                      borderColor: colores.oroTextoPequeno,
-                      // El visor siempre es oscuro: el tono de presionado es el del tema oscuro.
-                      backgroundColor: pressed ? temaOscuro.presionado : 'transparent',
-                    },
-                  ]}
+                  onPressIn={presionServicio.hundir}
+                  onPressOut={presionServicio.soltar}
                 >
-                  <Text style={[styles.textoVerServicio, { color: colores.oroTextoPequeno }]}>
-                    Ver servicio
-                  </Text>
-                  <ChevronRight
-                    color={colores.oroTextoPequeno}
-                    size={icono.tamanoPequeno}
-                    strokeWidth={icono.trazo}
-                  />
+                  {({ pressed }) => (
+                    <Animated.View
+                      style={[
+                        styles.verServicio,
+                        {
+                          borderColor: oro,
+                          // El visor siempre es oscuro: el tono de presionado es el del tema oscuro.
+                          backgroundColor: pressed ? temaOscuro.presionado : 'transparent',
+                        },
+                        presionServicio.estilo,
+                      ]}
+                    >
+                      <Text style={[styles.textoVerServicio, { color: oro }]}>Ver servicio</Text>
+                      <ChevronRight
+                        color={oro}
+                        size={icono.tamanoPequeno}
+                        strokeWidth={icono.trazo}
+                      />
+                    </Animated.View>
+                  )}
                 </Pressable>
               ) : null}
             </View>
@@ -170,8 +195,12 @@ const styles = StyleSheet.create({
     right: pantalla.margen,
     width: toqueMinimo,
     height: toqueMinimo,
+  },
+  botonCerrar: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: radio.pastilla,
   },
   pie: {
     position: 'absolute',

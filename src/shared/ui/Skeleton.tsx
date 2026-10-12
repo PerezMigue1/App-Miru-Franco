@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
 import Animated, {
-  Easing,
   cancelAnimation,
   useAnimatedStyle,
   useSharedValue,
@@ -9,11 +8,10 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { curva, duracion, opacidad, radio } from './tokens';
+import { EASE_ENTRADA_SALIDA } from './movimiento';
+import { duracion, opacidad, radio } from './tokens';
 import { useMovimientoReducido } from './useMovimientoReducido';
 import { useTheme } from './useTheme';
-
-const EASE_ENTRADA_SALIDA = Easing.bezier(...curva.entradaSalida);
 
 interface SkeletonProps {
   /** Tamaño y forma del bloque; por defecto radio de campo. */

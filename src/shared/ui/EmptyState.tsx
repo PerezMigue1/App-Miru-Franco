@@ -1,7 +1,9 @@
 import { StyleSheet, Text, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 
 import { Button } from './Button';
 import { Monograma } from './Monograma';
+import { useEntradaContenido } from './movimiento';
 import { espacio, fuente, tipo, tracking } from './tokens';
 import { useTheme } from './useTheme';
 
@@ -11,11 +13,15 @@ interface EmptyStateProps {
   accion?: { titulo: string; onPress: () => void };
 }
 
-/** Estado vacío o de error: monograma, mensaje honesto y, si existe, una acción real. */
+/**
+ * Estado vacío o de error: monograma, mensaje honesto y, si existe, una acción real. Aparece con
+ * un fundido corto en lugar de saltar en lugar del contenido.
+ */
 export function EmptyState({ titulo, mensaje, accion }: EmptyStateProps) {
   const { colores } = useTheme();
+  const entrada = useEntradaContenido();
   return (
-    <View style={styles.contenedor}>
+    <Animated.View entering={entrada} style={styles.contenedor}>
       <Monograma tamano="mediano" />
       <Text accessibilityRole="header" style={[styles.titulo, { color: colores.texto }]}>
         {titulo}
@@ -26,7 +32,7 @@ export function EmptyState({ titulo, mensaje, accion }: EmptyStateProps) {
           <Button titulo={accion.titulo} onPress={accion.onPress} variante="secundario" />
         </View>
       ) : null}
-    </View>
+    </Animated.View>
   );
 }
 

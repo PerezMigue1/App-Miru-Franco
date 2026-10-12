@@ -1,12 +1,10 @@
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 
+import { usePresion } from './movimiento';
 import {
   borde,
-  curva,
-  duracion,
-  escalaPresionado,
   espacio,
   fuente,
   opacidad,
@@ -38,8 +36,6 @@ interface ButtonProps {
   accessibilityHint?: string;
 }
 
-const EASE_SALIDA = Easing.bezier(...curva.salida);
-
 /** Botón de la marca: 48dp de alto mínimo y se hunde 140 ms al presionar. */
 export function Button({
   titulo,
@@ -53,8 +49,7 @@ export function Button({
   accessibilityHint,
 }: ButtonProps) {
   const { colores } = useTheme();
-  const escala = useSharedValue(1);
-  const estiloAnimado = useAnimatedStyle(() => ({ transform: [{ scale: escala.get() }] }));
+  const { estilo: estiloPresion, hundir, soltar } = usePresion();
 
   const primario = variante === 'primario';
   const peligro = variante === 'peligro';
@@ -67,13 +62,6 @@ export function Button({
       ? colorContorno
       : colores.textoSobreSecundario;
 
-  const hundir = () => {
-    escala.set(withTiming(escalaPresionado, { duration: duracion.presionar, easing: EASE_SALIDA }));
-  };
-  const soltar = () => {
-    escala.set(withTiming(1, { duration: duracion.presionar, easing: EASE_SALIDA }));
-  };
-
   return (
     <Pressable
       accessibilityRole="button"
@@ -84,6 +72,8 @@ export function Button({
       onPress={onPress}
       onPressIn={hundir}
       onPressOut={soltar}
+      // La atenuación va afuera: la presión controla la opacidad de la vista de adentro.
+      style={deshabilitado ? styles.deshabilitado : null}
     >
       <Animated.View
         style={[
@@ -91,8 +81,7 @@ export function Button({
           primario && styles.sombra,
           contorno && [styles.contorno, { borderColor: colorContorno }],
           { backgroundColor: fondo, shadowColor: colores.sombra },
-          deshabilitado && styles.deshabilitado,
-          estiloAnimado,
+          estiloPresion,
         ]}
       >
         {icono && posicionIcono === 'inicio' ? <View accessible={false}>{icono}</View> : null}

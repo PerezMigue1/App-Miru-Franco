@@ -9,7 +9,7 @@ import {
   View,
   type LayoutChangeEvent,
 } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EncabezadoVolver } from '@/features/auth/components/EncabezadoVolver';
@@ -17,8 +17,8 @@ import { InvitacionSesion } from '@/features/auth/components/InvitacionSesion';
 import { useAuth } from '@/features/auth/viewmodels/useAuth';
 import { Button } from '@/shared/ui/Button';
 import { EmptyState } from '@/shared/ui/EmptyState';
+import { EASE_ENTRADA_SALIDA, useEntradaContenido } from '@/shared/ui/movimiento';
 import {
-  curva,
   duracion,
   espacio,
   fuente,
@@ -41,8 +41,6 @@ const SEGMENTOS: { valor: Segmento; etiqueta: string }[] = [
   { valor: 'proximas', etiqueta: 'Próximas' },
   { valor: 'historial', etiqueta: 'Historial' },
 ];
-
-const EASE_ENTRADA_SALIDA = Easing.bezier(...curva.entradaSalida);
 
 /** Tarjetas que dibuja el skeleton mientras carga la lista. */
 const ESQUELETOS = [0, 1, 2];
@@ -118,6 +116,8 @@ function ListaMisCitas({
   onReservar: () => void;
 }) {
   const { colores } = useTheme();
+  // Entrada única de la lista al terminar de cargar: en el contenedor, nunca en cada tarjeta.
+  const entrada = useEntradaContenido();
 
   if (vm.estado === 'cargando') {
     return (
@@ -172,7 +172,7 @@ function ListaMisCitas({
   }
 
   return (
-    <View style={styles.lista}>
+    <Animated.View entering={entrada} style={styles.lista}>
       {aviso}
       {citas.map((cita) => (
         <TarjetaCita
@@ -186,7 +186,7 @@ function ListaMisCitas({
           }
         />
       ))}
-    </View>
+    </Animated.View>
   );
 }
 

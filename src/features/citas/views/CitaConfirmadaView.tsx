@@ -1,17 +1,15 @@
 import { useLocalSearchParams } from 'expo-router';
 import { CircleCheck, Hourglass } from 'lucide-react-native';
-import { useEffect } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/shared/ui/Button';
 import { EmptyState } from '@/shared/ui/EmptyState';
+import { useEntradaContenido } from '@/shared/ui/movimiento';
 import { Skeleton } from '@/shared/ui/Skeleton';
 import {
   confirmacion,
-  curva,
-  duracion,
   espacio,
   esqueleto,
   fuente,
@@ -21,7 +19,6 @@ import {
   tipo,
   tracking,
 } from '@/shared/ui/tokens';
-import { useMovimientoReducido } from '@/shared/ui/useMovimientoReducido';
 import { useTheme } from '@/shared/ui/useTheme';
 
 import { BadgeEstado, type TonoBadge } from '../components/BadgeEstado';
@@ -31,8 +28,6 @@ import {
   useCitaConfirmadaViewModel,
   type AnticipoConfirmacion,
 } from '../viewmodels/useCitaConfirmadaViewModel';
-
-const EASE_SALIDA = Easing.bezier(...curva.salida);
 
 const BADGE_ANTICIPO: Record<AnticipoConfirmacion, { texto: string; tono: TonoBadge }> = {
   pagado: { texto: 'Anticipo pagado', tono: 'exito' },
@@ -151,29 +146,15 @@ function Confirmacion({
   avisoSalon: string | null;
 }) {
   const { colores } = useTheme();
-  const reducido = useMovimientoReducido();
-  const opacidad = useSharedValue(0);
-  const desplazamiento = useSharedValue(reducido ? 0 : confirmacion.desplazamiento);
-
-  // Una sola entrada al montarse: opacidad y un desplazamiento corto (solo opacidad si se pide
-  // reducir el movimiento). Si el ajuste cambia después, los valores ya están en su destino y
-  // no se repite nada.
-  useEffect(() => {
-    const ajuste = { duration: duracion.entrada, easing: EASE_SALIDA };
-    opacidad.set(withTiming(1, ajuste));
-    desplazamiento.set(reducido ? 0 : withTiming(0, ajuste));
-  }, [desplazamiento, opacidad, reducido]);
-
-  const animado = useAnimatedStyle(() => ({
-    opacity: opacidad.get(),
-    transform: [{ translateY: desplazamiento.get() }],
-  }));
+  // Una sola entrada al montarse, en 220 ms: opacidad y 8px hacia arriba (solo opacidad si se
+  // pide reducir el movimiento).
+  const entrada = useEntradaContenido();
 
   const badge = BADGE_ANTICIPO[anticipo];
   const conMonto = anticipo !== 'noAplica' && cita.anticipoMonto != null;
 
   return (
-    <Animated.View style={[styles.confirmacion, animado]}>
+    <Animated.View entering={entrada} style={styles.confirmacion}>
       <View style={styles.momento}>
         <View accessible={false} importantForAccessibility="no-hide-descendants">
           <CircleCheck color={colores.exito} size={confirmacion.icono} strokeWidth={icono.trazo} />

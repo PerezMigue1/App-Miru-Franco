@@ -11,12 +11,14 @@ import {
 } from 'lucide-react-native';
 import type { ReactNode } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 
 import { Button } from '@/shared/ui/Button';
 import { EmptyState } from '@/shared/ui/EmptyState';
 import { Hoja } from '@/shared/ui/Hoja';
 import { ListRow } from '@/shared/ui/ListRow';
 import { Monograma } from '@/shared/ui/Monograma';
+import { useEntradaContenido, usePresion } from '@/shared/ui/movimiento';
 import { ScreenHeader } from '@/shared/ui/ScreenHeader';
 import { Skeleton } from '@/shared/ui/Skeleton';
 import {
@@ -120,6 +122,7 @@ export default function PerfilView() {
 
 function ContenidoConSesion({ perfil }: { perfil: PerfilViewModel }) {
   const { colores } = useTheme();
+  const entrada = useEntradaContenido();
 
   if (perfil.estado === 'error') {
     return (
@@ -138,8 +141,9 @@ function ContenidoConSesion({ perfil }: { perfil: PerfilViewModel }) {
   return (
     <>
       <Aviso tipo="exito" texto={perfil.avisoGuardado} estilo={styles.margen} />
+      {/* Al llegar los datos, la identidad reemplaza al skeleton apareciendo en 220 ms. */}
       {datos ? (
-        <View style={styles.identidad}>
+        <Animated.View entering={entrada} style={styles.identidad}>
           <Avatar
             foto={datos.foto}
             ocupada={perfil.fotoOcupada}
@@ -147,7 +151,7 @@ function ContenidoConSesion({ perfil }: { perfil: PerfilViewModel }) {
           />
           <Text style={[styles.nombre, { color: colores.texto }]}>{datos.nombre}</Text>
           <Text style={[styles.correo, { color: colores.textoSuave }]}>{datos.email}</Text>
-        </View>
+        </Animated.View>
       ) : (
         <View style={styles.identidad} accessible accessibilityLabel="Cargando tus datos">
           <Skeleton estilo={styles.avatarEsqueleto} />
@@ -193,6 +197,7 @@ function ContenidoConSesion({ perfil }: { perfil: PerfilViewModel }) {
 /** Avatar con la foto o el monograma; mientras se sube o se quita, muestra la carga encima. */
 function Avatar({ foto, ocupada, onPress }: { foto: string | null; ocupada: boolean; onPress: () => void }) {
   const { colores, oscuro } = useTheme();
+  const { estilo: estiloPresion, hundir, soltar } = usePresion();
   return (
     <Pressable
       accessibilityRole="button"
@@ -200,34 +205,38 @@ function Avatar({ foto, ocupada, onPress }: { foto: string | null; ocupada: bool
       accessibilityState={{ busy: ocupada, disabled: ocupada }}
       disabled={ocupada}
       onPress={onPress}
-      style={styles.avatar}
+      onPressIn={hundir}
+      onPressOut={soltar}
     >
-      {foto ? (
-        <Image
-          source={{ uri: foto }}
-          style={styles.foto}
-          contentFit="cover"
-          // Sin caché en disco: la foto no queda en el teléfono después de cerrar sesión.
-          cachePolicy="memory"
-          accessibilityIgnoresInvertColors
-        />
-      ) : (
-        <Monograma tamano="grande" />
-      )}
-      {ocupada ? (
-        <View style={[styles.cargaFoto, { backgroundColor: colores.velo }]}>
-          <ActivityIndicator color={colores.oro} />
-        </View>
-      ) : (
-        <View
-          style={[
-            styles.insignia,
-            { backgroundColor: colores.accion, borderColor: oscuro ? colores.oro : colores.fondo },
-          ]}
-        >
-          <Camera color={colores.textoSobreAccion} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
-        </View>
-      )}
+      {/* Se hunde como un botón al tocarlo (140 ms). */}
+      <Animated.View style={[styles.avatar, estiloPresion]}>
+        {foto ? (
+          <Image
+            source={{ uri: foto }}
+            style={styles.foto}
+            contentFit="cover"
+            // Sin caché en disco: la foto no queda en el teléfono después de cerrar sesión.
+            cachePolicy="memory"
+            accessibilityIgnoresInvertColors
+          />
+        ) : (
+          <Monograma tamano="grande" />
+        )}
+        {ocupada ? (
+          <View style={[styles.cargaFoto, { backgroundColor: colores.velo }]}>
+            <ActivityIndicator color={colores.oro} />
+          </View>
+        ) : (
+          <View
+            style={[
+              styles.insignia,
+              { backgroundColor: colores.accion, borderColor: oscuro ? colores.oro : colores.fondo },
+            ]}
+          >
+            <Camera color={colores.textoSobreAccion} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
+          </View>
+        )}
+      </Animated.View>
     </Pressable>
   );
 }

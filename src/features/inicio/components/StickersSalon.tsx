@@ -1,7 +1,6 @@
 import { memo, useEffect } from 'react';
 import { StyleSheet } from 'react-native';
 import Animated, {
-  Easing,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
@@ -9,14 +8,13 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Circle, G, Path, Rect } from 'react-native-svg';
 
-import { colorSticker, curva, duracion, hero, radio, stickers } from '@/shared/ui/tokens';
+import { EASE_SALIDA } from '@/shared/ui/movimiento';
+import { colorSticker, duracion, hero, radio, stickers } from '@/shared/ui/tokens';
 
 export type Motivo = 'tijeras' | 'destello' | 'gota' | 'peine';
 
 /** Orden de aparición escalonada. */
 export const MOTIVOS: Motivo[] = ['tijeras', 'destello', 'gota', 'peine'];
-
-const EASE_SALIDA = Easing.bezier(...curva.salida);
 
 interface StickerProps {
   motivo: Motivo;

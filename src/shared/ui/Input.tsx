@@ -9,13 +9,13 @@ import {
   useWindowDimensions,
   type TextInputProps,
 } from 'react-native';
-import Animated, { Easing, FadeIn, ReduceMotion } from 'react-native-reanimated';
+import Animated, { FadeIn, ReduceMotion } from 'react-native-reanimated';
 
 import { soloDigitos, telefonoEscrito, telefonoPegado } from './digitos';
+import { EASE_SALIDA, transicionBorde } from './movimiento';
 import {
   borde,
   campoMultilinea,
-  curva,
   duracion,
   espacio,
   fuente,
@@ -82,7 +82,6 @@ const LINEA_MENSAJE = tipo.etiqueta.linea;
 /** Lo que le falta a una línea de mensaje para llegar al objetivo táctil mínimo, por lado. */
 const HOLGURA_ACCION = (toqueMinimo - LINEA_MENSAJE) / 2;
 const DIGITOS_FECHA = 8;
-const EASE_SALIDA = Easing.bezier(...curva.salida);
 // Solo el ícono (decorativo) se funde; el texto queda fuera para que TalkBack lo anuncie.
 const APARECER = FadeIn.duration(duracion.estadoCampo).easing(EASE_SALIDA).reduceMotion(ReduceMotion.Never);
 
@@ -208,9 +207,11 @@ export function Input({
       <Text nativeID={`${id}-etiqueta`} style={[styles.etiqueta, { color: colores.texto }]}>
         {etiqueta}
       </Text>
-      <View
+      {/* El borde cambia de color en 140 ms al enfocar, al salir y al marcar un error. */}
+      <Animated.View
         style={[
           styles.caja,
+          transicionBorde,
           { backgroundColor: colores.campoFondo, borderColor: colorBorde },
         ]}
       >
@@ -247,7 +248,7 @@ export function Input({
             <OjoIcono color={colores.campoPlaceholder} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
           </Pressable>
         ) : null}
-      </View>
+      </Animated.View>
       {/*
         Región en vivo siempre montada (collapsable={false}: Fabric aplanaría la vista y con ella la
         región). Que aparezca o cambie un mensaje es un cambio de contenido: se anuncia una vez.

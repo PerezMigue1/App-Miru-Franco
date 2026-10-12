@@ -1,6 +1,8 @@
 import { useId, useState, type Ref } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 
+import { transicionBorde } from './movimiento';
 import { borde, codigo, espacio, fuente, radio, tipo } from './tokens';
 import { useTheme } from './useTheme';
 
@@ -58,15 +60,17 @@ export function OtpInput({
           importantForAccessibility="no-hide-descendants"
         >
           {casillas.map((indice) => (
-            <View
+            // El foco pasa de una casilla a la siguiente con una transición de color de 140 ms.
+            <Animated.View
               key={indice}
               style={[
                 styles.casilla,
+                transicionBorde,
                 { backgroundColor: colores.campoFondo, borderColor: colorBorde(indice) },
               ]}
             >
               <Text style={[styles.digito, { color: colores.campoTexto }]}>{valor[indice] ?? ''}</Text>
-            </View>
+            </Animated.View>
           ))}
         </View>
         <TextInput

@@ -1,8 +1,10 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
+import { memo, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 
+import { transicionSeleccion, usePresion } from '@/shared/ui/movimiento';
 import {
-  escalaPresionado,
   espacio,
   fuente,
   icono,
@@ -48,6 +50,8 @@ export function CalendarioMensual({ mes, seleccionada, onElegir, onCambiarMes }:
   const ahora = new Date();
   const hoy = fechaLocal(ahora);
   const puedeRegresar = compararMeses(mes, mesDe(ahora)) > 0;
+  // Las semanas solo cambian con el mes: así los días memoizados no se vuelven a pintar al elegir.
+  const semanas = useMemo(() => semanasDelMes(mes), [mes]);
 
   return (
     <View
@@ -79,7 +83,7 @@ export function CalendarioMensual({ mes, seleccionada, onElegir, onCambiarMes }:
         ))}
       </View>
 
-      {semanasDelMes(mes).map((semana, indice) => (
+      {semanas.map((semana, indice) => (
         <View key={semana.find((dia) => dia !== null)?.fecha ?? `semana-${indice}`} style={styles.fila}>
           {semana.map((dia, columna) =>
             dia ? (
@@ -110,6 +114,7 @@ interface BotonMesProps {
 
 function BotonMes({ etiqueta, deshabilitado = false, onPress, Icono }: BotonMesProps) {
   const { colores } = useTheme();
+  const { estilo, hundir, soltar } = usePresion();
   return (
     <Pressable
       accessibilityRole="button"
@@ -117,15 +122,14 @@ function BotonMes({ etiqueta, deshabilitado = false, onPress, Icono }: BotonMesP
       accessibilityState={{ disabled: deshabilitado }}
       disabled={deshabilitado}
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.botonMes,
-        {
-          opacity: deshabilitado ? opacidad.deshabilitado : 1,
-          transform: [{ scale: pressed ? escalaPresionado : 1 }],
-        },
-      ]}
+      onPressIn={hundir}
+      onPressOut={soltar}
+      // La atenuación va afuera: la presión controla la opacidad de la vista de adentro.
+      style={deshabilitado ? styles.deshabilitado : null}
     >
-      <Icono color={colores.texto} size={icono.tamano} strokeWidth={icono.trazo} />
+      <Animated.View style={[styles.botonMes, estilo]}>
+        <Icono color={colores.texto} size={icono.tamano} strokeWidth={icono.trazo} />
+      </Animated.View>
     </Pressable>
   );
 }
@@ -138,8 +142,14 @@ interface DiaProps {
   onElegir: (fecha: string) => void;
 }
 
-function Dia({ dia, esHoy, pasado, seleccionado, onElegir }: DiaProps) {
+/**
+ * Un día del calendario. El relleno y el anillo se funden en 140 ms al elegirlo: el círculo siempre
+ * lleva fondo y borde (del color de la tarjeta cuando no se ven) para que la transición no pase
+ * por transparente.
+ */
+const Dia = memo(function Dia({ dia, esHoy, pasado, seleccionado, onElegir }: DiaProps) {
   const { colores } = useTheme();
+  const { estilo, hundir, soltar } = usePresion();
   const legible = fechaLegible(dia.fecha);
   const colorTexto = seleccionado
     ? colores.textoSobreSeleccion
@@ -154,13 +164,23 @@ function Dia({ dia, esHoy, pasado, seleccionado, onElegir }: DiaProps) {
       accessibilityState={{ selected: seleccionado, disabled: pasado }}
       disabled={pasado}
       onPress={() => onElegir(dia.fecha)}
-      style={({ pressed }) => [styles.celda, { transform: [{ scale: pressed ? escalaPresionado : 1 }] }]}
+      onPressIn={hundir}
+      onPressOut={soltar}
+      style={styles.celda}
     >
-      <View
+      <Animated.View
         style={[
           styles.circulo,
-          seleccionado ? { backgroundColor: colores.seleccion } : null,
-          esHoy && !seleccionado ? { borderWidth: reserva.anilloHoy, borderColor: colores.foco } : null,
+          transicionSeleccion,
+          {
+            backgroundColor: seleccionado ? colores.seleccion : colores.superficie,
+            borderColor: seleccionado
+              ? colores.seleccion
+              : esHoy
+                ? colores.foco
+                : colores.superficie,
+          },
+          estilo,
         ]}
       >
         <Text
@@ -172,10 +192,10 @@ function Dia({ dia, esHoy, pasado, seleccionado, onElegir }: DiaProps) {
         >
           {dia.dia}
         </Text>
-      </View>
+      </Animated.View>
     </Pressable>
   );
-}
+});
 
 const styles = StyleSheet.create({
   tarjeta: {
@@ -209,6 +229,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: radio.pastilla,
   },
+  deshabilitado: {
+    opacity: opacidad.deshabilitado,
+  },
   fila: {
     flexDirection: 'row',
   },
@@ -233,6 +256,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radio.pastilla,
+    borderWidth: reserva.anilloHoy,
   },
   numero: {
     fontFamily: fuente.textoMedio,
