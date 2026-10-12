@@ -6,6 +6,9 @@
 
 android
 
+## Notas
+React Native con Expo SDK 57, solo Android en la v1, sin iOS ni web.
+
 ## Users
 - **Clientas del salón**: ven el inicio con los productos y el trabajo del salón, reservan servicios, pagan el anticipo de su cita, compran productos de la tienda, consultan sus citas, pedidos y perfil, y reciben recordatorios por notificación push. Usan el celular como dispositivo principal de la app.
 - La app de la v1 es solo para el rol cliente. Personal del salón y administración siguen usando el sitio web (`/operacion` y `/admin`).
