@@ -17,8 +17,11 @@ import {
 } from './tokens';
 import { useTheme } from './useTheme';
 
-/** primario: vino con sombra. secundario: terracota. contorno: transparente con borde y texto de contorno. */
-type Variante = 'primario' | 'secundario' | 'contorno';
+/**
+ * primario: vino con sombra. secundario: terracota. contorno: transparente con borde y texto de
+ * contorno. peligro: igual que contorno, pero en el color de peligro (acciones destructivas).
+ */
+type Variante = 'primario' | 'secundario' | 'contorno' | 'peligro';
 
 interface ButtonProps {
   titulo: string;
@@ -30,6 +33,8 @@ interface ButtonProps {
   deshabilitado?: boolean;
   /** Operación en curso: no responde al toque y se anuncia como ocupado, sin atenuarse. */
   cargando?: boolean;
+  /** Etiqueta para el lector de pantalla cuando el título solo no basta; por omisión, el título. */
+  accessibilityLabel?: string;
   accessibilityHint?: string;
 }
 
@@ -44,6 +49,7 @@ export function Button({
   posicionIcono = 'fin',
   deshabilitado = false,
   cargando = false,
+  accessibilityLabel,
   accessibilityHint,
 }: ButtonProps) {
   const { colores } = useTheme();
@@ -51,12 +57,14 @@ export function Button({
   const estiloAnimado = useAnimatedStyle(() => ({ transform: [{ scale: escala.get() }] }));
 
   const primario = variante === 'primario';
-  const contorno = variante === 'contorno';
+  const peligro = variante === 'peligro';
+  const contorno = variante === 'contorno' || peligro;
+  const colorContorno = peligro ? colores.peligro : colores.contorno;
   const fondo = primario ? colores.accion : contorno ? 'transparent' : colores.secundario;
   const colorTexto = primario
     ? colores.textoSobreAccion
     : contorno
-      ? colores.contorno
+      ? colorContorno
       : colores.textoSobreSecundario;
 
   const hundir = () => {
@@ -70,6 +78,7 @@ export function Button({
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ disabled: deshabilitado || cargando, busy: cargando }}
+      accessibilityLabel={accessibilityLabel}
       accessibilityHint={accessibilityHint}
       disabled={deshabilitado || cargando}
       onPress={onPress}
@@ -80,7 +89,7 @@ export function Button({
         style={[
           styles.boton,
           primario && styles.sombra,
-          contorno && [styles.contorno, { borderColor: colores.contorno }],
+          contorno && [styles.contorno, { borderColor: colorContorno }],
           { backgroundColor: fondo, shadowColor: colores.sombra },
           deshabilitado && styles.deshabilitado,
           estiloAnimado,

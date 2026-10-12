@@ -106,8 +106,14 @@ function especialistasDelServicio(servicio: Servicio, agenda: Especialista[]): E
   });
 }
 
-/** Reservar una cita en tres pasos: especialista, día y hora, y confirmar (GP-06.2). */
-export function useReservarCitaViewModel(servicioId: string | undefined): ReservarCitaViewModel {
+/**
+ * Reservar una cita en tres pasos: especialista, día y hora, y confirmar (GP-06.2). Con
+ * `especialistaIdInicial` válida para el servicio ("Reservar lo mismo"), arranca en Día y hora.
+ */
+export function useReservarCitaViewModel(
+  servicioId: string | undefined,
+  especialistaIdInicial?: string,
+): ReservarCitaViewModel {
   const router = useRouter();
   const { usuario } = useAuth();
   const candado = useCandado();
@@ -147,6 +153,53 @@ export function useReservarCitaViewModel(servicioId: string | undefined): Reserv
     };
   }, []);
 
+  const cargarHorarios = useCallback(
+    (especialistaId: string | number, dia: string, idServicio: string | number) => {
+      solicitudHorarios.current += 1;
+      const actual = solicitudHorarios.current;
+      setEstadoHorarios('cargando');
+      setDisponibilidad(null);
+      setErrorHorarios('');
+      obtenerDisponibilidad({ especialistaId, fecha: dia, servicioId: idServicio })
+        .then((respuesta) => {
+          if (actual !== solicitudHorarios.current) {
+            return;
+          }
+          setDisponibilidad(respuesta);
+          setEstadoHorarios('listo');
+        })
+        .catch((error: unknown) => {
+          if (actual !== solicitudHorarios.current) {
+            return;
+          }
+          setErrorHorarios(esErrorDeRed(error) ? MENSAJE_SIN_CONEXION : ERROR_HORARIOS);
+          setEstadoHorarios('error');
+        });
+    },
+    [],
+  );
+
+  /**
+   * Fija a la especialista y empieza día y hora por hoy, en el mes actual (día y hora anteriores se
+   * limpian). Lo usan elegir especialista y la especialista que llega en la ruta.
+   */
+  const empezarDiaHora = useCallback(
+    (elegida: Especialista, idServicio: string | number) => {
+      const ahora = new Date();
+      const hoy = fechaLocal(ahora);
+      setEspecialista(elegida);
+      setMesVisible(mesDe(ahora));
+      setSlot(null);
+      setHorarioOcupado(false);
+      setFecha(hoy);
+      cargarHorarios(elegida.id, hoy, idServicio);
+    },
+    [cargarHorarios],
+  );
+
+  // La especialista de la ruta se aplica una sola vez, en la primera carga que sale bien.
+  const especialistaInicialAplicada = useRef(false);
+
   const recargar = useCallback(() => {
     solicitudServicio.current += 1;
     const actual = solicitudServicio.current;
@@ -180,8 +233,23 @@ export function useReservarCitaViewModel(servicioId: string | undefined): Reserv
           setEstado('error');
           return;
         }
+        const disponibles = especialistasDelServicio(respuesta, agenda.lista);
         setServicio(respuesta);
-        setEspecialistas(especialistasDelServicio(respuesta, agenda.lista));
+        setEspecialistas(disponibles);
+        if (!especialistaInicialAplicada.current) {
+          especialistaInicialAplicada.current = true;
+          // "Reservar lo mismo": si la especialista sigue entre las del servicio, se empieza en Día y
+          // hora con ella elegida; atrás regresa al paso de especialista para cambiarla.
+          const idInicial = especialistaIdInicial?.trim() ?? '';
+          const inicial = idInicial
+            ? disponibles.find((item) => String(item.id) === idInicial)
+            : undefined;
+          if (inicial) {
+            empezarDiaHora(inicial, respuesta.id);
+            setDireccion(1);
+            setPaso(2);
+          }
+        }
         setEstado('listo');
       })
       .catch((error: unknown) => {
@@ -191,37 +259,11 @@ export function useReservarCitaViewModel(servicioId: string | undefined): Reserv
         setServicio(null);
         setEstado(error instanceof ApiError && error.status === 404 ? 'noEncontrado' : 'error');
       });
-  }, [servicioId]);
+  }, [servicioId, especialistaIdInicial, empezarDiaHora]);
 
   useEffect(() => {
     recargar();
   }, [recargar]);
-
-  const cargarHorarios = useCallback(
-    (especialistaId: string | number, dia: string, idServicio: string | number) => {
-      solicitudHorarios.current += 1;
-      const actual = solicitudHorarios.current;
-      setEstadoHorarios('cargando');
-      setDisponibilidad(null);
-      setErrorHorarios('');
-      obtenerDisponibilidad({ especialistaId, fecha: dia, servicioId: idServicio })
-        .then((respuesta) => {
-          if (actual !== solicitudHorarios.current) {
-            return;
-          }
-          setDisponibilidad(respuesta);
-          setEstadoHorarios('listo');
-        })
-        .catch((error: unknown) => {
-          if (actual !== solicitudHorarios.current) {
-            return;
-          }
-          setErrorHorarios(esErrorDeRed(error) ? MENSAJE_SIN_CONEXION : ERROR_HORARIOS);
-          setEstadoHorarios('error');
-        });
-    },
-    [],
-  );
 
   const irAPaso = useCallback((nuevo: PasoReserva, sentido: 1 | -1) => {
     setDireccion(sentido);
@@ -237,20 +279,13 @@ export function useReservarCitaViewModel(servicioId: string | undefined): Reserv
       setErrorEnvio(null);
       if (!misma || fecha == null) {
         // Otra especialista: día y hora se limpian y se empieza por hoy, en el mes actual.
-        const ahora = new Date();
-        const hoy = fechaLocal(ahora);
-        setEspecialista(elegida);
-        setMesVisible(mesDe(ahora));
-        setSlot(null);
-        setHorarioOcupado(false);
-        setFecha(hoy);
-        cargarHorarios(elegida.id, hoy, servicio.id);
+        empezarDiaHora(elegida, servicio.id);
       } else if (estadoHorarios === 'error') {
         cargarHorarios(elegida.id, fecha, servicio.id);
       }
       irAPaso(2, 1);
     },
-    [servicio, enviando, especialista, fecha, estadoHorarios, cargarHorarios, irAPaso],
+    [servicio, enviando, especialista, fecha, estadoHorarios, cargarHorarios, empezarDiaHora, irAPaso],
   );
 
   const elegirDia = useCallback(

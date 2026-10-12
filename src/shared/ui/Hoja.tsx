@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { borde, espacio, fuente, pantalla, radio, tipo, tracking } from './tokens';
@@ -15,10 +15,14 @@ interface HojaProps {
   children: ReactNode;
 }
 
-/** Hoja inferior sobre un velo carbón (Modal de React Native): título, texto y acciones. */
+/**
+ * Hoja inferior sobre un velo carbón (Modal de React Native): título, texto y acciones. Si lleva un
+ * campo de texto, sube sobre el teclado y, si no cabe, se encoge bajo la barra de estado (el
+ * contenido largo va en un ScrollView dentro de children).
+ */
 export function Hoja({ visible, onCerrar, titulo, texto, children }: HojaProps) {
   const { colores } = useTheme();
-  const { bottom } = useSafeAreaInsets();
+  const { top, bottom } = useSafeAreaInsets();
   return (
     <Modal
       visible={visible}
@@ -28,7 +32,7 @@ export function Hoja({ visible, onCerrar, titulo, texto, children }: HojaProps) 
       navigationBarTranslucent
       onRequestClose={onCerrar}
     >
-      <View style={styles.modal}>
+      <KeyboardAvoidingView behavior="padding" style={[styles.modal, { paddingTop: top + espacio.l }]}>
         {/* El velo cierra al tocarlo; para TalkBack basta Atrás, así el foco empieza en el título. */}
         <Pressable
           accessible={false}
@@ -50,7 +54,7 @@ export function Hoja({ visible, onCerrar, titulo, texto, children }: HojaProps) 
           </View>
           {children}
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -61,6 +65,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   hoja: {
+    flexShrink: 1,
     gap: espacio.m,
     paddingHorizontal: pantalla.margen,
     paddingTop: espacio.xxl,

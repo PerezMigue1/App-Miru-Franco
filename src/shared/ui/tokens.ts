@@ -549,3 +549,9 @@ export const confirmacion = {
   /** Desplazamiento corto de la entrada del momento de confirmación (sin él con movimiento reducido). */
   desplazamiento: espacio.l,
 } as const;
+
+/** Cancelación de cita (GP-06.3). */
+export const cancelacion = {
+  /** Caracteres máximos del motivo escrito con la opción "Otro". */
+  largoMotivo: 200,
+} as const;

@@ -63,8 +63,15 @@ function conMayuscula(texto: string): string {
 export default function ReservarCitaView() {
   const { colores } = useTheme();
   const { bottom } = useSafeAreaInsets();
-  const { servicioId } = useLocalSearchParams<{ servicioId: string }>();
-  const vm = useReservarCitaViewModel(servicioId);
+  // especialistaId opcional: "Reservar lo mismo" desde Mis citas arranca en Día y hora con ella.
+  const { servicioId, especialistaId } = useLocalSearchParams<{
+    servicioId: string;
+    especialistaId?: string;
+  }>();
+  const vm = useReservarCitaViewModel(
+    servicioId,
+    typeof especialistaId === 'string' ? especialistaId : undefined,
+  );
   const reducido = useMovimientoReducido();
   const refIndicador = useRef<View>(null);
   const refScroll = useRef<ScrollView>(null);

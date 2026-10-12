@@ -101,6 +101,9 @@ function Navegacion({ fuentesListas }: { fuentesListas: boolean }) {
             {/* Reserva, anticipo y confirmación (GP-06.2): solo con sesión. */}
             <Stack.Screen name="reservar/[servicioId]" />
             <Stack.Screen name="anticipo/[citaId]" />
+            {/* Detalle de una cita de Mis citas, con reprogramar y cancelar (GP-06.3). */}
+            <Stack.Screen name="cita/[id]" />
+            <Stack.Screen name="cita/[id]/reprogramar" />
             <Stack.Screen name="cita-confirmada/[citaId]" options={{ gestureEnabled: false }} />
           </Stack.Protected>
         </Stack>

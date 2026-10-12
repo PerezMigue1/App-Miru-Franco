@@ -51,7 +51,8 @@ export function ResumenCita({ cita, conEspecialista = false, children }: Resumen
   );
 }
 
-function Dato({ Icono, etiqueta, valor }: { Icono: LucideIcon; etiqueta: string; valor: string }) {
+/** Fila con ícono y texto de la tarjeta de la cita (fecha, hora, especialista, duración...). */
+export function Dato({ Icono, etiqueta, valor }: { Icono: LucideIcon; etiqueta: string; valor: string }) {
   const { colores } = useTheme();
   return (
     <View style={styles.dato} accessible accessibilityLabel={`${etiqueta}: ${valor}`}>
