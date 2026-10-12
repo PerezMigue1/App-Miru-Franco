@@ -55,7 +55,7 @@ export function CalendarioMensual({ mes, seleccionada, onElegir, onCambiarMes }:
 
   return (
     <View
-      style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombra }]}
+      style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombraTarjeta }]}
     >
       <View style={styles.encabezado}>
         <BotonMes
@@ -77,7 +77,7 @@ export function CalendarioMensual({ mes, seleccionada, onElegir, onCambiarMes }:
       {/* Cada día ya dice su día de la semana; los encabezados solo son visuales. */}
       <View importantForAccessibility="no-hide-descendants" style={styles.fila}>
         {ENCABEZADOS_SEMANA.map((nombre) => (
-          <Text key={nombre} style={[styles.encabezadoDia, { color: colores.texto }]}>
+          <Text key={nombre} style={[styles.encabezadoDia, { color: colores.textoSuave }]}>
             {nombre}
           </Text>
         ))}
@@ -219,7 +219,7 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.subtitulo.tamano,
     lineHeight: tipo.subtitulo.linea,
-    letterSpacing: tracking.titulo,
+    letterSpacing: tracking.subtitulo,
     fontVariant: ['tabular-nums'],
   },
   botonMes: {

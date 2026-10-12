@@ -48,6 +48,7 @@ import {
 import { useTheme } from '@/shared/ui/useTheme';
 
 import { CAPAS, ORDEN_CAPAS, type ClaveFluido, type FluidoHero } from '../models/FluidoModel';
+import { FondoHero } from './FondoHero';
 import { MOTIVOS, Sticker, type Motivo } from './StickersSalon';
 
 /** Renders propios de la marca (no las imágenes del API), en dos tamaños. */
@@ -233,15 +234,17 @@ export function HeroFluidos({
   return (
     <View style={{ height: top + altoEscenario + recorrido }}>
       <Animated.View style={[styles.escenario, { top, height: altoEscenario }, estiloEscenario]}>
+        {/* Fondo de la web detrás de todo el escenario (absoluto: no cambia su alto ni su layout). */}
+        <FondoHero />
         <Animated.View
           accessible
           accessibilityRole="header"
           accessibilityLabel="Mirú Franco Beauty Salón"
           style={[styles.marca, estiloSalida]}
         >
-          <Text style={[styles.miru, { color: colores.texto }]}>MIRÚ</Text>
-          <Text style={[styles.franco, { color: colores.oro }]}>Franco</Text>
-          <Text style={[styles.lema, { color: colores.textoSuave }]}>BEAUTY SALÓN</Text>
+          <Text style={[styles.miru, { color: colores.oroGrande }]}>MIRÚ</Text>
+          <Text style={[styles.franco, { color: colores.oroGrande }]}>Franco</Text>
+          <Text style={[styles.lema, { color: colores.lemaHero }]}>BEAUTY SALÓN</Text>
         </Animated.View>
 
         <View style={styles.composicion} onLayout={medirCaja}>
@@ -290,7 +293,12 @@ export function HeroFluidos({
             style={[styles.destino, { top: caja.y, height: caja.height }, estiloDestino]}
           >
             {/* Texto PROVISIONAL (DESIGN.md). */}
-            <Text style={[styles.gigante, { color: colores.texto }]}>{'Brillo\nque se\nnota'}</Text>
+            {/* Como .mf-fluidos__gigante: "que se" en Great Vibes y --oro-grande, en su propia línea. */}
+            <View style={styles.gigante}>
+              <Text style={[styles.giganteSerif, { color: colores.gigante }]}>Brillo</Text>
+              <Text style={[styles.giganteManuscrita, { color: colores.oroGrande }]}>que se</Text>
+              <Text style={[styles.giganteSerif, { color: colores.gigante }]}>nota</Text>
+            </View>
             <View
               onLayout={medirAncla}
               style={{ width: altoAncla * hero.proporcionGiro, height: altoAncla }}
@@ -561,22 +569,27 @@ const Leyenda = memo(function Leyenda({
           key={f.clave}
           accessible
           accessibilityLabel={[f.nombre, f.precio].filter(Boolean).join(', ')}
-          style={[styles.chip, { borderColor: colores.hairline }]}
+          style={[styles.chip, { borderColor: colores.hairlineFuerte }]}
         >
           <View style={[styles.punto, { backgroundColor: f.color }]} />
           {f.nombre ? (
-            <Text numberOfLines={2} style={[styles.chipNombre, { color: colores.texto }]}>
+            <Text numberOfLines={2} style={[styles.chipNombre, { color: colores.textoCuerpo }]}>
               {f.nombre}
             </Text>
           ) : null}
           {f.precio ? (
-            <Text style={[styles.chipPrecio, { color: colores.texto }]}>{f.precio}</Text>
+            <Text style={[styles.chipPrecio, { color: colores.textoCuerpo }]}>{f.precio}</Text>
           ) : null}
         </View>
       ))}
     </View>
   );
 });
+
+/** Alto de la línea "que se": el tamaño gigante con la proporción de tipo.marcaManuscrita (68). */
+const ALTO_MANUSCRITA = Math.round(
+  (tipo.gigante.tamano * tipo.marcaManuscrita.linea) / tipo.marcaManuscrita.tamano,
+);
 
 const styles = StyleSheet.create({
   escenario: {
@@ -670,10 +683,22 @@ const styles = StyleSheet.create({
   },
   gigante: {
     flexShrink: 1,
-    fontFamily: fuente.tituloFuerte,
+  },
+  giganteSerif: {
+    fontFamily: fuente.titulo,
     fontSize: tipo.gigante.tamano,
     lineHeight: tipo.gigante.linea,
     letterSpacing: tracking.gigante,
+  },
+  // Great Vibes mide 1.25 em de alto natural: con el interlineado de 54 se cortaría la "q". Su línea
+  // usa la proporción de la marca manuscrita (1.3) y los márgenes negativos devuelven la diferencia,
+  // así el bloque sigue midiendo tres líneas de 54 y no se mueve.
+  giganteManuscrita: {
+    fontFamily: fuente.manuscrita,
+    fontSize: tipo.gigante.tamano,
+    lineHeight: ALTO_MANUSCRITA,
+    marginVertical: (tipo.gigante.linea - ALTO_MANUSCRITA) / 2,
+    includeFontPadding: false,
   },
   viaje: {
     position: 'absolute',

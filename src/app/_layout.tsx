@@ -1,4 +1,4 @@
-import { Geist_400Regular, Geist_500Medium, Geist_600SemiBold } from '@expo-google-fonts/geist';
+import { Geist_400Regular, Geist_500Medium, Geist_600SemiBold, Geist_700Bold } from '@expo-google-fonts/geist';
 import { GreatVibes_400Regular } from '@expo-google-fonts/great-vibes';
 import {
   PlayfairDisplay_600SemiBold,
@@ -7,6 +7,7 @@ import {
 import { useFonts } from 'expo-font';
 import { Stack, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -15,6 +16,7 @@ import { HojaBienvenida } from '@/features/auth/components/HojaBienvenida';
 import { AuthProvider, useAuth } from '@/features/auth/viewmodels/useAuth';
 import { SesionRequeridaProvider } from '@/features/auth/viewmodels/useRequiereSesion';
 import { AparienciaProvider, useApariencia } from '@/shared/ui/apariencia';
+import { FondoBarraEstado } from '@/shared/ui/FondoBarraEstado';
 import { IntroGrieta } from '@/shared/ui/IntroGrieta';
 import { useTheme } from '@/shared/ui/useTheme';
 
@@ -29,6 +31,7 @@ export default function RootLayout() {
     Geist_400Regular,
     Geist_500Medium,
     Geist_600SemiBold,
+    Geist_700Bold,
     GreatVibes_400Regular,
   });
   // Con error de carga la app sigue con la fuente del sistema en lugar de quedarse en el splash.
@@ -76,6 +79,8 @@ function Navegacion({ fuentesListas }: { fuentesListas: boolean }) {
 
   return (
     <GestureHandlerRootView style={[styles.raiz, { backgroundColor: colores.fondo }]}>
+      {/* Íconos claros de la barra de estado en toda la app: siempre van sobre el cromo carbón. */}
+      <StatusBar style="light" />
       <SesionRequeridaProvider>
         <Stack
           screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colores.fondo } }}
@@ -87,6 +92,13 @@ function Navegacion({ fuentesListas }: { fuentesListas: boolean }) {
           <Stack.Screen name="servicio/[id]" />
           {/* Mis citas es pública: sin sesión muestra la invitación a iniciar sesión. */}
           <Stack.Screen name="mis-citas" />
+          {/* Tienda (GP-06.4): el detalle de un producto y Mis pedidos son públicos; sin sesión, Mis
+              pedidos muestra la invitación a iniciar sesión. El carrito es una pestaña. */}
+          <Stack.Screen name="producto/[id]" />
+          <Stack.Screen name="mis-pedidos" />
+          {/* Notificaciones se abre con la campana de Inicio, encima de las pestañas; sin sesión
+              muestra la invitación a iniciar sesión. */}
+          <Stack.Screen name="notificaciones" />
           {/* Acceso se abre encima de las pestañas y solo sin sesión: al iniciar sesión el guard lo
               saca de la pila y queda a la vista la pestaña donde estaba la clienta. */}
           <Stack.Protected guard={estado !== 'autenticado'}>
@@ -105,10 +117,16 @@ function Navegacion({ fuentesListas }: { fuentesListas: boolean }) {
             <Stack.Screen name="cita/[id]" />
             <Stack.Screen name="cita/[id]/reprogramar" />
             <Stack.Screen name="cita-confirmada/[citaId]" options={{ gestureEnabled: false }} />
+            {/* Compra en la tienda (GP-06.4): checkout, confirmación y detalle de un pedido. */}
+            <Stack.Screen name="checkout" />
+            <Stack.Screen name="pedido/[id]" />
+            <Stack.Screen name="pedido-confirmado/[pedidoId]" options={{ gestureEnabled: false }} />
           </Stack.Protected>
         </Stack>
         <HojaBienvenida introTerminada={introTerminada} />
       </SesionRequeridaProvider>
+      {/* Encima del Stack y debajo de la intro de la grieta (que ya es carbón). */}
+      <FondoBarraEstado />
       <IntroGrieta onTerminar={terminarIntro} />
     </GestureHandlerRootView>
   );

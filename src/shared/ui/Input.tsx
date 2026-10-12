@@ -32,6 +32,8 @@ export type TipoInput =
   | 'correo'
   | 'telefono'
   | 'fecha'
+  /** Cantidad entera (filtros de precio y duración): teclado numérico. */
+  | 'numero'
   | 'claveActual'
   | 'claveNueva'
   /** Datos de salud: sin sugerencias, corrección ni autollenado del teclado. */
@@ -102,6 +104,7 @@ const AJUSTES: Record<TipoInput, TextInputProps> = {
     keyboardType: 'number-pad',
   },
   fecha: { autoComplete: 'birthdate-full', keyboardType: 'number-pad', maxLength: LARGO_FECHA },
+  numero: { keyboardType: 'number-pad', autoComplete: 'off', autoCorrect: false },
   // Sin autocorrección: el teclado no aprende la contraseña ni la cambia al mostrarla.
   claveActual: {
     autoComplete: 'password',
@@ -204,7 +207,7 @@ export function Input({
 
   return (
     <View>
-      <Text nativeID={`${id}-etiqueta`} style={[styles.etiqueta, { color: colores.texto }]}>
+      <Text nativeID={`${id}-etiqueta`} style={[styles.etiqueta, { color: colores.contorno }]}>
         {etiqueta}
       </Text>
       {/* El borde cambia de color en 140 ms al enfocar, al salir y al marcar un error. */}
@@ -213,6 +216,8 @@ export function Input({
           styles.caja,
           transicionBorde,
           { backgroundColor: colores.campoFondo, borderColor: colorBorde },
+          // Halo del foco como .mf-campo:focus (3px de --mf-foco al 22 %); con error, solo el borde.
+          enfocado && !hayError && !estadoEsError ? { boxShadow: `0 0 0 3px ${colores.focoHalo}` } : null,
         ]}
       >
         <TextInput
@@ -344,15 +349,15 @@ const styles = StyleSheet.create({
   etiqueta: {
     marginBottom: espacio.s,
     fontFamily: fuente.textoMedio,
-    fontSize: tipo.pequeno.tamano,
-    lineHeight: tipo.pequeno.linea,
+    fontSize: tipo.etiquetaCampo.tamano,
+    lineHeight: tipo.etiquetaCampo.linea,
   },
   caja: {
     minHeight: toqueMinimo,
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: radio.campo,
-    borderWidth: borde.campo,
+    borderWidth: borde.entrada,
   },
   entrada: {
     flex: 1,

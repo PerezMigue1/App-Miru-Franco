@@ -39,7 +39,7 @@ export function ListRow({
       onPress={onPress}
       style={({ pressed }) => [
         styles.fila,
-        { backgroundColor: pressed ? colores.presionado : 'transparent' },
+        { backgroundColor: pressed ? colores.presionado : colores.transparente },
       ]}
     >
       <View style={deshabilitada ? styles.deshabilitada : null}>

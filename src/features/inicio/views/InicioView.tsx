@@ -1,6 +1,6 @@
-import { useIsFocused, useRouter } from 'expo-router';
-import { Bell, Info, UserRound, X, type LucideIcon } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
+import { useIsFocused, useRouter, type Href } from 'expo-router';
+import { Info, X, type LucideIcon } from 'lucide-react-native';
+import { useCallback, useEffect, useState } from 'react';
 import {
   AccessibilityInfo,
   Pressable,
@@ -14,14 +14,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Enlace } from '@/features/auth/components/AuthContainer';
 import { useAuth } from '@/features/auth/viewmodels/useAuth';
-import { useRequiereSesion } from '@/features/auth/viewmodels/useRequiereSesion';
+import { AccionesCabecera } from '@/shared/ui/AccionesCabecera';
 import { Button } from '@/shared/ui/Button';
+import { CabeceraCompacta } from '@/shared/ui/CabeceraCompacta';
 import { EmptyState } from '@/shared/ui/EmptyState';
 import { usePresion } from '@/shared/ui/movimiento';
-import { SearchBar } from '@/shared/ui/SearchBar';
 import {
   borde,
-  cabecera,
+  cabeceraCompacta,
   espacio,
   fuente,
   icono,
@@ -37,20 +37,27 @@ import { useTheme } from '@/shared/ui/useTheme';
 
 import { GaleriaEsqueleto, GaleriaTrabajo } from '../components/GaleriaTrabajo';
 import { HeroFluidos } from '../components/HeroFluidos';
+import { CarruselProductos, CarruselServicios } from '../components/SeccionCarrusel';
 import type { FotoGaleria } from '../models/FotoModel';
 import { useInicioViewModel, type EstadoInicio } from '../viewmodels/useInicioViewModel';
 
 export default function InicioView() {
-  const { estado, fluidos, fotos, recargar } = useInicioViewModel();
+  const {
+    estado,
+    fluidos,
+    fotos,
+    estadoProductos,
+    productosDestacados,
+    serviciosDestacados,
+    recargar,
+  } = useInicioViewModel();
   const { colores } = useTheme();
   const { top } = useSafeAreaInsets();
   const reducido = useMovimientoReducido();
   const enfocada = useIsFocused();
   const { navigate, push } = useRouter();
   const { estado: estadoSesion, sesionVencida, descartarAvisoSesion } = useAuth();
-  const requiereSesion = useRequiereSesion();
   const conSesion = estadoSesion === 'autenticado';
-  const presionAcceso = usePresion();
 
   // El aviso de sesión vencida aparece de golpe junto con el cambio a Inicio: se anuncia aparte para
   // que TalkBack no lo pierda.
@@ -62,17 +69,23 @@ export default function InicioView() {
   const refScroll = useAnimatedRef<Animated.ScrollView>();
   const desplazamiento = useScrollOffset(refScroll);
   const [altoVisible, setAltoVisible] = useState(0);
-  const altoCabecera = top + cabecera.alto;
+  // Cromo compacto (56): el escenario del hero queda justo debajo.
+  const altoCabecera = top + cabeceraCompacta.alto;
 
   const medir = (e: LayoutChangeEvent) => setAltoVisible(e.nativeEvent.layout.height);
 
   // TODO(GP-06): llevar al detalle del Fluido Di Goji en la tienda; por ahora abre la pestaña Tienda.
   const verGoji = () => navigate('/tienda');
+  // Estables: las filas memoizadas de los carruseles no se vuelven a pintar por ellas.
+  const abrirProducto = useCallback((id: number) => push(`/producto/${id}` as Href), [push]);
+  const abrirServicio = useCallback(
+    (id: string | number) => push(`/servicio/${encodeURIComponent(String(id))}` as Href),
+    [push],
+  );
+  const verTienda = useCallback(() => navigate('/tienda'), [navigate]);
+  // La pestaña se llama Servicios, pero su ruta es /citas.
+  const verServicios = useCallback(() => navigate('/citas'), [navigate]);
   // TODO(GP-06): abrir la búsqueda de productos y servicios; por ahora abre la pestaña Tienda.
-  const buscar = () => navigate('/tienda');
-  const abrirPerfil = () => navigate('/perfil');
-  // Sin sesión, la campana abre la hoja de acceso.
-  const abrirNotificaciones = () => requiereSesion(() => navigate('/notificaciones'));
 
   return (
     <View style={[styles.raiz, { backgroundColor: colores.fondo }]}>
@@ -84,7 +97,8 @@ export default function InicioView() {
         {altoVisible > 0 ? (
           <HeroFluidos
             fluidos={fluidos}
-            cargando={estado === 'cargando'}
+            // Nombre y precio de los fluidos salen del catálogo: su esqueleto sigue al catálogo.
+            cargando={estadoProductos === 'cargando'}
             desplazamiento={desplazamiento}
             altoVisible={altoVisible}
             altoCabecera={altoCabecera}
@@ -96,7 +110,7 @@ export default function InicioView() {
 
         {conSesion ? null : (
           <View style={styles.invitacion}>
-            <View style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombra }]}>
+            <View style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombraTarjeta }]}>
               <Text accessibilityRole="header" style={[styles.tituloTarjeta, { color: colores.texto }]}>
                 Crea tu cuenta para reservar citas y comprar
               </Text>
@@ -107,55 +121,34 @@ export default function InicioView() {
           </View>
         )}
 
+        <CarruselProductos
+          cargando={estadoProductos === 'cargando'}
+          productos={estadoProductos === 'listo' ? productosDestacados : []}
+          onAbrir={abrirProducto}
+          onVerTodos={verTienda}
+        />
+        <CarruselServicios
+          cargando={estado === 'cargando'}
+          servicios={estado === 'listo' ? serviciosDestacados : []}
+          onAbrir={abrirServicio}
+          onVerTodos={verServicios}
+        />
+
         <View style={styles.galeria}>
-          <Text accessibilityRole="header" style={[styles.titulo, { color: colores.texto }]}>
+          <Text accessibilityRole="header" style={[styles.titulo, { color: colores.textoSuave }]}>
             Nuestro trabajo
           </Text>
           <ContenidoGaleria estado={estado} fotos={fotos} onReintentar={recargar} />
         </View>
       </Animated.ScrollView>
 
-      {/* Cabecera fija con fondo propio: el contenido pasa por debajo sin chocar con la barra de estado. */}
-      <View
-        style={[
-          styles.cabecera,
-          {
-            paddingTop: top + cabecera.relleno,
-            backgroundColor: colores.fondo,
-            borderBottomColor: colores.hairline,
-          },
-        ]}
-      >
-        {conSesion ? (
-          <BotonIcono icono={UserRound} etiqueta="Abrir perfil" onPress={abrirPerfil} />
-        ) : (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Iniciar sesión"
-            onPress={() => push('/login')}
-            onPressIn={presionAcceso.hundir}
-            onPressOut={presionAcceso.soltar}
-          >
-            {({ pressed }) => (
-              <Animated.View
-                style={[
-                  styles.botonTexto,
-                  { backgroundColor: pressed ? colores.presionado : 'transparent' },
-                  presionAcceso.estilo,
-                ]}
-              >
-                <Text style={[styles.textoBoton, { color: colores.foco }]}>Iniciar sesión</Text>
-              </Animated.View>
-            )}
-          </Pressable>
-        )}
-        <SearchBar
-          texto="Buscar productos y servicios"
-          accessibilityHint="Abre la tienda"
-          onPress={buscar}
-        />
-        <BotonIcono icono={Bell} etiqueta="Abrir notificaciones" onPress={abrirNotificaciones} />
-      </View>
+      {/* Cabecera fija con fondo propio: el contenido pasa por debajo sin chocar con la barra de estado.
+          La misma cabecera compacta de las demás pantallas. */}
+      <CabeceraCompacta
+        style={[styles.cabecera, { shadowColor: colores.sombraTarjeta }]}
+        // Las mismas acciones de las demás pestañas: campana y foto (o "Iniciar sesión").
+        derecha={<AccionesCabecera />}
+      />
 
       {sesionVencida ? (
         <View
@@ -191,13 +184,16 @@ function BotonIcono({
   onPress,
   color,
   tamano = icono.tamano,
+  sobrePanel = false,
 }: {
   icono: LucideIcon;
   etiqueta: string;
   onPress: () => void;
-  /** Por omisión, el color del texto. */
+  /** Por omisión, el color del texto (o el del texto sobre el panel, en la cabecera). */
   color?: string;
   tamano?: number;
+  /** Va sobre el cromo carbón de la cabecera: ícono claro y presionado de cromo. */
+  sobrePanel?: boolean;
 }) {
   const { colores } = useTheme();
   const { estilo, hundir, soltar } = usePresion();
@@ -213,11 +209,21 @@ function BotonIcono({
         <Animated.View
           style={[
             styles.botonIcono,
-            { backgroundColor: pressed ? colores.presionado : 'transparent' },
+            {
+              backgroundColor: pressed
+                ? sobrePanel
+                  ? colores.presionadoCromo
+                  : colores.presionado
+                : colores.transparente,
+            },
             estilo,
           ]}
         >
-          <Icono color={color ?? colores.texto} size={tamano} strokeWidth={icono.trazo} />
+          <Icono
+            color={color ?? (sobrePanel ? colores.textoSobrePanel : colores.texto)}
+            size={tamano}
+            strokeWidth={icono.trazo}
+          />
         </Animated.View>
       )}
     </Pressable>
@@ -260,12 +266,11 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: espacio.xs,
-    paddingHorizontal: pantalla.margen - espacio.s,
-    paddingBottom: cabecera.relleno,
-    borderBottomWidth: borde.hairline,
+    // Sin filete: como la cabecera web, se separa del contenido con sombra.
+    shadowOpacity: sombra.tarjeta.opacidad,
+    shadowRadius: sombra.tarjeta.radio,
+    shadowOffset: { width: 0, height: sombra.tarjeta.desplazamientoY },
+    elevation: sombra.tarjeta.elevacion,
   },
   botonIcono: {
     width: toqueMinimo,
@@ -297,18 +302,7 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.subtitulo.tamano,
     lineHeight: tipo.subtitulo.linea,
-    letterSpacing: tracking.titulo,
-  },
-  botonTexto: {
-    minHeight: toqueMinimo,
-    justifyContent: 'center',
-    paddingHorizontal: espacio.s,
-    borderRadius: radio.pastilla,
-  },
-  textoBoton: {
-    fontFamily: fuente.textoFuerte,
-    fontSize: tipo.pequeno.tamano,
-    lineHeight: tipo.pequeno.linea,
+    letterSpacing: tracking.subtitulo,
   },
   avisoSesion: {
     position: 'absolute',
@@ -333,6 +327,6 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.titulo.tamano,
     lineHeight: tipo.titulo.linea,
-    letterSpacing: tracking.titulo,
+    letterSpacing: tracking.tituloPagina,
   },
 });

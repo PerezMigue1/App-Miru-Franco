@@ -88,7 +88,7 @@ export function VisorFoto({ fotos, indice, onCerrar }: VisorFotoProps) {
       navigationBarTranslucent
       onRequestClose={onCerrar}
     >
-      <View style={[styles.fondo, { backgroundColor: colores.velo }]}>
+      <View style={[styles.fondo, { backgroundColor: colores.veloVisor }]}>
         {indice === null ? null : (
           <FlatList
             data={fotos}
@@ -123,7 +123,7 @@ export function VisorFoto({ fotos, indice, onCerrar }: VisorFotoProps) {
         >
           {/* Fondo de velo propio: la X conserva el contraste aunque la foto quede debajo. */}
           <Animated.View
-            style={[styles.botonCerrar, { backgroundColor: colores.velo }, presionCerrar.estilo]}
+            style={[styles.botonCerrar, { backgroundColor: colores.veloVisor }, presionCerrar.estilo]}
           >
             <X color={colores.textoSobrePanel} size={icono.tamano} strokeWidth={icono.trazo} />
           </Animated.View>
@@ -134,7 +134,7 @@ export function VisorFoto({ fotos, indice, onCerrar }: VisorFotoProps) {
             style={[
               styles.pie,
               // Con fondo de velo, el texto del pie se lee igual sobre fotos claras.
-              { paddingBottom: bottom + visor.rellenoPie, backgroundColor: colores.velo },
+              { paddingBottom: bottom + visor.rellenoPie, backgroundColor: colores.veloVisor },
             ]}
           >
             <View style={styles.filaServicio}>
@@ -156,7 +156,7 @@ export function VisorFoto({ fotos, indice, onCerrar }: VisorFotoProps) {
                         {
                           borderColor: oro,
                           // El visor siempre es oscuro: el tono de presionado es el del tema oscuro.
-                          backgroundColor: pressed ? temaOscuro.presionado : 'transparent',
+                          backgroundColor: pressed ? temaOscuro.presionado : temaOscuro.transparente,
                         },
                         presionServicio.estilo,
                       ]}
@@ -221,7 +221,7 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.subtitulo.tamano,
     lineHeight: tipo.subtitulo.linea,
-    letterSpacing: tracking.titulo,
+    letterSpacing: tracking.subtitulo,
   },
   verServicio: {
     minHeight: toqueMinimo,

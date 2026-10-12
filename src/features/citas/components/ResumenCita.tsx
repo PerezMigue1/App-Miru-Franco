@@ -34,7 +34,7 @@ export function ResumenCita({ cita, conEspecialista = false, children }: Resumen
 
   return (
     <View
-      style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombra }]}
+      style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombraTarjeta }]}
     >
       {cita.servicioNombre ? (
         <Text style={[styles.servicio, { color: colores.texto }]}>{cita.servicioNombre}</Text>
@@ -54,12 +54,13 @@ export function ResumenCita({ cita, conEspecialista = false, children }: Resumen
 /** Fila con ícono y texto de la tarjeta de la cita (fecha, hora, especialista, duración...). */
 export function Dato({ Icono, etiqueta, valor }: { Icono: LucideIcon; etiqueta: string; valor: string }) {
   const { colores } = useTheme();
+  // Detalles en el secundario bajo el nombre del servicio (4.8:1 sobre terracota en los dos temas).
   return (
     <View style={styles.dato} accessible accessibilityLabel={`${etiqueta}: ${valor}`}>
       <View style={styles.iconoDato}>
-        <Icono color={colores.texto} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
+        <Icono color={colores.textoSuave} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
       </View>
-      <Text style={[styles.valor, { color: colores.texto }]}>{valor}</Text>
+      <Text style={[styles.valor, { color: colores.textoSuave }]}>{valor}</Text>
     </View>
   );
 }
@@ -78,7 +79,7 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.subtitulo.tamano,
     lineHeight: tipo.subtitulo.linea,
-    letterSpacing: tracking.titulo,
+    letterSpacing: tracking.subtitulo,
   },
   datos: {
     gap: espacio.s,

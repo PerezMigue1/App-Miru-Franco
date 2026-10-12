@@ -67,7 +67,11 @@ export default function ReprogramarCitaView() {
 
   return (
     <View style={[styles.raiz, { backgroundColor: colores.fondo }]}>
-      <EncabezadoVolver titulo="Reprogramar cita" onVolver={vm.regresar} />
+      <EncabezadoVolver
+        titulo="Reprogramar cita"
+        subtitulo="Selecciona una nueva fecha y hora para tu cita"
+        onVolver={vm.regresar}
+      />
 
       {vm.estado === 'cargando' ? (
         <View
@@ -190,7 +194,7 @@ function DatosFijos({ vm }: { vm: ReprogramarCitaViewModel }) {
     return null;
   }
   return (
-    <View style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombra }]}>
+    <View style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombraTarjeta }]}>
       <Text style={[styles.servicio, { color: colores.texto }]}>
         {cita.servicioNombre || 'Cita en el salón'}
       </Text>
@@ -262,7 +266,7 @@ function ResumenCambio({ vm }: { vm: ReprogramarCitaViewModel }) {
     <View
       accessible
       accessibilityLabel={`Cambio de tu cita. De: ${antes}. A: ${despues}.`}
-      style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombra }]}
+      style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombraTarjeta }]}
     >
       <Subtitulo texto="Tu cambio" />
       <View style={styles.cambio}>
@@ -288,13 +292,13 @@ function FilaCambio({
   const { colores } = useTheme();
   return (
     <View style={styles.filaCambio}>
-      {/* Texto principal y no el suave: el suave sobre terracota no llega a 4.5:1. */}
-      <Text style={[styles.etiquetaCambio, { color: colores.texto }]}>{etiqueta}:</Text>
+      {/* Etiqueta y horario anterior en el secundario (4.8:1 sobre terracota); el nuevo, en el principal. */}
+      <Text style={[styles.etiquetaCambio, { color: colores.textoSuave }]}>{etiqueta}:</Text>
       <Text
         style={[
           styles.valorCambio,
           destacada ? styles.valorDestacado : null,
-          { color: colores.texto },
+          { color: destacada ? colores.texto : colores.textoSuave },
         ]}
       >
         {valor}
@@ -322,7 +326,7 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.subtitulo.tamano,
     lineHeight: tipo.subtitulo.linea,
-    letterSpacing: tracking.titulo,
+    letterSpacing: tracking.subtitulo,
   },
   tarjeta: {
     gap: espacio.m,
@@ -337,7 +341,7 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.subtitulo.tamano,
     lineHeight: tipo.subtitulo.linea,
-    letterSpacing: tracking.titulo,
+    letterSpacing: tracking.subtitulo,
   },
   cuerpo: {
     fontFamily: fuente.textoMedio,

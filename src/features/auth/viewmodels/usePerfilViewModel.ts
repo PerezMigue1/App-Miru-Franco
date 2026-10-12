@@ -26,6 +26,7 @@ import {
   urlDeFotoSubida,
 } from '../models/PerfilModel';
 import { useAuth } from './useAuth';
+import { fijarFotoClienta } from './useFotoClienta';
 
 const CIERRE_FALLIDO = 'No se pudo cerrar la sesión. Intenta de nuevo';
 const AVISOS_GUARDADO: Record<string, string> = {
@@ -76,6 +77,7 @@ export interface PerfilViewModel {
   // Navegación
   editarPerfil: () => void;
   abrirMisCitas: () => void;
+  abrirMisPedidos: () => void;
   cambiarContrasena: () => void;
   abrirAviso: () => void;
   cerrarSesion: () => void;
@@ -262,6 +264,8 @@ export function usePerfilViewModel(): PerfilViewModel {
       if (!vigente()) {
         return;
       }
+      // La cabecera de las pestañas muestra la foto nueva al instante.
+      fijarFotoClienta(url);
       // Una carga de /me que ya estaba en camino no debe regresar la foto anterior.
       solicitud.current += 1;
       setPerfil((actual) => (actual ? { ...actual, foto: url } : actual));
@@ -285,6 +289,7 @@ export function usePerfilViewModel(): PerfilViewModel {
       if (generacion !== generacionActual()) {
         return;
       }
+      fijarFotoClienta(null);
       solicitud.current += 1;
       setPerfil((actual) => (actual ? { ...actual, foto: null } : actual));
     } catch (error) {
@@ -366,6 +371,7 @@ export function usePerfilViewModel(): PerfilViewModel {
     },
     editarPerfil: () => push('/editar-perfil'),
     abrirMisCitas: () => push('/mis-citas' as Href),
+    abrirMisPedidos: () => push('/mis-pedidos' as Href),
     cambiarContrasena: () => push('/cambiar-contrasena'),
     abrirAviso,
     // Mientras una foto se sube o se quita, no se cierra la sesión; si no, se confirma antes.

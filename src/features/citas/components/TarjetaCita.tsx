@@ -6,6 +6,8 @@ import Animated from 'react-native-reanimated';
 import { usePresion } from '@/shared/ui/movimiento';
 import { Skeleton } from '@/shared/ui/Skeleton';
 import {
+  borde,
+  escalaPresionadoTarjeta,
   espacio,
   esqueleto,
   fuente,
@@ -15,7 +17,6 @@ import {
   sombra,
   tipo,
   toqueMinimo,
-  tracking,
 } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
@@ -44,11 +45,12 @@ function conMayuscula(texto: string): string {
 /**
  * Una cita de Mis citas: servicio, especialista, fecha y hora, estado de la cita y del anticipo y,
  * con el anticipo pendiente, su plazo y si se paga en el salón. Se hunde al tocarla (respuesta
- * compartida de usePresion: 0.97 en 140 ms; con movimiento reducido solo baja la opacidad).
+ * compartida de usePresion con la escala de tarjeta: 0.99 en 140 ms; con movimiento reducido solo
+ * baja la opacidad).
  */
 export const TarjetaCita = memo(function TarjetaCita({ cita, onPress, accion }: TarjetaCitaProps) {
   const { colores, oscuro } = useTheme();
-  const { estilo: estiloPresion, hundir, soltar } = usePresion();
+  const { estilo: estiloPresion, hundir, soltar } = usePresion(escalaPresionadoTarjeta);
 
   const servicio = cita.servicioNombre || 'Cita en el salón';
   const fecha = conMayuscula(fechaLegible(cita.fechaHoraInicio));
@@ -78,7 +80,7 @@ export const TarjetaCita = memo(function TarjetaCita({ cita, onPress, accion }: 
     <Animated.View
       style={[
         styles.tarjeta,
-        { backgroundColor: colores.superficie, shadowColor: colores.sombra },
+        { backgroundColor: colores.superficie, shadowColor: colores.sombraTarjeta },
         estiloPresion,
       ]}
     >
@@ -109,7 +111,12 @@ export const TarjetaCita = memo(function TarjetaCita({ cita, onPress, accion }: 
                 <BadgeEstado texto={etiquetaAnticipo.texto} tono={etiquetaAnticipo.tono} />
               ) : null}
               {enSalon ? (
-                <View style={[styles.pastilla, { backgroundColor: coloresSalon.fondo }]}>
+                <View
+                  style={[
+                    styles.pastilla,
+                    { backgroundColor: coloresSalon.fondo, borderColor: insignia.borde.neutro },
+                  ]}
+                >
                   <Store
                     color={coloresSalon.texto}
                     size={icono.tamanoPequeno}
@@ -122,7 +129,8 @@ export const TarjetaCita = memo(function TarjetaCita({ cita, onPress, accion }: 
               ) : null}
             </View>
 
-            {limite ? <Dato Icono={Clock} texto={limite} /> : null}
+            {/* El plazo de pago pide acción: va en el principal y no en el secundario. */}
+            {limite ? <Dato Icono={Clock} texto={limite} principal /> : null}
           </View>
 
           <ChevronRight color={colores.texto} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
@@ -134,15 +142,24 @@ export const TarjetaCita = memo(function TarjetaCita({ cita, onPress, accion }: 
   );
 });
 
-function Dato({ Icono, texto }: { Icono: typeof Clock; texto: string }) {
+function Dato({
+  Icono,
+  texto,
+  principal = false,
+}: {
+  Icono: typeof Clock;
+  texto: string;
+  principal?: boolean;
+}) {
   const { colores } = useTheme();
+  // Especialista y fecha en el secundario (4.8:1 sobre terracota en claro y en oscuro).
+  const color = principal ? colores.texto : colores.textoSuave;
   return (
     <View style={styles.dato}>
       <View style={styles.iconoDato}>
-        <Icono color={colores.texto} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
+        <Icono color={color} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
       </View>
-      {/* Texto principal y no el suave: el suave sobre terracota no llega a 4.5:1. */}
-      <Text style={[styles.textoDato, { color: colores.texto }]}>{texto}</Text>
+      <Text style={[styles.textoDato, { color }]}>{texto}</Text>
     </View>
   );
 }
@@ -155,7 +172,7 @@ export function TarjetaCitaEsqueleto() {
       style={[
         styles.tarjeta,
         styles.contenido,
-        { backgroundColor: colores.superficie, shadowColor: colores.sombra },
+        { backgroundColor: colores.superficie, shadowColor: colores.sombraTarjeta },
       ]}
     >
       <Skeleton estilo={[styles.lineaTitulo, { width: esqueleto.anchoMedio }]} />
@@ -191,11 +208,11 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: espacio.s,
   },
+  // Título en Geist 600 como las tarjetas de la web (no Playfair).
   servicio: {
-    fontFamily: fuente.titulo,
-    fontSize: tipo.subtitulo.tamano,
-    lineHeight: tipo.subtitulo.linea,
-    letterSpacing: tracking.titulo,
+    fontFamily: fuente.textoFuerte,
+    fontSize: tipo.tituloTarjeta.tamano,
+    lineHeight: tipo.tituloTarjeta.linea,
   },
   dato: {
     flexDirection: 'row',
@@ -218,13 +235,15 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: espacio.s,
   },
+  // Mismo lenguaje que BadgeEstado: filete interior de 1px descontado del relleno.
   pastilla: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: espacio.xs,
-    paddingHorizontal: insignia.rellenoHorizontal,
-    paddingVertical: insignia.rellenoVertical,
+    paddingHorizontal: insignia.rellenoHorizontal - borde.hairline,
+    paddingVertical: insignia.rellenoVertical - borde.hairline,
     borderRadius: radio.pastilla,
+    borderWidth: borde.hairline,
   },
   textoPastilla: {
     fontFamily: fuente.textoMedio,

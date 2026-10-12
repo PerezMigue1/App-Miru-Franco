@@ -101,7 +101,11 @@ export default function ReservarCitaView() {
 
   return (
     <KeyboardAvoidingView behavior="padding" style={[styles.raiz, { backgroundColor: colores.fondo }]}>
-      <EncabezadoVolver titulo={vm.servicio?.nombre || 'Reservar cita'} onVolver={vm.atras} />
+      <EncabezadoVolver
+        titulo={vm.servicio?.nombre || 'Reservar cita'}
+        subtitulo="Selecciona especialista, día y hora para tu cita"
+        onVolver={vm.atras}
+      />
 
       {vm.estado === 'cargando' ? (
         <View
@@ -297,7 +301,7 @@ function PasoConfirmar({ vm }: { vm: ReservarCitaViewModel }) {
       <Subtitulo texto="Confirma tu cita" />
 
       <View
-        style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombra }]}
+        style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombraTarjeta }]}
       >
         <Dato etiqueta="Servicio" valor={servicio.nombre} />
         <Dato etiqueta="Especialista" valor={especialista.nombre} />
@@ -307,7 +311,7 @@ function PasoConfirmar({ vm }: { vm: ReservarCitaViewModel }) {
         {servicio.anticipo ? (
           <View style={styles.anticipo}>
             <Dato etiqueta="Anticipo" valor={servicio.anticipo} cifra />
-            <Text style={[styles.nota, { color: colores.texto }]}>
+            <Text style={[styles.parrafo, { color: colores.texto }]}>
               En línea tienes 2 horas para pagarlo. Se descuenta del total el día de tu cita. Si
               cancelas, el anticipo no se devuelve; si reagendas con aviso, se respeta.
             </Text>
@@ -380,8 +384,8 @@ function Dato({ etiqueta, valor, cifra = false }: { etiqueta: string; valor: str
   const { colores } = useTheme();
   return (
     <View accessible accessibilityLabel={`${etiqueta}: ${valor}`} style={styles.dato}>
-      {/* Texto principal y no el suave: el suave sobre terracota no llega a 4.5:1. */}
-      <Text style={[styles.etiquetaDato, { color: colores.texto }]}>{etiqueta}</Text>
+      {/* Etiqueta en el secundario (4.8:1 sobre terracota); el valor, en el principal. */}
+      <Text style={[styles.etiquetaDato, { color: colores.textoSuave }]}>{etiqueta}</Text>
       <Text style={[styles.valorDato, cifra ? styles.cifra : null, { color: colores.texto }]}>
         {valor}
       </Text>
@@ -411,7 +415,7 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.subtitulo.tamano,
     lineHeight: tipo.subtitulo.linea,
-    letterSpacing: tracking.titulo,
+    letterSpacing: tracking.subtitulo,
   },
   lista: {
     gap: espacio.m,
@@ -425,6 +429,12 @@ const styles = StyleSheet.create({
     fontFamily: fuente.texto,
     fontSize: tipo.pequeno.tamano,
     lineHeight: tipo.pequeno.linea,
+  },
+  // Aviso extenso del anticipo: interlineado de párrafo largo.
+  parrafo: {
+    fontFamily: fuente.texto,
+    fontSize: tipo.parrafo.tamano,
+    lineHeight: tipo.parrafo.linea,
   },
   aviso: {
     flexDirection: 'row',

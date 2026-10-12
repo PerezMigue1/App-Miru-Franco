@@ -268,7 +268,8 @@ function ExplicacionAnticipo({
             <Text style={[styles.textoFuerte, { color: colores.texto }]}>{limite}</Text>
           </View>
         ) : null}
-        <Text style={[styles.cuerpo, { color: colores.textoSuave }]}>
+        {/* Aviso que explica una consecuencia: va en el principal, no en el secundario. */}
+        <Text style={[styles.cuerpo, { color: colores.texto }]}>
           Si el anticipo no se paga a tiempo, la cita se cancela sola.
         </Text>
       </>
@@ -282,7 +283,7 @@ function ExplicacionAnticipo({
   const respeto =
     anticipo === 'pagado' && cambios ? ' Si reprogramas tu cita con aviso, tu anticipo se respeta.' : '';
   return (
-    <Text style={[styles.cuerpo, { color: colores.textoSuave }]}>
+    <Text style={[styles.cuerpo, { color: colores.texto }]}>
       {explicacion}
       {respeto}
     </Text>
@@ -294,7 +295,7 @@ function Tarjeta({ children }: { children: ReactNode }) {
   const { colores } = useTheme();
   return (
     <View
-      style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombra }]}
+      style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombraTarjeta }]}
     >
       {children}
     </View>
@@ -342,7 +343,7 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.subtitulo.tamano,
     lineHeight: tipo.subtitulo.linea,
-    letterSpacing: tracking.titulo,
+    letterSpacing: tracking.subtitulo,
   },
   monto: {
     flexDirection: 'row',
@@ -378,10 +379,11 @@ const styles = StyleSheet.create({
     lineHeight: tipo.cuerpo.linea,
     fontVariant: ['tabular-nums'],
   },
+  // Notas, motivo y explicaciones del anticipo: párrafos con interlineado 1.625.
   cuerpo: {
     fontFamily: fuente.texto,
-    fontSize: tipo.cuerpo.tamano,
-    lineHeight: tipo.cuerpo.linea,
+    fontSize: tipo.parrafo.tamano,
+    lineHeight: tipo.parrafo.linea,
   },
   seccion: {
     gap: espacio.s,
@@ -390,7 +392,7 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.subtitulo.tamano,
     lineHeight: tipo.subtitulo.linea,
-    letterSpacing: tracking.titulo,
+    letterSpacing: tracking.subtitulo,
   },
   acciones: {
     marginTop: espacio.s,

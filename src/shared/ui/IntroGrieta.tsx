@@ -140,7 +140,7 @@ export function IntroGrieta({ onTerminar }: { onTerminar?: () => void } = {}) {
               <Svg width={tamano.ancho} height={tamano.alto}>
                 <AnimatedPath
                   d={trazoDe(tamano.ancho, tamano.alto)}
-                  stroke={paleta.oro}
+                  stroke={paleta.oroFoco}
                   strokeWidth={intro.trazoGrosor}
                   strokeLinejoin="round"
                   fill="none"
@@ -185,7 +185,7 @@ function Mitad({ lado, ancho, alto }: { lado: Lado; ancho: number; alto: number 
           y={cy}
           dy={intro.letra * intro.ajusteBase}
           textAnchor="middle"
-          fontFamily={fuente.titulo}
+          fontFamily={fuente.monograma}
           fontSize={intro.letra}
           letterSpacing={tracking.monograma}
           fill={paleta.oro}

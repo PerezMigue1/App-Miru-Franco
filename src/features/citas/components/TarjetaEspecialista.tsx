@@ -8,6 +8,7 @@ import { usePresion } from '@/shared/ui/movimiento';
 import { Skeleton } from '@/shared/ui/Skeleton';
 import {
   duracion,
+  escalaPresionadoTarjeta,
   espacio,
   esqueleto,
   fuente,
@@ -33,7 +34,7 @@ interface TarjetaEspecialistaProps {
 /** Una especialista para elegir: foto en círculo (o monograma), nombre y puesto. Se hunde al tocarla. */
 export function TarjetaEspecialista({ especialista, seleccionada, onPress }: TarjetaEspecialistaProps) {
   const { colores } = useTheme();
-  const { estilo, hundir, soltar } = usePresion();
+  const { estilo, hundir, soltar } = usePresion(escalaPresionadoTarjeta);
 
   const etiqueta = [especialista.nombre, especialista.puesto].filter(Boolean).join(', ');
 
@@ -50,7 +51,7 @@ export function TarjetaEspecialista({ especialista, seleccionada, onPress }: Tar
       <Animated.View
         style={[
           styles.tarjeta,
-          { backgroundColor: colores.superficie, shadowColor: colores.sombra },
+          { backgroundColor: colores.superficie, shadowColor: colores.sombraTarjeta },
           estilo,
         ]}
       >
@@ -73,8 +74,8 @@ export function TarjetaEspecialista({ especialista, seleccionada, onPress }: Tar
             {especialista.nombre}
           </Text>
           {especialista.puesto ? (
-            // Texto principal y no el suave: el suave sobre terracota no llega a 4.5:1.
-            <Text numberOfLines={2} style={[styles.puesto, { color: colores.texto }]}>
+            // Puesto en el secundario (4.8:1 sobre terracota en claro y en oscuro).
+            <Text numberOfLines={2} style={[styles.puesto, { color: colores.textoSuave }]}>
               {especialista.puesto}
             </Text>
           ) : null}
@@ -99,7 +100,7 @@ export function TarjetaEspecialistaEsqueleto() {
     <View
       style={[
         styles.tarjeta,
-        { backgroundColor: colores.superficie, shadowColor: colores.sombra },
+        { backgroundColor: colores.superficie, shadowColor: colores.sombraTarjeta },
       ]}
     >
       <Skeleton estilo={styles.foto} />
@@ -140,7 +141,7 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.cuerpo.tamano,
     lineHeight: tipo.cuerpo.linea,
-    letterSpacing: tracking.titulo,
+    letterSpacing: tracking.tituloTarjeta,
   },
   puesto: {
     fontFamily: fuente.texto,

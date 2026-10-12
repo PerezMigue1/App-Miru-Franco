@@ -9,18 +9,17 @@ import {
   ShieldCheck,
   UserPen,
 } from 'lucide-react-native';
-import type { ReactNode } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
 import { Button } from '@/shared/ui/Button';
 import { EmptyState } from '@/shared/ui/EmptyState';
 import { Hoja } from '@/shared/ui/Hoja';
-import { ListRow } from '@/shared/ui/ListRow';
 import { Monograma } from '@/shared/ui/Monograma';
 import { useEntradaContenido, usePresion } from '@/shared/ui/movimiento';
 import { ScreenHeader } from '@/shared/ui/ScreenHeader';
 import { Skeleton } from '@/shared/ui/Skeleton';
+import { FilaTarjeta, SeccionFilas } from '@/shared/ui/TarjetaFilas';
 import {
   borde,
   esqueleto,
@@ -58,27 +57,34 @@ export default function PerfilView() {
         <ContenidoConSesion perfil={perfil} />
       )}
 
-      <Grupo titulo="Configuración">
-        <ListRow icono={Palette} titulo="Apariencia" onPress={perfil.abrirApariencia} />
-        <ListRow
+      <SeccionFilas titulo="Configuración" estilo={styles.separacionSeccion}>
+        <FilaTarjeta
+          icono={Palette}
+          titulo="Apariencia"
+          descripcion="Claro, oscuro o igual que tu teléfono."
+          onPress={perfil.abrirApariencia}
+        />
+        <FilaTarjeta
           icono={ShieldCheck}
           titulo="Aviso de privacidad"
+          descripcion="Cómo cuidamos tus datos personales."
           onPress={perfil.abrirAviso}
           accessibilityHint="Se abre en el navegador"
         />
-      </Grupo>
+      </SeccionFilas>
 
       {perfil.estado === 'sinSesion' ? null : (
-        <View style={styles.cierre}>
-          <View style={[styles.grupoFilas, { borderColor: colores.hairline }]}>
-            <ListRow
+        <View style={[styles.cierre, styles.separacionSeccion]}>
+          <SeccionFilas>
+            <FilaTarjeta
               icono={LogOut}
               titulo="Cerrar sesión"
+              descripcion="Sal de tu cuenta en este teléfono."
               destructiva
               deshabilitada={perfil.fotoOcupada}
               onPress={perfil.cerrarSesion}
             />
-          </View>
+          </SeccionFilas>
           <Aviso tipo="error" texto={perfil.errorCierre} estilo={styles.margen} />
         </View>
       )}
@@ -170,33 +176,53 @@ function ContenidoConSesion({ perfil }: { perfil: PerfilViewModel }) {
         </View>
       ) : null}
 
-      <Grupo titulo="Tu cuenta">
-        <ListRow icono={UserPen} titulo="Editar perfil" onPress={perfil.editarPerfil} />
+      <SeccionFilas titulo="Tu cuenta" estilo={styles.separacionSeccion}>
+        <FilaTarjeta
+          icono={UserPen}
+          titulo="Editar perfil"
+          descripcion="Nombre, teléfono, fecha de nacimiento y datos de tu cabello."
+          onPress={perfil.editarPerfil}
+        />
         {datos?.tienePassword === false ? (
-          <ListRow icono={KeyRound} titulo="Cambiar contraseña" detalle="Entras con Google" deshabilitada />
-        ) : (
-          // Mientras carga no se sabe si la cuenta tiene contraseña: se habilita al tener los datos.
-          <ListRow
+          <FilaTarjeta
             icono={KeyRound}
             titulo="Cambiar contraseña"
+            descripcion="Entras con Google, así que no usas contraseña."
+            deshabilitada
+          />
+        ) : (
+          // Mientras carga no se sabe si la cuenta tiene contraseña: se habilita al tener los datos.
+          <FilaTarjeta
+            icono={KeyRound}
+            titulo="Cambiar contraseña"
+            descripcion="Confirma el cambio con un código que llega a tu correo."
             deshabilitada={!datos}
             onPress={perfil.cambiarContrasena}
           />
         )}
-      </Grupo>
+      </SeccionFilas>
 
-      <Grupo titulo="Tu actividad">
-        <ListRow icono={CalendarDays} titulo="Mis citas" onPress={perfil.abrirMisCitas} />
-        {/* TODO(GP-06.3): abrir el historial de pedidos de la tienda. */}
-        <ListRow icono={Package} titulo="Mis pedidos" detalle="Disponible pronto" deshabilitada />
-      </Grupo>
+      <SeccionFilas titulo="Tu actividad" estilo={styles.separacionSeccion}>
+        <FilaTarjeta
+          icono={CalendarDays}
+          titulo="Mis citas"
+          descripcion="Tus próximas citas y tu historial."
+          onPress={perfil.abrirMisCitas}
+        />
+        <FilaTarjeta
+          icono={Package}
+          titulo="Mis pedidos"
+          descripcion="Tus compras y cuándo puedes recogerlas."
+          onPress={perfil.abrirMisPedidos}
+        />
+      </SeccionFilas>
     </>
   );
 }
 
 /** Avatar con la foto o el monograma; mientras se sube o se quita, muestra la carga encima. */
 function Avatar({ foto, ocupada, onPress }: { foto: string | null; ocupada: boolean; onPress: () => void }) {
-  const { colores, oscuro } = useTheme();
+  const { colores } = useTheme();
   const { estilo: estiloPresion, hundir, soltar } = usePresion();
   return (
     <Pressable
@@ -223,14 +249,15 @@ function Avatar({ foto, ocupada, onPress }: { foto: string | null; ocupada: bool
           <Monograma tamano="grande" />
         )}
         {ocupada ? (
-          <View style={[styles.cargaFoto, { backgroundColor: colores.velo }]}>
-            <ActivityIndicator color={colores.oro} />
+          <View style={[styles.cargaFoto, { backgroundColor: colores.veloVisor }]}>
+            <ActivityIndicator color={colores.oroTextoPequeno} />
           </View>
         ) : (
           <View
             style={[
               styles.insignia,
-              { backgroundColor: colores.accion, borderColor: oscuro ? colores.oro : colores.fondo },
+              // Anillo --oro-grande: 3.7:1 sobre lino y 6.7:1 sobre carbón; separa el vino del fondo.
+              { backgroundColor: colores.accion, borderColor: colores.oroGrande },
             ]}
           >
             <Camera color={colores.textoSobreAccion} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
@@ -246,19 +273,6 @@ function etiquetaAvatar(foto: string | null, ocupada: boolean): string {
     return 'Guardando foto de perfil';
   }
   return foto ? 'Cambiar foto de perfil' : 'Elegir foto de perfil';
-}
-
-/** Grupo de filas con su título. */
-function Grupo({ titulo, children }: { titulo: string; children: ReactNode }) {
-  const { colores } = useTheme();
-  return (
-    <View style={styles.grupo}>
-      <Text accessibilityRole="header" style={[styles.tituloGrupo, { color: colores.textoSuave }]}>
-        {titulo}
-      </Text>
-      <View style={[styles.grupoFilas, { borderColor: colores.hairline }]}>{children}</View>
-    </View>
-  );
 }
 
 const styles = StyleSheet.create({
@@ -317,7 +331,7 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.subtitulo.tamano,
     lineHeight: tipo.subtitulo.linea,
-    letterSpacing: tracking.titulo,
+    letterSpacing: tracking.subtitulo,
   },
   correo: {
     textAlign: 'center',
@@ -343,21 +357,12 @@ const styles = StyleSheet.create({
   },
   textoPermiso: {
     fontFamily: fuente.texto,
-    fontSize: tipo.pequeno.tamano,
-    lineHeight: tipo.pequeno.linea,
+    fontSize: tipo.parrafo.tamano,
+    lineHeight: tipo.parrafo.linea,
   },
-  grupo: {
-    gap: espacio.s,
-  },
-  tituloGrupo: {
-    paddingHorizontal: pantalla.margen,
-    fontFamily: fuente.textoMedio,
-    fontSize: tipo.pequeno.tamano,
-    lineHeight: tipo.pequeno.linea,
-  },
-  grupoFilas: {
-    borderTopWidth: borde.hairline,
-    borderBottomWidth: borde.hairline,
+  // 32 entre secciones como .mf-perfil de la web: el contenido ya separa 24 con su gap.
+  separacionSeccion: {
+    marginTop: espacio.x3 - espacio.xxl,
   },
   cierre: {
     gap: espacio.m,

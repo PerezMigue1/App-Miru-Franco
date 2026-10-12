@@ -289,7 +289,8 @@ export function AuthContainer({
           <Animated.View
             style={[
               styles.indicador,
-              { width: anchoPestana, backgroundColor: colores.oro },
+              // --oro-grande: 3.7:1 sobre lino y 6.7:1 sobre carbón (indicador, mínimo 3:1).
+              { width: anchoPestana, backgroundColor: colores.oroGrande },
               estiloIndicador,
             ]}
           />
@@ -384,7 +385,8 @@ export function PanelMarca() {
       <View accessible accessibilityRole="header" accessibilityLabel="Mirú Franco Beauty Salón">
         <View style={styles.marca}>
           <Text style={[styles.marcaMiru, { color: colores.textoSobrePanel }]}>Mirú</Text>
-          <Text style={[styles.marcaFranco, { color: colores.oro }]}>Franco</Text>
+          {/* Oro sobre carbón (--oro-sobre-carbon, como .mf-logotipo): el panel es carbón en los dos temas. */}
+          <Text style={[styles.marcaFranco, { color: colores.oroTextoPequeno }]}>Franco</Text>
         </View>
         <Text style={[styles.lema, { color: colores.oroTextoPequeno }]}>BEAUTY SALÓN</Text>
       </View>
@@ -400,7 +402,7 @@ export function Encabezado({ titulo, texto }: { titulo: string; texto: string })
       <Text accessibilityRole="header" style={[styles.titulo, { color: colores.texto }]}>
         {titulo}
       </Text>
-      <Text style={[styles.texto, { color: colores.textoSuave }]}>{texto}</Text>
+      <Text style={[styles.parrafo, { color: colores.textoSuave }]}>{texto}</Text>
     </View>
   );
 }
@@ -710,7 +712,7 @@ function IndicadorPasos({ paso, refIndicador }: { paso: PasoRegistro; refIndicad
                         borderColor: esActual ? colores.oro : colores.accion,
                         borderWidth: borde.indicador,
                       }
-                    : { backgroundColor: 'transparent', borderColor: colores.textoSuave, borderWidth: borde.campo },
+                    : { backgroundColor: colores.transparente, borderColor: colores.textoSuave, borderWidth: borde.campo },
                 ]}
               >
                 {hecho ? (
@@ -1185,7 +1187,7 @@ export function Opciones<T extends string>({
   const id = useId();
   return (
     <View ref={refContenedor} style={styles.campo}>
-      <Text nativeID={`${id}-etiqueta`} style={[styles.etiqueta, { color: colores.texto }]}>
+      <Text nativeID={`${id}-etiqueta`} style={[styles.etiqueta, { color: colores.contorno }]}>
         {etiqueta}
       </Text>
       <View accessibilityRole="radiogroup" accessibilityLabelledBy={`${id}-etiqueta`} style={styles.opcionesCabello}>
@@ -1307,7 +1309,7 @@ export function Aviso({
           style={[styles.aviso, { borderColor: esError ? colores.peligro : colores.hairline }]}
         >
           <Icono color={esError ? colores.peligro : colores.foco} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
-          <Text style={[styles.texto, styles.textoAviso, { color }]}>{texto}</Text>
+          <Text style={[styles.parrafo, styles.textoAviso, { color }]}>{texto}</Text>
         </Animated.View>
       ) : null}
     </View>
@@ -1381,7 +1383,7 @@ function Selector({
 
   return (
     <View ref={refContenedor} style={styles.campo}>
-      <Text nativeID={`${id}-etiqueta`} style={[styles.etiqueta, { color: colores.texto }]}>
+      <Text nativeID={`${id}-etiqueta`} style={[styles.etiqueta, { color: colores.contorno }]}>
         {etiqueta}
       </Text>
       <Pressable
@@ -1471,7 +1473,7 @@ function ContenidoSelector({
   }
   if (opciones.length === 0) {
     return (
-      <Text style={[styles.texto, { color: colores.textoSuave }]}>
+      <Text style={[styles.parrafo, { color: colores.textoCuerpo }]}>
         Todavía no hay preguntas de seguridad disponibles.
       </Text>
     );
@@ -1488,7 +1490,7 @@ function ContenidoSelector({
             onPress={() => onElegir(opcion)}
             style={({ pressed }) => [
               styles.opcion,
-              { backgroundColor: pressed ? colores.presionado : 'transparent' },
+              { backgroundColor: pressed ? colores.presionado : colores.transparente },
             ]}
           >
             <Text style={[styles.texto, styles.textoOpcion, { color: colores.texto }]}>{opcion.pregunta}</Text>
@@ -1555,7 +1557,7 @@ export function Casilla({
             <Check color={colores.textoSobreAccion} size={icono.tamanoPequeno} strokeWidth={icono.trazoMarca} />
           ) : null}
         </Animated.View>
-        <Text style={[styles.texto, styles.textoCasilla, { color: colores.texto }]}>
+        <Text style={[styles.parrafo, styles.textoCasilla, { color: colores.texto }]}>
           {texto}
           {enlace ? (
             <>
@@ -1592,7 +1594,7 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.titulo.tamano,
     lineHeight: tipo.titulo.linea,
-    letterSpacing: tracking.titulo,
+    letterSpacing: tracking.tituloPagina,
   },
   marcaFranco: {
     fontFamily: fuente.manuscrita,
@@ -1648,12 +1650,18 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.titulo.tamano,
     lineHeight: tipo.titulo.linea,
-    letterSpacing: tracking.titulo,
+    letterSpacing: tracking.tituloPagina,
   },
   texto: {
     fontFamily: fuente.texto,
     fontSize: tipo.cuerpo.tamano,
     lineHeight: tipo.cuerpo.linea,
+  },
+  // Párrafos de varias líneas (apoyo del encabezado, avisos, consentimiento): interlineado 1.625.
+  parrafo: {
+    fontFamily: fuente.texto,
+    fontSize: tipo.parrafo.tamano,
+    lineHeight: tipo.parrafo.linea,
   },
   enlace: {
     minHeight: toqueMinimo,
@@ -1695,11 +1703,13 @@ const styles = StyleSheet.create({
   campo: {
     gap: espacio.s,
   },
+  // .mf-etiqueta: 15px, peso 500, en --menu-texto-principal (igual que la etiqueta de Input).
   etiqueta: {
     fontFamily: fuente.textoMedio,
-    fontSize: tipo.pequeno.tamano,
-    lineHeight: tipo.pequeno.linea,
+    fontSize: tipo.etiquetaCampo.tamano,
+    lineHeight: tipo.etiquetaCampo.linea,
   },
+  // El selector se lee como un campo (.mf-campo): borde de 1px, como Input.
   selector: {
     minHeight: toqueMinimo,
     flexDirection: 'row',
@@ -1708,7 +1718,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: espacio.l,
     paddingVertical: espacio.s,
     borderRadius: radio.campo,
-    borderWidth: borde.campo,
+    borderWidth: borde.entrada,
   },
   textoSelector: {
     flex: 1,
@@ -1845,7 +1855,7 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.subtitulo.tamano,
     lineHeight: tipo.subtitulo.linea,
-    letterSpacing: tracking.titulo,
+    letterSpacing: tracking.subtitulo,
   },
   enlaceEnTexto: {
     fontFamily: fuente.textoMedio,

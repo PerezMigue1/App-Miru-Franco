@@ -1,5 +1,6 @@
 import { Image } from 'expo-image';
 import { ChevronRight, Clock } from 'lucide-react-native';
+import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
@@ -9,6 +10,7 @@ import { Skeleton } from '@/shared/ui/Skeleton';
 import {
   catalogo,
   duracion,
+  escalaPresionadoTarjeta,
   espacio,
   esqueleto,
   fuente,
@@ -30,10 +32,13 @@ interface TarjetaServicioProps {
   onPress: () => void;
 }
 
-/** Un servicio del catálogo: miniatura, nombre, categoría, duración y precio. Se hunde al tocarla. */
-export function TarjetaServicio({ servicio, onPress }: TarjetaServicioProps) {
+/**
+ * Un servicio del catálogo: miniatura, nombre, categoría, duración y precio. Se hunde al tocarla.
+ * Toma el ancho de su contenedor (la lista o una columna de ancho fijo) y el texto se acomoda dentro.
+ */
+export const TarjetaServicio = memo(function TarjetaServicio({ servicio, onPress }: TarjetaServicioProps) {
   const { colores } = useTheme();
-  const { estilo, hundir, soltar } = usePresion();
+  const { estilo, hundir, soltar } = usePresion(escalaPresionadoTarjeta);
 
   const etiqueta = [servicio.nombre, servicio.duracion, servicio.precio ?? SIN_PRECIO]
     .filter(Boolean)
@@ -51,7 +56,7 @@ export function TarjetaServicio({ servicio, onPress }: TarjetaServicioProps) {
       <Animated.View
         style={[
           styles.tarjeta,
-          { backgroundColor: colores.superficie, shadowColor: colores.sombra },
+          { backgroundColor: colores.superficie, shadowColor: colores.sombraTarjeta },
           estilo,
         ]}
       >
@@ -74,16 +79,18 @@ export function TarjetaServicio({ servicio, onPress }: TarjetaServicioProps) {
             {servicio.nombre}
           </Text>
           {servicio.categoria ? (
-            // Texto principal y no el suave: el suave sobre terracota no llega a 4.5:1.
-            <Text numberOfLines={1} style={[styles.categoria, { color: colores.texto }]}>
+            // Categoría en el secundario, como la tienda de la web (4.8:1 sobre terracota).
+            <Text numberOfLines={1} style={[styles.categoria, { color: colores.textoSuave }]}>
               {servicio.categoria}
             </Text>
           ) : null}
           <View style={styles.linea}>
             {servicio.duracion ? (
               <View style={styles.duracion}>
-                <Clock color={colores.texto} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
-                <Text style={[styles.dato, { color: colores.texto }]}>{servicio.duracion}</Text>
+                <Clock color={colores.textoSuave} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
+                <Text style={[styles.dato, styles.cifra, { color: colores.textoSuave }]}>
+                  {servicio.duracion}
+                </Text>
               </View>
             ) : null}
             <Text
@@ -103,7 +110,7 @@ export function TarjetaServicio({ servicio, onPress }: TarjetaServicioProps) {
       </Animated.View>
     </Pressable>
   );
-}
+});
 
 /** Esqueleto con la forma de la tarjeta, para el estado de carga del catálogo. */
 export function TarjetaServicioEsqueleto() {
@@ -112,7 +119,7 @@ export function TarjetaServicioEsqueleto() {
     <View
       style={[
         styles.tarjeta,
-        { backgroundColor: colores.superficie, shadowColor: colores.sombra },
+        { backgroundColor: colores.superficie, shadowColor: colores.sombraTarjeta },
       ]}
     >
       <Skeleton estilo={styles.miniatura} />
@@ -154,7 +161,7 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.cuerpo.tamano,
     lineHeight: tipo.cuerpo.linea,
-    letterSpacing: tracking.titulo,
+    letterSpacing: tracking.tituloTarjeta,
   },
   categoria: {
     fontFamily: fuente.texto,
@@ -177,6 +184,9 @@ const styles = StyleSheet.create({
     fontFamily: fuente.texto,
     fontSize: tipo.pequeno.tamano,
     lineHeight: tipo.pequeno.linea,
+  },
+  cifra: {
+    fontVariant: ['tabular-nums'],
   },
   precio: {
     fontFamily: fuente.textoFuerte,

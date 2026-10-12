@@ -50,7 +50,7 @@ export function Skeleton({ estilo }: SkeletonProps) {
       accessible={false}
       importantForAccessibility="no-hide-descendants"
       style={[
-        { borderRadius: radio.campo, backgroundColor: colores.superficieSecundaria },
+        { borderRadius: radio.campo, backgroundColor: colores.esqueleto },
         estilo,
         animado,
       ]}

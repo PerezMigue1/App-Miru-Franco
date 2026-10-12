@@ -19,6 +19,7 @@ import { Button } from '@/shared/ui/Button';
 import { EmptyState } from '@/shared/ui/EmptyState';
 import { EASE_ENTRADA_SALIDA, useEntradaContenido } from '@/shared/ui/movimiento';
 import {
+  borde,
   duracion,
   espacio,
   fuente,
@@ -68,7 +69,11 @@ export default function MisCitasView() {
 
   return (
     <View style={[styles.raiz, { backgroundColor: colores.fondo }]}>
-      <EncabezadoVolver titulo="Mis citas" onVolver={regresar} />
+      <EncabezadoVolver
+        titulo="Mis citas"
+        subtitulo="Gestiona todas tus citas agendadas"
+        onVolver={regresar}
+      />
       <ScrollView
         style={{ backgroundColor: colores.fondo }}
         contentContainerStyle={{ paddingBottom: bottom + espacio.x3 }}
@@ -206,7 +211,14 @@ function BotonReservarIgual({ cita, onPress }: { cita: Cita; onPress: () => void
   );
 }
 
-/** Control segmentado con indicador que se desliza 240 ms (inmediato con movimiento reducido). */
+/**
+ * Control segmentado con indicador que se desliza 240 ms (inmediato con movimiento reducido). Igual
+ * que los segmentados de la web (cliente.css): pista en superficie suave con contorno de 1px
+ * (--segmentado-borde: sin borde en claro, gris en oscuro) e indicador relleno con su sombra tintada.
+ * El indicador usa el color de selección (vino en claro, oro en oscuro) y no el fondo de la
+ * pantalla: el fondo apenas se separaba de la pista (1.2:1 en claro y 1.1:1 en oscuro) y la opción
+ * activa solo se distinguía por el color del texto.
+ */
 function ControlSegmentado({
   valor,
   onCambiar,
@@ -236,13 +248,16 @@ function ControlSegmentado({
     <View
       accessibilityRole="tablist"
       onLayout={(e: LayoutChangeEvent) => setAncho(e.nativeEvent.layout.width)}
-      style={[styles.segmentado, { backgroundColor: colores.superficieSecundaria }]}
+      style={[
+        styles.segmentado,
+        { backgroundColor: colores.superficieSecundaria, borderColor: colores.segmentadoBorde },
+      ]}
     >
       {ancho > 0 ? (
         <Animated.View
           style={[
             styles.indicador,
-            { width: anchoIndicador, backgroundColor: colores.fondo, shadowColor: colores.sombra },
+            { width: anchoIndicador, backgroundColor: colores.seleccion, shadowColor: colores.sombra },
             estiloIndicador,
           ]}
         />
@@ -260,7 +275,7 @@ function ControlSegmentado({
             <Text
               style={[
                 styles.textoSegmento,
-                { color: activo ? colores.texto : colores.textoSuave },
+                { color: activo ? colores.textoSobreSeleccion : colores.texto },
               ]}
             >
               {s.etiqueta}
@@ -288,16 +303,21 @@ const styles = StyleSheet.create({
     fontSize: tipo.pequeno.tamano,
     lineHeight: tipo.pequeno.linea,
   },
+  // El contorno va por dentro (en la web es un box-shadow inset): el relleno descuenta su grosor
+  // para que el control y el indicador midan lo mismo que antes.
   segmentado: {
     flexDirection: 'row',
-    padding: espacio.xs,
+    padding: espacio.xs - borde.hairline,
     borderRadius: radio.pastilla,
+    borderWidth: borde.hairline,
   },
+  // Botón de la opción activa: sombra del botón primario (vino en claro), como el indicador de la
+  // web (0 6px 14px -8px vino).
   indicador: {
     position: 'absolute',
-    top: espacio.xs,
-    bottom: espacio.xs,
-    left: espacio.xs,
+    top: espacio.xs - borde.hairline,
+    bottom: espacio.xs - borde.hairline,
+    left: espacio.xs - borde.hairline,
     borderRadius: radio.pastilla,
     shadowOpacity: sombra.boton.opacidad,
     shadowRadius: sombra.boton.radio,

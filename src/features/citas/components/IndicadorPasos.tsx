@@ -17,6 +17,10 @@ interface IndicadorPasosProps {
  * Indicador de pasos de un flujo con el mismo lenguaje que el del registro: el paso actual en vino
  * con anillo de oro, el hecho en vino con palomita y el pendiente solo con contorno. Con tres pasos
  * la etiqueta va bajo el círculo para caber a 360dp sin cortarse.
+ *
+ * El anillo es el borde exterior del paso actual, así que necesita 3:1 contra el fondo de la
+ * pantalla: el oro de marca sobre lino da 2.8:1, por eso va en oroGrande (3.7:1 sobre lino en
+ * claro; oro de foco, 6.7:1 sobre carbón, en oscuro).
  */
 export function IndicadorPasos({ pasos, actual, ref }: IndicadorPasosProps) {
   const { colores } = useTheme();
@@ -48,7 +52,7 @@ export function IndicadorPasos({ pasos, actual, ref }: IndicadorPasosProps) {
                   marcado
                     ? {
                         backgroundColor: colores.accion,
-                        borderColor: esActual ? colores.oro : colores.accion,
+                        borderColor: esActual ? colores.oroGrande : colores.accion,
                         borderWidth: borde.indicador,
                       }
                     : { borderColor: colores.textoSuave, borderWidth: borde.campo },
@@ -74,7 +78,9 @@ export function IndicadorPasos({ pasos, actual, ref }: IndicadorPasosProps) {
               <Text
                 style={[
                   styles.etiqueta,
-                  { color: marcado ? colores.texto : colores.textoSuave },
+                  // Como PasosFlujo de la web: solo el paso actual en el color de texto principal (y
+                  // en 600); los hechos y los pendientes en el secundario (8.9:1 en claro, 6:1 en oscuro).
+                  { color: esActual ? colores.texto : colores.textoSuave },
                   esActual ? styles.etiquetaActual : null,
                 ]}
               >
@@ -124,6 +130,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   etiquetaActual: {
-    fontFamily: fuente.textoMedio,
+    fontFamily: fuente.textoFuerte,
   },
 });

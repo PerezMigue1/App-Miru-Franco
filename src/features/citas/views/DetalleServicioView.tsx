@@ -172,7 +172,7 @@ function Contenido({
                 accessibilityLabel={`Duración: ${servicio.duracion}`}
               >
                 <Clock color={colores.textoSuave} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
-                <Text style={[styles.textoDato, { color: colores.textoSuave }]}>
+                <Text style={[styles.textoDato, styles.tabular, { color: colores.textoSuave }]}>
                   {servicio.duracion}
                 </Text>
               </View>
@@ -357,10 +357,10 @@ function BotonRegresar({
             styles.circuloRegresar,
             {
               backgroundColor: sobreImagen
-                ? colores.velo
+                ? colores.veloVisor
                 : pressed
                   ? colores.presionado
-                  : 'transparent',
+                  : colores.transparente,
             },
             estilo,
           ]}
@@ -392,7 +392,7 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.titulo.tamano,
     lineHeight: tipo.titulo.linea,
-    letterSpacing: tracking.titulo,
+    letterSpacing: tracking.tituloPagina,
   },
   metadatos: {
     flexDirection: 'row',
@@ -438,6 +438,9 @@ const styles = StyleSheet.create({
     fontFamily: fuente.textoFuerte,
     fontVariant: ['tabular-nums'],
   },
+  tabular: {
+    fontVariant: ['tabular-nums'],
+  },
   accion: {
     paddingHorizontal: pantalla.margen,
     paddingTop: espacio.xxl,
@@ -451,12 +454,13 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.subtitulo.tamano,
     lineHeight: tipo.subtitulo.linea,
-    letterSpacing: tracking.titulo,
+    letterSpacing: tracking.subtitulo,
   },
+  // Descripción del servicio: párrafo largo con interlineado 1.625.
   cuerpo: {
     fontFamily: fuente.texto,
-    fontSize: tipo.cuerpo.tamano,
-    lineHeight: tipo.cuerpo.linea,
+    fontSize: tipo.parrafo.tamano,
+    lineHeight: tipo.parrafo.linea,
   },
   lista: {
     gap: espacio.s,

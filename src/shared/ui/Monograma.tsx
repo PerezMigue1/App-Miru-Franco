@@ -39,7 +39,7 @@ const styles = StyleSheet.create({
     borderColor: paleta.oro,
   },
   letras: {
-    fontFamily: fuente.titulo,
+    fontFamily: fuente.monograma,
     color: paleta.oro,
     letterSpacing: tracking.monograma,
   },

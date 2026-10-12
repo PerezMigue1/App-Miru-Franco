@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text } from 'react-native';
 import Animated from 'react-native-reanimated';
 
 import { transicionBorde, usePresion } from './movimiento';
-import { borde, espacio, fuente, icono, radio, tipo, toqueMinimo } from './tokens';
+import { borde, controles, espacio, fuente, icono, radio, tipo, toqueMinimo } from './tokens';
 import { useTheme } from './useTheme';
 
 interface SearchBarProps {
@@ -13,8 +13,9 @@ interface SearchBarProps {
 }
 
 /**
- * Barra de búsqueda visual: aún no escribe (la búsqueda llega en GP-06), solo lleva a donde se
- * buscará. Al presionar, se hunde como un botón y el borde toma el color de foco.
+ * Barra de búsqueda visual: aún no escribe, solo lleva a donde se buscará. Tiene el aspecto de
+ * .mf-campo de la web (rectángulo de radio 10, borde de 1px, sin pastilla). Al presionar, se hunde
+ * como un botón y toma el foco del campo: borde de foco y halo de 3px.
  */
 export function SearchBar({ texto, onPress, accessibilityHint }: SearchBarProps) {
   const { colores } = useTheme();
@@ -39,6 +40,7 @@ export function SearchBar({ texto, onPress, accessibilityHint }: SearchBarProps)
               backgroundColor: colores.campoFondo,
               borderColor: pressed ? colores.foco : colores.campoBorde,
             },
+            pressed ? { boxShadow: `0 0 0 ${controles.halo}px ${colores.focoHalo}` } : null,
             estilo,
           ]}
         >
@@ -63,8 +65,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: espacio.s,
     paddingHorizontal: espacio.l,
-    borderRadius: radio.pastilla,
-    borderWidth: borde.hairline,
+    borderRadius: radio.campo,
+    borderWidth: borde.entrada,
   },
   texto: {
     flexShrink: 1,

@@ -1,83 +1,348 @@
-import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { useCallback, useRef } from 'react';
+import {
+  FlatList,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+  type ListRenderItem,
+} from 'react-native';
+import Animated from 'react-native-reanimated';
 
+import { Button } from '@/shared/ui/Button';
+import { EmptyState } from '@/shared/ui/EmptyState';
+import { BotonFiltros } from '@/shared/ui/Filtros';
+import { useEntradaContenido } from '@/shared/ui/movimiento';
 import { ScreenHeader } from '@/shared/ui/ScreenHeader';
-import { SearchBar } from '@/shared/ui/SearchBar';
 import { Skeleton } from '@/shared/ui/Skeleton';
-import { esqueleto, espacio, fuente, pantalla, radio, tienda, tipo } from '@/shared/ui/tokens';
+import {
+  controles,
+  espacio,
+  filtrosTienda,
+  fuente,
+  pantalla,
+  radio,
+  tienda,
+  tipo,
+  toqueMinimo,
+} from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
-const TARJETAS = ['uno', 'dos', 'tres', 'cuatro'];
+import { BuscadorProductos } from '../components/BuscadorProductos';
+import { FiltroCategorias } from '../components/FiltroCategorias';
+import { HojaFiltrosTienda } from '../components/HojaFiltrosTienda';
+import { TarjetaProducto, TarjetaProductoEsqueleto } from '../components/TarjetaProducto';
+import type { ProductoCatalogo } from '../models/productoModel';
+import { useCatalogoViewModel } from '../viewmodels/useCatalogoViewModel';
 
-/** Tienda: solo presentación; el catálogo y la compra llegan en GP-06. */
+/** Filas del skeleton: tarjetasEsqueleto repartidas en las columnas de la cuadrícula. */
+const FILAS_ESQUELETO = Array.from(
+  { length: Math.ceil(tienda.tarjetasEsqueleto / tienda.columnas) },
+  (_, fila) => Array.from({ length: tienda.columnas }, (__, columna) => fila * tienda.columnas + columna),
+);
+
+function claveProducto(producto: ProductoCatalogo): string {
+  return String(producto.id);
+}
+
+/** Pestaña Productos (ruta tienda): catálogo público en dos columnas con búsqueda, categorías, filtros y páginas. */
 export default function TiendaView() {
   const { colores } = useTheme();
   const { width } = useWindowDimensions();
+  const vm = useCatalogoViewModel();
+  const refLista = useRef<FlatList<ProductoCatalogo>>(null);
+  // La cuadrícula aparece una sola vez al terminar de cargar (en el contenedor, no en cada fila).
+  const entrada = useEntradaContenido();
+
   const anchoTarjeta =
     (width - pantalla.margen * 2 - espacio.m * (tienda.columnas - 1)) / tienda.columnas;
 
-  return (
-    <ScrollView
-      style={{ backgroundColor: colores.fondo }}
-      contentContainerStyle={styles.contenido}
-    >
-      <ScreenHeader titulo="Tienda" />
-      <View style={styles.cuerpo}>
-        <View style={styles.busqueda}>
-          {/* TODO(GP-06): búsqueda real en el catálogo. */}
-          <SearchBar texto="Buscar productos" accessibilityHint="Disponible próximamente" />
-        </View>
-        <Text style={[styles.nota, { color: colores.textoSuave }]}>
-          Los productos del salón aparecerán aquí.
-        </Text>
-        <View style={styles.cuadricula} accessible accessibilityLabel="Espacio para los productos del salón">
-          {TARJETAS.map((clave) => (
-            <View key={clave} style={[styles.tarjeta, { width: anchoTarjeta }]}>
-              <Skeleton estilo={styles.imagen} />
-              <Skeleton estilo={styles.linea} />
-              <Skeleton estilo={styles.lineaCorta} />
+  const { abrirProducto } = vm;
+  const renderProducto = useCallback<ListRenderItem<ProductoCatalogo>>(
+    ({ item }) => <TarjetaProducto producto={item} ancho={anchoTarjeta} onAbrir={abrirProducto} />,
+    [anchoTarjeta, abrirProducto],
+  );
+
+  // El carrito tiene su propia pestaña: la cabecera de Productos solo lleva el título.
+  const encabezadoPantalla = (
+    <ScreenHeader
+      titulo="Productos"
+      subtitulo="Explora nuestro catálogo de productos profesionales"
+    />
+  );
+
+  const refresco = (
+    <RefreshControl
+      refreshing={vm.refrescando}
+      onRefresh={vm.refrescar}
+      colors={[colores.foco]}
+      progressBackgroundColor={colores.campoFondo}
+    />
+  );
+
+  if (vm.estado === 'cargando') {
+    return (
+      <ScrollView
+        style={{ backgroundColor: colores.fondo }}
+        contentContainerStyle={styles.contenido}
+        scrollEnabled={false}
+      >
+        {encabezadoPantalla}
+        <View
+          accessible
+          accessibilityRole="progressbar"
+          accessibilityLabel="Cargando productos"
+          style={styles.esqueleto}
+        >
+          <View style={styles.filaBuscador}>
+            <Skeleton estilo={[styles.buscadorEsqueleto, styles.buscador]} />
+            <Skeleton estilo={[styles.buscadorEsqueleto, styles.botonFiltrosEsqueleto]} />
+          </View>
+          <View style={styles.chipsEsqueleto}>
+            <Skeleton estilo={styles.chipEsqueleto} />
+            <Skeleton estilo={styles.chipEsqueleto} />
+            <Skeleton estilo={styles.chipEsqueleto} />
+          </View>
+          {FILAS_ESQUELETO.map((fila) => (
+            <View key={fila[0]} style={styles.filaEsqueleto}>
+              {fila.map((i) => (
+                <TarjetaProductoEsqueleto key={i} ancho={anchoTarjeta} />
+              ))}
             </View>
           ))}
         </View>
+      </ScrollView>
+    );
+  }
+
+  if (vm.estado === 'error' || !vm.hayProductos) {
+    return (
+      <ScrollView
+        style={{ backgroundColor: colores.fondo }}
+        contentContainerStyle={styles.contenido}
+        refreshControl={vm.estado === 'error' ? undefined : refresco}
+      >
+        {encabezadoPantalla}
+        <View style={styles.estado}>
+          {vm.estado === 'error' ? (
+            <EmptyState
+              titulo={vm.errorRed ? 'Sin conexión' : 'No pudimos cargar la tienda'}
+              mensaje={
+                vm.errorRed
+                  ? 'Revisa tu internet e intenta de nuevo.'
+                  : 'Ocurrió un problema al traer los productos. Intenta de nuevo en un momento.'
+              }
+              accion={{ titulo: 'Reintentar', onPress: vm.recargar }}
+            />
+          ) : (
+            <EmptyState
+              titulo="Aún no hay productos"
+              mensaje="El salón todavía no publica productos en la app. Vuelve pronto."
+            />
+          )}
+        </View>
+      </ScrollView>
+    );
+  }
+
+  // Elemento y no componente: si se definiera como componente en el render, el campo de búsqueda
+  // se volvería a montar en cada letra y perdería el foco.
+  const encabezadoLista = (
+    <View>
+      {encabezadoPantalla}
+      <View style={styles.controles}>
+        <View style={styles.filaBuscador}>
+          <View style={styles.buscador}>
+            <BuscadorProductos valor={vm.busqueda} onCambiar={vm.setBusqueda} />
+          </View>
+          <BotonFiltros activos={vm.filtrosActivos} onPress={vm.abrirFiltros} />
+        </View>
+        <FiltroCategorias categorias={vm.categorias} elegida={vm.categoria} onElegir={vm.setCategoria} />
+        {vm.errorRefresco ? (
+          <Text accessibilityLiveRegion="polite" style={[styles.aviso, { color: colores.peligro }]}>
+            No pudimos actualizar la tienda. Desliza hacia abajo para intentar de nuevo.
+          </Text>
+        ) : null}
       </View>
-    </ScrollView>
+    </View>
+  );
+
+  const sinResultados = (
+    <View style={styles.estado}>
+      <EmptyState
+        titulo="No encontramos productos"
+        mensaje="Prueba con otra búsqueda, categoría o filtro."
+        accion={{ titulo: 'Ver todos', onPress: vm.limpiarFiltros }}
+      />
+    </View>
+  );
+
+  // Al cambiar de página la lista vuelve arriba, al encabezado.
+  const irAPagina = (cambiar: () => void) => {
+    cambiar();
+    refLista.current?.scrollToOffset({ offset: 0, animated: false });
+  };
+
+  const paginador =
+    vm.totalPaginas > 1 ? (
+      <View style={styles.paginador}>
+        <Text style={[styles.textoPaginador, { color: colores.textoSuave }]}>{vm.textoRango}</Text>
+        <View style={styles.botonesPaginador}>
+          <View style={styles.botonPaginador}>
+            <Button
+              titulo="Anterior"
+              variante="secundario"
+              onPress={() => irAPagina(vm.paginaAnterior)}
+              deshabilitado={vm.pagina <= 1}
+              accessibilityLabel="Página anterior"
+            />
+          </View>
+          <View style={styles.botonPaginador}>
+            <Button
+              titulo="Siguiente"
+              variante="secundario"
+              onPress={() => irAPagina(vm.paginaSiguiente)}
+              deshabilitado={vm.pagina >= vm.totalPaginas}
+              accessibilityLabel="Página siguiente"
+            />
+          </View>
+        </View>
+        <Text
+          accessibilityLiveRegion="polite"
+          style={[styles.textoPaginador, { color: colores.texto }]}
+        >
+          Página {vm.pagina} de {vm.totalPaginas}
+        </Text>
+      </View>
+    ) : null;
+
+  return (
+    <Animated.View entering={entrada} style={[styles.raiz, { backgroundColor: colores.fondo }]}>
+      <FlatList
+        ref={refLista}
+        data={vm.productosPagina}
+        keyExtractor={claveProducto}
+        renderItem={renderProducto}
+        numColumns={tienda.columnas}
+        columnWrapperStyle={styles.filaProductos}
+        ItemSeparatorComponent={SeparadorFilas}
+        ListHeaderComponent={encabezadoLista}
+        ListEmptyComponent={sinResultados}
+        ListFooterComponent={paginador}
+        contentContainerStyle={styles.contenido}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        refreshControl={refresco}
+        initialNumToRender={tienda.tarjetasEsqueleto}
+        maxToRenderPerBatch={tienda.tarjetasEsqueleto}
+        windowSize={7}
+      />
+      <HojaFiltrosTienda
+        visible={vm.hojaFiltros}
+        onCerrar={vm.cerrarFiltros}
+        categoria={vm.categoria}
+        borrador={vm.borrador}
+        borradorActivos={vm.borradorActivos}
+        grupos={vm.gruposFiltro}
+        onCambiarPrecioMinimo={vm.setPrecioMinimo}
+        onCambiarPrecioMaximo={vm.setPrecioMaximo}
+        onAlternar={vm.alternarOpcion}
+        onLimpiar={vm.limpiarBorrador}
+        onAplicar={vm.aplicarFiltros}
+      />
+    </Animated.View>
   );
 }
 
+function SeparadorFilas() {
+  return <View style={styles.separador} />;
+}
+
 const styles = StyleSheet.create({
+  raiz: {
+    flex: 1,
+  },
   contenido: {
     flexGrow: 1,
     paddingBottom: espacio.x3,
   },
-  cuerpo: {
+  controles: {
     paddingHorizontal: pantalla.margen,
-    gap: espacio.xl,
+    paddingBottom: espacio.xl,
+    gap: espacio.l,
   },
-  busqueda: {
+  // Buscador y botón "Filtros" en la misma fila: el buscador toma el ancho que sobra.
+  filaBuscador: {
     flexDirection: 'row',
+    alignItems: 'center',
+    gap: filtrosTienda.separacionBoton,
   },
-  nota: {
+  buscador: {
+    flex: 1,
+  },
+  aviso: {
     fontFamily: fuente.texto,
-    fontSize: tipo.cuerpo.tamano,
-    lineHeight: tipo.cuerpo.linea,
+    fontSize: tipo.pequeno.tamano,
+    lineHeight: tipo.pequeno.linea,
   },
-  cuadricula: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  // Las dos tarjetas de una fila se estiran al mismo alto (alignItems stretch por omisión).
+  filaProductos: {
+    paddingHorizontal: pantalla.margen,
     gap: espacio.m,
   },
-  tarjeta: {
+  separador: {
+    height: espacio.m,
+  },
+  paginador: {
+    alignItems: 'center',
+    gap: espacio.m,
+    paddingHorizontal: pantalla.margen,
+    paddingTop: espacio.xxl,
+  },
+  botonesPaginador: {
+    flexDirection: 'row',
+    alignSelf: 'stretch',
+    gap: espacio.m,
+  },
+  botonPaginador: {
+    flex: 1,
+  },
+  textoPaginador: {
+    fontFamily: fuente.texto,
+    fontSize: tipo.pequeno.tamano,
+    lineHeight: tipo.pequeno.linea,
+    fontVariant: ['tabular-nums'],
+    textAlign: 'center',
+  },
+  estado: {
+    paddingHorizontal: pantalla.margen,
+  },
+  esqueleto: {
+    paddingHorizontal: pantalla.margen,
+    gap: espacio.m,
+  },
+  buscadorEsqueleto: {
+    height: toqueMinimo,
+    borderRadius: radio.campo,
+  },
+  botonFiltrosEsqueleto: {
+    width: filtrosTienda.anchoBotonEsqueleto,
+  },
+  chipsEsqueleto: {
+    flexDirection: 'row',
     gap: espacio.s,
+    paddingTop: espacio.xs,
+    paddingBottom: espacio.s,
   },
-  imagen: {
-    aspectRatio: 1,
-    borderRadius: radio.tarjeta,
+  chipEsqueleto: {
+    width: toqueMinimo * 2,
+    height: controles.pastillaAlto,
+    borderRadius: radio.campo,
   },
-  linea: {
-    width: esqueleto.anchoMedio,
-    height: esqueleto.linea,
-  },
-  lineaCorta: {
-    width: esqueleto.anchoCorto,
-    height: esqueleto.linea,
+  filaEsqueleto: {
+    flexDirection: 'row',
+    gap: espacio.m,
   },
 });

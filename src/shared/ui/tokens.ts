@@ -1,186 +1,10 @@
-/**
- * Tokens del sistema "Atelier cálido" (DESIGN.md). Es el único lugar del código donde se escriben
- * colores y medidas: las pantallas y componentes solo leen de aquí.
- */
+import { coloresFondoHero, coloresInsignia } from './colores';
 
 /**
- * Paleta: cada valor sale de una variable del sitio web (.referencia-web/src/app/styles), que es la
- * fuente de verdad. Entre paréntesis, la variable de origen.
+ * Tokens del sistema "Atelier cálido" (DESIGN.md): medidas, tipografía y movimiento. Los colores
+ * viven solo en colores.ts y aquí se vuelven a exportar para que ningún import se rompa.
  */
-export const paleta = {
-  lino: '#DCC8B6', // --fondo-general (claro)
-  terracota: '#B38E6F', // --tarjetas-paneles (claro), --texto-secundario (oscuro)
-  arena: '#d0b29c', // --fondos-suaves (claro)
-  vino: '#710014', // --botones-principales, --mf-foco (claro)
-  vinoProfundo: '#600011', // --menu-texto-principal, --danger-texto (claro)
-  oro: '#9f6d1f', // --logo-branding
-  oroFoco: '#c4954d', // --mf-foco, --oro-sobre-carbon, --nav-activo-icono (oscuro)
-  oroSobreCarbon: '#b07a28', // --oro-sobre-carbon (claro)
-  carbon: '#161616', // --header-footer, --fondo-general (oscuro)
-  carbonMedio: '#1f1f1f', // --fondos-suaves, --input-bg, --mf-banda (oscuro)
-  carbonClaro: '#2a2a2a', // --texto-cuerpo, --encabezados-alterno (claro), --tarjetas-paneles (oscuro)
-  crema: '#F2F1ED', // --input-bg, --texto-fondo-oscuro (claro), --btn-secundario-texto (oscuro)
-  blanco: '#ffffff', // --menu-texto-principal, --texto-fondo-oscuro (oscuro)
-  textoSecundario: '#4a4541', // --texto-secundario (claro)
-  bordeCampoClaro: '#8a7667', // --campo-borde (claro)
-  bordeCampoOscuro: '#6e6e6e', // --campo-borde (oscuro)
-  placeholderClaro: '#6b5a4e', // --campo-placeholder (claro)
-  placeholderOscuro: '#b8a597', // --campo-placeholder (oscuro)
-  peligroOscuro: '#e0748f', // --danger-texto (oscuro)
-  exitoClaro: '#242d1b', // --success-texto (claro)
-  exitoOscuro: '#82a163', // --success-texto (oscuro)
-  avisoClaro: '#37280b', // --warning-texto = --oro-texto (claro)
-  avisoOscuro: '#D98E04', // --warning-texto = --warning (oscuro)
-} as const;
-
-/** Resplandor detrás de cada frasco del hero (solo para eso). Valores de fluidosHero.ts de la web. */
-export const colorFluido = {
-  goji: '#7a1a1f',
-  argan: '#d99a4e',
-  platino: '#5b3fd6',
-  hialuronico: '#d9728f',
-} as const;
-
-/** Colores con transparencia, también tomados de la web. */
-const transparencias = {
-  cremaCuerpo: 'rgba(242, 241, 237, 0.88)', // --texto-cuerpo (oscuro)
-  cremaSobreCarbon: 'rgba(242, 241, 237, 0.8)', // --texto-fondo-oscuro-80 (claro)
-  blancoSobreCarbon: 'rgba(255, 255, 255, 0.8)', // --texto-fondo-oscuro-80 (oscuro)
-  lineaClaro: 'rgba(113, 0, 20, 0.14)', // --mf-linea (claro)
-  lineaOscuro: 'rgba(255, 255, 255, 0.08)', // --mf-linea (oscuro)
-  presionadoClaro: 'rgba(113, 0, 20, 0.05)', // --nav-hover-bg (claro)
-  presionadoOscuro: 'rgba(255, 255, 255, 0.04)', // --nav-hover-bg (oscuro)
-  // Sin variable equivalente en la web (se conserva y se reporta): velo del visor y de las hojas.
-  velo: 'rgba(22, 22, 22, 0.94)',
-} as const;
-
-export interface Colores {
-  /** Lienzo de pantalla. */
-  fondo: string;
-  /** Superficie de tarjeta. */
-  superficie: string;
-  /** Superficies secundarias, marcos de imagen y skeletons. */
-  superficieSecundaria: string;
-  texto: string;
-  textoSuave: string;
-  /** Único acento de acción. */
-  accion: string;
-  textoSobreAccion: string;
-  /** Botón secundario. */
-  secundario: string;
-  textoSobreSecundario: string;
-  foco: string;
-  hairline: string;
-  campoFondo: string;
-  campoBorde: string;
-  campoTexto: string;
-  campoPlaceholder: string;
-  barraFondo: string;
-  iconoActivo: string;
-  iconoInactivo: string;
-  /** Panel de marca, placeholders de imagen y visor. */
-  panel: string;
-  textoSobrePanel: string;
-  textoSuaveSobrePanel: string;
-  oro: string;
-  oroTextoPequeno: string;
-  sombra: string;
-  velo: string;
-  /** Errores de formulario y acciones destructivas. */
-  peligro: string;
-  /** Fondo de una fila mientras se presiona. */
-  presionado: string;
-  /** Confirmación de un estado (por ejemplo, "Correo disponible"). */
-  exito: string;
-  /** Estado en espera o que pide atención sin ser error. */
-  aviso: string;
-  /** Enlaces de texto. */
-  enlace: string;
-  /** Borde y texto del botón con borde (--menu-texto-principal de la web): 8.6:1 en claro y 18:1 en oscuro. */
-  contorno: string;
-  /**
-   * Relleno del día y del horario elegidos. Claro: vino (4.1:1 sobre terracota, 7.6:1 sobre lino).
-   * Oscuro: el vino casi desaparece sobre carbón (1.2:1), así que se usa el oro de foco oscuro
-   * (5.3:1 sobre la tarjeta #2a2a2a y 6.7:1 sobre el fondo #161616).
-   */
-  seleccion: string;
-  /** Número sobre el relleno de selección: crema sobre vino (10.9:1) y carbón sobre oro (6.7:1). */
-  textoSobreSeleccion: string;
-}
-
-export const temaClaro: Colores = {
-  fondo: paleta.lino,
-  superficie: paleta.terracota,
-  superficieSecundaria: paleta.arena,
-  texto: paleta.carbonClaro,
-  textoSuave: paleta.textoSecundario,
-  accion: paleta.vino,
-  textoSobreAccion: paleta.crema,
-  secundario: paleta.terracota,
-  textoSobreSecundario: paleta.carbonClaro,
-  foco: paleta.vino,
-  hairline: transparencias.lineaClaro,
-  campoFondo: paleta.crema,
-  campoBorde: paleta.bordeCampoClaro,
-  campoTexto: paleta.vinoProfundo,
-  campoPlaceholder: paleta.placeholderClaro,
-  barraFondo: paleta.lino,
-  iconoActivo: paleta.vino,
-  iconoInactivo: paleta.carbonClaro,
-  panel: paleta.carbon,
-  textoSobrePanel: paleta.crema,
-  textoSuaveSobrePanel: transparencias.cremaSobreCarbon,
-  oro: paleta.oro,
-  oroTextoPequeno: paleta.oroSobreCarbon,
-  // Sombra tintada de vino del botón primario (identidad de la marca; sin variable equivalente en la web).
-  sombra: paleta.vino,
-  velo: transparencias.velo,
-  peligro: paleta.vinoProfundo,
-  presionado: transparencias.presionadoClaro,
-  exito: paleta.exitoClaro,
-  aviso: paleta.avisoClaro,
-  enlace: paleta.vinoProfundo,
-  contorno: paleta.vinoProfundo,
-  seleccion: paleta.vino,
-  textoSobreSeleccion: paleta.crema,
-};
-
-export const temaOscuro: Colores = {
-  fondo: paleta.carbon,
-  superficie: paleta.carbonClaro,
-  superficieSecundaria: paleta.carbonMedio,
-  texto: transparencias.cremaCuerpo,
-  textoSuave: paleta.terracota,
-  accion: paleta.vino,
-  textoSobreAccion: paleta.blanco,
-  secundario: paleta.carbonClaro,
-  textoSobreSecundario: paleta.crema,
-  foco: paleta.oroFoco,
-  hairline: transparencias.lineaOscuro,
-  campoFondo: paleta.carbonMedio,
-  campoBorde: paleta.bordeCampoOscuro,
-  campoTexto: paleta.blanco,
-  campoPlaceholder: paleta.placeholderOscuro,
-  barraFondo: paleta.carbonMedio,
-  iconoActivo: paleta.oroFoco,
-  iconoInactivo: paleta.terracota,
-  panel: paleta.carbon,
-  textoSobrePanel: paleta.blanco,
-  textoSuaveSobrePanel: transparencias.blancoSobreCarbon,
-  oro: paleta.oro,
-  oroTextoPequeno: paleta.oroFoco,
-  // La web usa negro puro en sombras oscuras; DESIGN.md lo prohíbe, así que se conserva carbón.
-  sombra: paleta.carbon,
-  velo: transparencias.velo,
-  peligro: paleta.peligroOscuro,
-  presionado: transparencias.presionadoOscuro,
-  exito: paleta.exitoOscuro,
-  aviso: paleta.avisoOscuro,
-  enlace: paleta.blanco,
-  contorno: paleta.blanco,
-  seleccion: paleta.oroFoco,
-  textoSobreSeleccion: paleta.carbon,
-};
+export * from './colores';
 
 /** Ritmo de 4px. */
 export const espacio = {
@@ -207,7 +31,10 @@ export const radio = {
 
 export const borde = {
   hairline: 1,
+  /** Botón con borde, anillos y casillas (--btn-borde 1.5px). */
   campo: 1.5,
+  /** Borde del campo de texto (.mf-campo: 1px). */
+  entrada: 1,
   indicador: 2,
 } as const;
 
@@ -224,31 +51,69 @@ export const icono = {
 
 /** Familias cargadas en src/app/_layout.tsx con @expo-google-fonts. */
 export const fuente = {
-  titulo: 'PlayfairDisplay_600SemiBold',
+  /** Títulos: Playfair 700 como .mf-titulo-pagina de la web. */
+  titulo: 'PlayfairDisplay_700Bold',
+  /** Letras "MF" del monograma y de la intro de la grieta: se conservan en 600. */
+  monograma: 'PlayfairDisplay_600SemiBold',
   tituloFuerte: 'PlayfairDisplay_700Bold',
   texto: 'Geist_400Regular',
   textoMedio: 'Geist_500Medium',
   textoFuerte: 'Geist_600SemiBold',
+  /** Precios, totales y contadores (Geist 700 de la web). */
+  textoNegrita: 'Geist_700Bold',
   manuscrita: 'GreatVibes_400Regular',
 } as const;
 
 /** Tamaño y alto de línea (texto en 1.5–1.6; títulos más cerrados). */
 export const tipo = {
   etiqueta: { tamano: 13, linea: 20 },
-  pequeno: { tamano: 14, linea: 22 },
-  cuerpo: { tamano: 16, linea: 25 },
+  /** Etiqueta de un campo de formulario (.mf-etiqueta: 15px, peso 500). */
+  etiquetaCampo: { tamano: 15, linea: 22 },
+  pequeno: { tamano: 14, linea: 21 },
+  /** Cuerpo: line-height 1.5 como el body de la web. */
+  cuerpo: { tamano: 16, linea: 24 },
+  /** Párrafos largos (descripciones, avisos extensos): line-height 1.625 de la web. */
+  parrafo: { tamano: 16, linea: 26 },
   subtitulo: { tamano: 20, linea: 28 },
-  titulo: { tamano: 28, linea: 34 },
+  /** .mf-titulo-pagina: clamp(30px…) con interlineado 1.15; a 360dp mide 30. */
+  titulo: { tamano: 30, linea: 35 },
   marca: { tamano: 44, linea: 48 },
   marcaManuscrita: { tamano: 40, linea: 52 },
   gigante: { tamano: 52, linea: 54 },
   /** 10sp: "Notificaciones" mide 69 dp en Geist y cada pestaña tiene 72 dp a 360 dp de ancho. */
   pestana: { tamano: 10, linea: 13 },
+  /** Categoría en mayúsculas sobre el título de una tarjeta ("SHAMPOO · AVYNA"). */
+  categoria: { tamano: 12, linea: 16 },
+  /** Título de tarjeta en Geist 600 (TarjetaCatalogo de la web: 18 con interlineado 1.375). */
+  tituloTarjeta: { tamano: 18, linea: 25 },
+  /** Descripción corta de una tarjeta (14 con interlineado 1.625). */
+  descripcion: { tamano: 14, linea: 23 },
+  /** Precio de una tarjeta en Geist 700. */
+  precio: { tamano: 20, linea: 28 },
+  /** Número de los contadores (Geist 700 12/16). */
+  contador: { tamano: 12, linea: 16 },
+  /** Logotipo de la cabecera: "Mirú" en Playfair 700, "Franco" en Great Vibes y "BEAUTY SALÓN". */
+  logotipo: { tamano: 16, linea: 18 },
+  logotipoFranco: { tamano: 20, linea: 24 },
+  logotipoSalon: { tamano: 10, linea: 12 },
 } as const;
 
-/** Espaciado de letra: títulos ligeramente cerrados, lema abierto. */
+/**
+ * Espaciado de letra: títulos en Playfair con -0.02em como la web (em × tamaño en px), lema abierto.
+ * `titulo`, `gigante` y `lema` los usa también el hero de fluidos, que no se toca: se conservan.
+ */
 export const tracking = {
+  /** Categoría en mayúsculas de las tarjetas (0.05em de 12). */
+  categoria: 0.6,
+  /** "BEAUTY SALÓN" del logotipo (0.18em de 10). */
+  logotipoSalon: 1.8,
   titulo: -0.4,
+  /** Título de pantalla (tipo.titulo, 30): -0.02em. */
+  tituloPagina: -0.6,
+  /** Subtítulo y título de hoja (tipo.subtitulo, 20): -0.02em. */
+  subtitulo: -0.4,
+  /** Título de tarjeta en Playfair (tipo.cuerpo, 16): -0.02em. */
+  tituloTarjeta: -0.32,
   gigante: -1.2,
   lema: 2.4,
   monograma: 1,
@@ -283,6 +148,10 @@ export const duracion = {
   intro: 1300,
   /** Amortiguado del parallax: cada lectura del giroscopio se alcanza en este tiempo. */
   parallax: 600,
+  /** Con movimiento reducido, hojas y diálogos solo se funden en este tiempo (sistema.css). */
+  reducido: 160,
+  /** La foto de la cabecera no se vuelve a leer de /me al enfocar una pestaña antes de este tiempo. */
+  refrescoFotoCabecera: 60000,
   /** Medio ciclo del pulso de los skeletons. */
   pulso: 900,
   /** Cambio de estado de un campo (verificando, disponible, requisito cumplido): igual que presionar. */
@@ -297,19 +166,34 @@ export const duracion = {
   cuentaRegresiva: 1000,
   /** Sesión móvil: el acceso se renueva antes de salir si le falta menos que esto para vencer. */
   margenRenovacion: 60000,
+  /** Confirmación del pedido: cada cuánto se consulta el estado del pago mientras está pendiente. */
+  consultaPago: 3000,
+  /** Confirmación del pedido: tiempo máximo de consultas seguidas del estado del pago. */
+  limiteConsultaPago: 45000,
+  /**
+   * Tras volver de Mercado Pago, cuánto se sigue consultando un pago que todavía no aparece
+   * (sin_pago): tres consultas. Un pago aprobado aparece casi siempre en la primera.
+   */
+  limiteConsultaSinPago: 9000,
 } as const;
 
 /** Intervalo de lectura del giroscopio. */
 export const intervaloSensor = 50;
 
-/** Escala al presionar: se hunde sin animar desde escala 0. */
+/** Escala al presionar un botón u opción: se hunde sin animar desde escala 0 (sistema.css: 0.97). */
 export const escalaPresionado = 0.97;
+
+/** Escala al presionar una tarjeta tocable completa (sistema.css: .mf-tarjeta-tocable 0.99). */
+export const escalaPresionadoTarjeta = 0.99;
 
 /** Escala desde la que entra un ícono de estado (nunca desde 0). */
 export const escalaEntrada = 0.9;
 
 export const opacidad = {
-  deshabilitado: 0.45,
+  /** Botón deshabilitado (Button de la web: 0.5). */
+  deshabilitado: 0.5,
+  /** Campo deshabilitado (.mf-campo:disabled 0.55). */
+  deshabilitadoCampo: 0.55,
   /** Pulso de los skeletons. */
   pulsoMinimo: 0.55,
   /** Respuesta al presionar con movimiento reducido: baja la opacidad en lugar de hundirse. */
@@ -469,17 +353,34 @@ export const stickers = {
   trazoInterior: 3.2,
 } as const;
 
-export const colorSticker = {
-  tijeras: { fondo: paleta.vino, tinta: paleta.crema },
-  destello: { fondo: paleta.oro, tinta: paleta.crema },
-  gota: { fondo: colorFluido.hialuronico, tinta: paleta.vino },
-  peine: { fondo: paleta.lino, tinta: paleta.vino },
-  papel: paleta.crema,
+
+
+/**
+ * Fondo del hero de Inicio (.hero-bg-gradient de globals.css): colores de colores.ts más la
+ * geometría de los dos resplandores, en fracción del ancho y alto del escenario.
+ */
+export const fondoHero = {
+  ...coloresFondoHero,
+  /** ellipse 80% 50% at 50% 0% y ellipse 60% 35% at 50% 70%; el color se apaga al 60 %. */
+  arriba: { cx: 0.5, cy: 0, rx: 0.8, ry: 0.5 },
+  abajo: { cx: 0.5, cy: 0.7, rx: 0.6, ry: 0.35 },
+  apagado: 0.6,
 } as const;
 
-/** Tienda: columnas de la cuadrícula de productos. */
+/** Tienda (GP-06.4): catálogo, carrito y pedidos. */
 export const tienda = {
+  /** Columnas de la cuadrícula de productos. */
   columnas: 2,
+  /** Productos por página del catálogo: 8 filas de dos. */
+  porPagina: 16,
+  /** Tarjetas que dibuja el skeleton mientras carga el catálogo. */
+  tarjetasEsqueleto: 6,
+  /** Lado de la foto cuadrada de una fila del carrito o de un pedido. */
+  miniatura: 72,
+  /** Ancho / alto de la foto de la tarjeta y de la galería del detalle (cuadradas). */
+  proporcionFoto: 1,
+  /** Diámetro del punto que marca la foto actual de la galería. */
+  puntoGaleria: 8,
 } as const;
 
 /** Galería: mosaico de 4 columnas por 3 filas por cada 7 fotos. */
@@ -529,29 +430,10 @@ export const reserva = {
   largoNotas: 300,
 } as const;
 
-/**
- * Insignias de estado (DESIGN.md: base clara teñida del color del estado con texto oscuro de su
- * familia). Igual que `.mf-badge` de la web (sistema.css): el color del estado al 16 % sobre la
- * base de insignia (crema en claro, carbón medio en oscuro), ya mezclado porque React Native no
- * tiene color-mix. Contraste del texto: 7:1 o más en claro y 4.7:1 o más en oscuro.
- */
+
+/** Insignias de estado: colores de colores.ts (coloresInsignia) más sus rellenos. */
 export const insignia = {
-  claro: {
-    /** --warning #D98E04 al 16 % sobre crema; texto --warning-texto. */
-    aviso: { fondo: '#EEE1C8', texto: paleta.avisoClaro },
-    /** --success #6E7D57 al 16 % sobre crema; texto --success-texto. */
-    exito: { fondo: '#DDDED5', texto: paleta.exitoClaro },
-    /** --logo-branding #9f6d1f al 16 % sobre crema; texto secundario. */
-    neutro: { fondo: '#E5DCCC', texto: paleta.textoSecundario },
-  },
-  oscuro: {
-    /** --warning al 16 % sobre #1f1f1f; texto --warning-texto oscuro (4.7:1). */
-    aviso: { fondo: '#3D311B', texto: paleta.avisoOscuro },
-    /** --success al 16 % sobre #1f1f1f; texto --success-texto oscuro (4.7:1). */
-    exito: { fondo: '#2C2E28', texto: paleta.exitoOscuro },
-    /** --logo-branding al 16 % sobre #1f1f1f; texto oro sobre carbón (5.1:1). */
-    neutro: { fondo: '#332B1F', texto: paleta.oroFoco },
-  },
+  ...coloresInsignia,
   rellenoHorizontal: espacio.m,
   rellenoVertical: espacio.xs,
 } as const;
@@ -566,4 +448,201 @@ export const confirmacion = {
 export const cancelacion = {
   /** Caracteres máximos del motivo escrito con la opción "Otro". */
   largoMotivo: 200,
+} as const;
+
+/** Catálogo y detalle de productos de la tienda (GP-06.4). */
+export const tiendaCatalogo = {
+  /** Ancho del punto de la foto actual de la galería: pastilla más larga que los demás puntos. */
+  puntoActivo: 20,
+  /** Diámetro de la viñeta de las características del producto. */
+  vineta: 6,
+  /** Cifra más alta del número de piezas de la pestaña Carrito; arriba de ella se lee "99+". */
+  maximoPiezasVisibles: 99,
+  /** Cifra del número de piezas de la pestaña Carrito: cabe en el círculo de 18dp de la barra. */
+  cifraPastilla: { tamano: 11, linea: 14 },
+} as const;
+
+/** Carrito, checkout y confirmación del pedido (GP-06.4). */
+export const tiendaCompra = {
+  /** Diámetro del círculo de la opción de pago tipo radio. */
+  radioOpcion: 22,
+  /** Diámetro del punto que marca la opción de pago elegida. */
+  puntoOpcion: 10,
+} as const;
+
+/** Controles compartidos: pastillas de filtro, buscadores y contador de cantidad (sin colores). */
+export const controles = {
+  /** Alto visual de la pastilla de filtro (Button sm de la web: min-h-9); el área táctil sigue en 48. */
+  pastillaAlto: 36,
+  /** Relleno vertical de la pastilla (py-1.5 de la web); el horizontal es espacio.m. */
+  pastillaRellenoVertical: 6,
+  /** Texto de la pastilla: Geist 600 14/20 (text-sm de la web). */
+  textoPastilla: { tamano: 14, linea: 20 },
+  /** Halo del foco de un campo (.mf-campo:focus: 0 0 0 3px). */
+  halo: 3,
+  /** Ancho de la caja de la cifra del contador de cantidad (w-16 del carrito de la web). */
+  cajaCantidad: 64,
+  /** Separación entre los botones del contador y la caja de la cifra. */
+  separacionCantidad: 6,
+  /** Ícono de menos y más del contador (16 como el carrito de la web). */
+  iconoCantidad: 16,
+} as const;
+
+/**
+ * Cabecera compacta de todas las pantallas (Header.tsx de la web en móvil): cromo carbón con el
+ * logotipo a la izquierda y las acciones a la derecha; el título de la pantalla baja al lienzo.
+ */
+export const cabeceraCompacta = {
+  /** Alto del contenido bajo la barra de estado (sin el área segura). */
+  alto: 56,
+  /** Relleno derecho: un botón de 48 deja su ícono a 20 del borde, igual que pantalla.margen. */
+  rellenoDerecho: espacio.s,
+  /** Relleno izquierdo cuando la fila empieza con el botón Volver (mismo cálculo). */
+  rellenoVolver: espacio.s,
+  /** Separación entre el monograma y el texto del logotipo, y entre botones. */
+  separacion: espacio.s,
+  separacionAcciones: espacio.xs,
+  /** Fila del buscador de Inicio, dentro del cromo: el campo de 48 más su relleno inferior. */
+  filaBuscador: toqueMinimo + espacio.s,
+  /**
+   * Bajo este ancho la web quita el monograma para que el logotipo quepa junto a las acciones
+   * (Header.tsx: min-[384px]). En Inicio sin sesión, con "Iniciar sesión" y la campana, se aplica igual.
+   */
+  anchoConMonograma: 384,
+  /** El logotipo crece con la fuente del sistema solo hasta este factor: la barra mide 56. */
+  escalaMaximaLogotipo: 1.2,
+  /** "BEAUTY SALÓN": 11 en lugar de 10 para que se lea en el teléfono (0.18em de espaciado). */
+  salon: { tamano: 11, linea: 13 },
+  trackingSalon: 2,
+  /** Bloque del título de la pantalla en el lienzo (PageHeader de la web). */
+  tituloArriba: espacio.xxl,
+  /**
+   * El título de 30 crece con la fuente del sistema hasta este factor (45): en las pantallas de la
+   * pila queda fijo sobre el scroll y a más tamaño se comería la mitad de la pantalla.
+   */
+  escalaMaximaTitulo: 1.5,
+  /** Título a subtítulo: mt-2 de la web. */
+  separacionSubtitulo: espacio.s,
+  /**
+   * Debajo del bloque: la web deja 32 (mb-8); aquí 16, porque cada vista ya suma su propio relleno
+   * superior (16 a 24) y así el contenido no cambia de lugar respecto a antes.
+   */
+  tituloAbajo: espacio.l,
+} as const;
+
+/**
+ * Tarjetas de producto, servicio, carrito, pedidos y citas (TarjetaCatalogo y TarjetaServicio de
+ * la web). Solo medidas: los colores salen de colores.ts por useTheme().
+ */
+export const tarjetas = {
+  /** Relleno del cuerpo de las tarjetas de producto y servicio (p-5 de la web). */
+  rellenoCuerpo: espacio.xl,
+  /** De la categoría al título (mt-1.5 de la web). */
+  separacionTitulo: 6,
+  /** Del título a la descripción (mt-2 de la web). */
+  separacionDescripcion: espacio.s,
+  /** Espacio sobre el pie con precio y acción (pt-5 de la web). */
+  separacionPie: espacio.xl,
+  /** Entre el texto y su ícono en la acción y la duración (gap-1.5 de la web). */
+  separacionIcono: 6,
+  /** Entre la duración y el precio de un servicio (mt-1 de la web). */
+  separacionPrecio: espacio.xs,
+  /** Flecha de "Ver detalles" y "Ver y agendar" (ArrowRight 16 de la web). */
+  iconoAccion: 16,
+  /** Reloj de la duración del servicio (Clock3 14 de la web). */
+  iconoDato: 14,
+  /** Acción de la tarjeta: Geist 600 14/20 (text-sm de la web). */
+  tipoAccion: { tamano: 14, linea: 20 },
+  /** Precio original tachado: 14/20 (text-sm de la web). */
+  tipoTachado: { tamano: 14, linea: 20 },
+  /** Total de una línea del carrito y de un pedido: Geist 700 18 (text-lg de la web). */
+  tipoTotal: { tamano: 18, linea: 26 },
+} as const;
+
+/**
+ * Barra inferior como la franja vino de la web (PestanaFranja.tsx) y contador de piezas y avisos
+ * (Contador.tsx).
+ */
+export const franja = {
+  /** Alto de la barra sin el área segura de abajo: pastilla 32 + 4 + etiqueta 13 con aire. */
+  altoBarra: 64,
+  /** Pastilla de la pestaña activa: envuelve al ícono de 24 y cabe en los 72 dp de cada pestaña. */
+  pastillaAncho: 56,
+  pastillaAlto: 32,
+  /** De la pastilla a la etiqueta. */
+  separacionEtiqueta: espacio.xs,
+  /** Tope de crecimiento de la etiqueta con la fuente del sistema: la barra tiene alto fijo. */
+  escalaMaximaEtiqueta: 1.5,
+  /** Diámetro mínimo del contador (min-w-[18px] h-[18px] de la web). */
+  contadorMinimo: 18,
+  /** Contador sobre el ícono: desde el borde de arriba de la pastilla y a la derecha del centro. */
+  contadorArriba: 0,
+  contadorDesfase: espacio.xs,
+} as const;
+
+/** Perfil: tarjeta de filas como .mf-perfil-fila y títulos de sección del portal de clientas. */
+export const perfil = {
+  /** Alto mínimo de una fila (min-height 4.25rem de la web). */
+  altoFila: 68,
+  /** Relleno vertical de la fila (0.85rem); el horizontal es espacio.xl (1.25rem). */
+  rellenoFila: 14,
+  /** Cuadrito del ícono (2.75rem) y el ícono dentro de él. */
+  cuadrito: 44,
+  icono: 20,
+  /** Título de sección: Geist 600 14/20. */
+  tituloSeccion: { tamano: 14, linea: 20 },
+} as const;
+
+/** Hoja de filtros de la Tienda y su botón junto al buscador (space-y-6 del panel de la web). */
+export const filtrosTienda = {
+  /** Entre un grupo de filtros y el siguiente dentro de la hoja (space-y-6 de la web). */
+  separacionSecciones: espacio.xxl,
+  /** Entre el buscador y el botón "Filtros" en la misma fila. */
+  separacionBoton: espacio.s,
+  /** Ancho del esqueleto del botón "Filtros" mientras carga el catálogo. */
+  anchoBotonEsqueleto: 104,
+} as const;
+
+/**
+ * Cabecera de las pestañas: logotipo de imagen (Header.tsx de la web: w-8 h-8 en móvil) y la foto de
+ * la clienta en un círculo a la derecha, dentro de un área táctil de 48. Solo medidas.
+ */
+export const cabeceraFoto = {
+  /** Lado de la imagen del logotipo (logo-miru, cuadrada): el alto útil de la cabecera de 56. */
+  logotipo: 48,
+  /** Diámetro visual del círculo de la foto o de las iniciales. */
+  circulo: 36,
+  /** Anillo del círculo sobre el carbón (como el contorno del contador). */
+  anillo: borde.campo,
+  /** Iniciales: Geist 600 14/18 dentro del círculo de 36. */
+  iniciales: { tamano: 14, linea: 18 },
+  /** Las iniciales crecen con la fuente del sistema solo hasta este factor: el círculo mide 36. */
+  escalaMaximaIniciales: 1.2,
+} as const;
+
+/**
+ * Carruseles de Inicio (productos y servicios al azar, debajo del hero). Solo medidas: los colores
+ * salen de colores.ts por useTheme().
+ */
+export const carruselInicio = {
+  /**
+   * Tarjetas que se ven a la vez en el ancho de la pantalla (sin el margen de la izquierda): la
+   * fracción hace que siempre asome parte de la siguiente y se note que la fila sigue. A 360 dp la
+   * de producto mide 197 y la de servicio 293; a 412 dp, 229 y 340.
+   */
+  productosVisibles: 1.6,
+  serviciosVisibles: 1.1,
+  /** Entre tarjetas del carrusel: más cerrado que el gap-6 (24) de la web para que asome la siguiente. */
+  separacion: espacio.l,
+  /**
+   * Relleno de arriba y abajo de la fila: la lista horizontal recorta lo que sale de ella y sin
+   * este aire se cortaría la sombra de las tarjetas (desplazamiento 8 + difuminado).
+   */
+  rellenoSombra: espacio.l,
+  /** Tarjetas del skeleton mientras carga: las que llenan el ancho de la pantalla. */
+  esqueletos: 2,
+  /** "VER TODOS": Geist 600 14 en mayúsculas con 0.05em de espaciado (tracking-wider de la web). */
+  trackingVerTodos: 0.7,
+  /** Flecha de "Ver todos" (ArrowRight 16 de la web). */
+  iconoVerTodos: 16,
 } as const;
