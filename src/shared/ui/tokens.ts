@@ -371,6 +371,8 @@ export const fondoHero = {
 export const tienda = {
   /** Columnas de la cuadrícula de productos. */
   columnas: 2,
+  /** Productos por página del catálogo: 8 filas de dos. */
+  porPagina: 16,
   /** Tarjetas que dibuja el skeleton mientras carga el catálogo. */
   tarjetasEsqueleto: 6,
   /** Lado de la foto cuadrada de una fila del carrito o de un pedido. */

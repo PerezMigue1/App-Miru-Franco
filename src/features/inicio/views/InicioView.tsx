@@ -19,7 +19,6 @@ import { Button } from '@/shared/ui/Button';
 import { CabeceraCompacta } from '@/shared/ui/CabeceraCompacta';
 import { EmptyState } from '@/shared/ui/EmptyState';
 import { usePresion } from '@/shared/ui/movimiento';
-import { SearchBar } from '@/shared/ui/SearchBar';
 import {
   borde,
   cabeceraCompacta,
@@ -70,8 +69,8 @@ export default function InicioView() {
   const refScroll = useAnimatedRef<Animated.ScrollView>();
   const desplazamiento = useScrollOffset(refScroll);
   const [altoVisible, setAltoVisible] = useState(0);
-  // Cromo compacto (56) más la fila del buscador: el escenario del hero queda justo debajo.
-  const altoCabecera = top + cabeceraCompacta.alto + cabeceraCompacta.filaBuscador;
+  // Cromo compacto (56): el escenario del hero queda justo debajo.
+  const altoCabecera = top + cabeceraCompacta.alto;
 
   const medir = (e: LayoutChangeEvent) => setAltoVisible(e.nativeEvent.layout.height);
 
@@ -87,7 +86,6 @@ export default function InicioView() {
   // La pestaña se llama Servicios, pero su ruta es /citas.
   const verServicios = useCallback(() => navigate('/citas'), [navigate]);
   // TODO(GP-06): abrir la búsqueda de productos y servicios; por ahora abre la pestaña Tienda.
-  const buscar = () => navigate('/tienda');
 
   return (
     <View style={[styles.raiz, { backgroundColor: colores.fondo }]}>
@@ -144,21 +142,11 @@ export default function InicioView() {
       </Animated.ScrollView>
 
       {/* Cabecera fija con fondo propio: el contenido pasa por debajo sin chocar con la barra de estado.
-          La misma cabecera compacta de las demás pantallas, con el buscador en una segunda fila del
-          cromo: dentro del scroll movería el escenario fijo del hero. */}
+          La misma cabecera compacta de las demás pantallas. */}
       <CabeceraCompacta
         style={[styles.cabecera, { shadowColor: colores.sombraTarjeta }]}
         // Las mismas acciones de las demás pestañas: campana y foto (o "Iniciar sesión").
         derecha={<AccionesCabecera />}
-        debajo={
-          <View style={styles.filaBuscador}>
-            <SearchBar
-              texto="Buscar productos y servicios"
-              accessibilityHint="Abre la tienda"
-              onPress={buscar}
-            />
-          </View>
-        }
       />
 
       {sesionVencida ? (
@@ -282,11 +270,6 @@ const styles = StyleSheet.create({
     shadowRadius: sombra.tarjeta.radio,
     shadowOffset: { width: 0, height: sombra.tarjeta.desplazamientoY },
     elevation: sombra.tarjeta.elevacion,
-  },
-  filaBuscador: {
-    flexDirection: 'row',
-    paddingHorizontal: pantalla.margen,
-    paddingBottom: cabeceraCompacta.filaBuscador - toqueMinimo,
   },
   botonIcono: {
     width: toqueMinimo,

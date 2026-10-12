@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import {
   FlatList,
   RefreshControl,
@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import Animated from 'react-native-reanimated';
 
+import { Button } from '@/shared/ui/Button';
 import { EmptyState } from '@/shared/ui/EmptyState';
 import { BotonFiltros } from '@/shared/ui/Filtros';
 import { useEntradaContenido } from '@/shared/ui/movimiento';
@@ -46,11 +47,12 @@ function claveProducto(producto: ProductoCatalogo): string {
   return String(producto.id);
 }
 
-/** Pestaña Tienda (GP-06.4): catálogo público en dos columnas con búsqueda, categorías y filtros. */
+/** Pestaña Productos (ruta tienda): catálogo público en dos columnas con búsqueda, categorías, filtros y páginas. */
 export default function TiendaView() {
   const { colores } = useTheme();
   const { width } = useWindowDimensions();
   const vm = useCatalogoViewModel();
+  const refLista = useRef<FlatList<ProductoCatalogo>>(null);
   // La cuadrícula aparece una sola vez al terminar de cargar (en el contenedor, no en cada fila).
   const entrada = useEntradaContenido();
 
@@ -177,10 +179,50 @@ export default function TiendaView() {
     </View>
   );
 
+  // Al cambiar de página la lista vuelve arriba, al encabezado.
+  const irAPagina = (cambiar: () => void) => {
+    cambiar();
+    refLista.current?.scrollToOffset({ offset: 0, animated: false });
+  };
+
+  const paginador =
+    vm.totalPaginas > 1 ? (
+      <View style={styles.paginador}>
+        <Text style={[styles.textoPaginador, { color: colores.textoSuave }]}>{vm.textoRango}</Text>
+        <View style={styles.botonesPaginador}>
+          <View style={styles.botonPaginador}>
+            <Button
+              titulo="Anterior"
+              variante="secundario"
+              onPress={() => irAPagina(vm.paginaAnterior)}
+              deshabilitado={vm.pagina <= 1}
+              accessibilityLabel="Página anterior"
+            />
+          </View>
+          <View style={styles.botonPaginador}>
+            <Button
+              titulo="Siguiente"
+              variante="secundario"
+              onPress={() => irAPagina(vm.paginaSiguiente)}
+              deshabilitado={vm.pagina >= vm.totalPaginas}
+              accessibilityLabel="Página siguiente"
+            />
+          </View>
+        </View>
+        <Text
+          accessibilityLiveRegion="polite"
+          style={[styles.textoPaginador, { color: colores.texto }]}
+        >
+          Página {vm.pagina} de {vm.totalPaginas}
+        </Text>
+      </View>
+    ) : null;
+
   return (
     <Animated.View entering={entrada} style={[styles.raiz, { backgroundColor: colores.fondo }]}>
       <FlatList
-        data={vm.productosVisibles}
+        ref={refLista}
+        data={vm.productosPagina}
         keyExtractor={claveProducto}
         renderItem={renderProducto}
         numColumns={tienda.columnas}
@@ -188,6 +230,7 @@ export default function TiendaView() {
         ItemSeparatorComponent={SeparadorFilas}
         ListHeaderComponent={encabezadoLista}
         ListEmptyComponent={sinResultados}
+        ListFooterComponent={paginador}
         contentContainerStyle={styles.contenido}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
@@ -251,6 +294,27 @@ const styles = StyleSheet.create({
   },
   separador: {
     height: espacio.m,
+  },
+  paginador: {
+    alignItems: 'center',
+    gap: espacio.m,
+    paddingHorizontal: pantalla.margen,
+    paddingTop: espacio.xxl,
+  },
+  botonesPaginador: {
+    flexDirection: 'row',
+    alignSelf: 'stretch',
+    gap: espacio.m,
+  },
+  botonPaginador: {
+    flex: 1,
+  },
+  textoPaginador: {
+    fontFamily: fuente.texto,
+    fontSize: tipo.pequeno.tamano,
+    lineHeight: tipo.pequeno.linea,
+    fontVariant: ['tabular-nums'],
+    textAlign: 'center',
   },
   estado: {
     paddingHorizontal: pantalla.margen,

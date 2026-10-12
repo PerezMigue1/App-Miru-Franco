@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { esErrorDeRed } from '@/features/auth/models/AuthModel';
 import { ApiError } from '@/shared/api/apiClient';
+import { tienda } from '@/shared/ui/tokens';
 
 import {
   categoriasDe,
@@ -215,7 +216,17 @@ export interface CatalogoViewModel {
   /** Quita la búsqueda, la categoría y los filtros del panel ("Ver todos"). */
   limpiarFiltros: () => void;
   categorias: string[];
+  /** Todos los productos que cumplen búsqueda, categoría y filtros. */
   productosVisibles: ProductoCatalogo[];
+  /** Solo los de la página actual (tienda.porPagina por página). */
+  productosPagina: ProductoCatalogo[];
+  /** Página actual, desde 1, y total de páginas (al menos 1). */
+  pagina: number;
+  totalPaginas: number;
+  /** "Mostrando 17 a 32 de 120 productos" para el pie de la lista. */
+  textoRango: string;
+  paginaAnterior: () => void;
+  paginaSiguiente: () => void;
   /** El catálogo trae al menos un producto (sin contar filtros). */
   hayProductos: boolean;
   abrirProducto: (id: number) => void;
@@ -360,6 +371,28 @@ export function useCatalogoViewModel(): CatalogoViewModel {
     [productos, busqueda, categoria, filtros, visibles],
   );
 
+  // Paginación sobre la lista ya filtrada: al cambiar búsqueda, categoría o filtros vuelve a la 1.
+  const [pagina, setPagina] = useState(1);
+  useEffect(() => {
+    setPagina(1);
+  }, [busqueda, categoria, filtros]);
+  const totalPaginas = Math.max(1, Math.ceil(productosVisibles.length / tienda.porPagina));
+  // Si el catálogo se acorta al refrescar, la página no queda fuera de rango.
+  const paginaActual = Math.min(pagina, totalPaginas);
+  const productosPagina = useMemo(
+    () =>
+      productosVisibles.slice((paginaActual - 1) * tienda.porPagina, paginaActual * tienda.porPagina),
+    [productosVisibles, paginaActual],
+  );
+  const desde = productosVisibles.length === 0 ? 0 : (paginaActual - 1) * tienda.porPagina + 1;
+  const hasta = Math.min(paginaActual * tienda.porPagina, productosVisibles.length);
+  const textoRango = `Mostrando ${desde} a ${hasta} de ${productosVisibles.length} productos`;
+  const paginaAnterior = useCallback(() => setPagina((actual) => Math.max(1, actual - 1)), []);
+  const paginaSiguiente = useCallback(
+    () => setPagina((actual) => Math.min(totalPaginas, actual + 1)),
+    [totalPaginas],
+  );
+
   const filtrosActivos = useMemo(() => contarActivos(filtros, visibles), [filtros, visibles]);
   const borradorActivos = useMemo(() => contarActivos(borrador, visibles), [borrador, visibles]);
 
@@ -428,6 +461,12 @@ export function useCatalogoViewModel(): CatalogoViewModel {
     limpiarFiltros,
     categorias,
     productosVisibles,
+    productosPagina,
+    pagina: paginaActual,
+    totalPaginas,
+    textoRango,
+    paginaAnterior,
+    paginaSiguiente,
     hayProductos: productos.length > 0,
     abrirProducto,
     filtrosActivos,

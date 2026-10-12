@@ -1,9 +1,9 @@
 import { Tabs } from 'expo-router';
 import {
-  CalendarDays,
   House,
+  Scissors,
   ShoppingCart,
-  Store,
+  SprayCan,
   UserRound,
   type LucideIcon,
 } from 'lucide-react-native';
@@ -22,9 +22,9 @@ function iconoDe(Icono: LucideIcon) {
 }
 
 const iconoInicio = iconoDe(House);
-const iconoCitas = iconoDe(CalendarDays);
+const iconoCitas = iconoDe(Scissors);
 // Carrito con el carrito de súper y Tienda con el escaparate: siluetas distintas que no se confunden.
-const iconoTienda = iconoDe(Store);
+const iconoTienda = iconoDe(SprayCan);
 const iconoPerfil = iconoDe(UserRound);
 
 export default function ClienteLayout() {
@@ -101,7 +101,11 @@ export default function ClienteLayout() {
             piezas > 0 ? `Carrito, ${piezas === 1 ? '1 pieza' : `${piezas} piezas`}` : 'Carrito',
         }}
       />
-      <Tabs.Screen name="tienda" options={{ title: 'Tienda', tabBarIcon: iconoTienda }} />
+      {/* La pestaña se llama Productos; la ruta sigue siendo tienda. */}
+      <Tabs.Screen
+        name="tienda"
+        options={{ title: 'Productos', tabBarIcon: iconoTienda, tabBarAccessibilityLabel: 'Productos' }}
+      />
       <Tabs.Screen name="perfil" options={{ title: 'Perfil', tabBarIcon: iconoPerfil }} />
     </Tabs>
   );
