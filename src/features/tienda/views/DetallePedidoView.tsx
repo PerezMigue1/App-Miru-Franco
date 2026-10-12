@@ -1,5 +1,5 @@
 import { useLocalSearchParams } from 'expo-router';
-import { CalendarDays, CircleCheck, Hourglass, Info } from 'lucide-react-native';
+import { CalendarDays, CircleCheck, Hourglass, Info, type LucideIcon } from 'lucide-react-native';
 import type { ReactNode } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
@@ -16,6 +16,7 @@ import {
   esqueleto,
   fuente,
   icono,
+  insignia,
   pantalla,
   radio,
   sombra,
@@ -134,18 +135,7 @@ function Contenido({
     <Animated.View entering={entrada} style={styles.bloques}>
       {/* Aviso tras cancelar (o si el pedido cambió): la hoja se cierra y TalkBack lo anuncia. */}
       <View collapsable={false} accessibilityLiveRegion="polite">
-        {aviso ? (
-          <View style={styles.filaIcono}>
-            <View style={styles.iconoLinea}>
-              {aviso.tipo === 'exito' ? (
-                <CircleCheck color={colores.exito} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
-              ) : (
-                <Info color={colores.texto} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
-              )}
-            </View>
-            <Text style={[styles.textoFuerte, { color: colores.texto }]}>{aviso.texto}</Text>
-          </View>
-        ) : null}
+        {aviso ? <PanelAviso aviso={aviso} /> : null}
       </View>
 
       <View style={styles.resumen}>
@@ -237,10 +227,38 @@ function Contenido({
   );
 }
 
+const ICONOS_AVISO: Record<AvisoPedido['tipo'], LucideIcon> = {
+  exito: CircleCheck,
+  aviso: Hourglass,
+  info: Info,
+};
+
+/**
+ * Aviso con el lenguaje de las insignias (.mf-badge): base teñida del color del estado, filete del
+ * mismo color al 30 % y texto oscuro de su familia (7:1 o más en claro, 4.7:1 o más en oscuro).
+ * Éxito: cancelado (y devolución pedida); aviso: la devolución quedó en revisión; info: el pedido cambió.
+ */
+function PanelAviso({ aviso }: { aviso: AvisoPedido }) {
+  const { oscuro } = useTheme();
+  const tono = (oscuro ? insignia.oscuro : insignia.claro)[aviso.tipo];
+  const Icono = ICONOS_AVISO[aviso.tipo];
+  return (
+    <View
+      accessible
+      style={[styles.panelAviso, { backgroundColor: tono.fondo, borderColor: insignia.borde[aviso.tipo] }]}
+    >
+      <View style={styles.iconoLinea} importantForAccessibility="no-hide-descendants">
+        <Icono color={tono.texto} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
+      </View>
+      <Text style={[styles.textoFuerte, { color: tono.texto }]}>{aviso.texto}</Text>
+    </View>
+  );
+}
+
 function Tarjeta({ children }: { children: ReactNode }) {
   const { colores } = useTheme();
   return (
-    <View style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombra }]}>
+    <View style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombraTarjeta }]}>
       {children}
     </View>
   );
@@ -305,7 +323,7 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.subtitulo.tamano,
     lineHeight: tipo.subtitulo.linea,
-    letterSpacing: tracking.titulo,
+    letterSpacing: tracking.subtitulo,
   },
   articulos: {
     gap: espacio.m,
@@ -344,6 +362,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: espacio.m,
+  },
+  panelAviso: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: espacio.m,
+    padding: espacio.l,
+    borderRadius: radio.campo,
+    borderWidth: borde.hairline,
   },
   iconoLinea: {
     // Centra el ícono con la primera línea del texto.

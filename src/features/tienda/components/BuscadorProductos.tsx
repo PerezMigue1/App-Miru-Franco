@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
-import { transicionBorde } from '@/shared/ui/movimiento';
+import { transicionBorde, usePresion } from '@/shared/ui/movimiento';
 import { borde, espacio, fuente, icono, radio, tipo, toqueMinimo } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
@@ -13,8 +13,9 @@ interface BuscadorProductosProps {
 }
 
 /**
- * Campo de búsqueda del catálogo con el aspecto de los campos de la marca: el borde toma el color
- * de foco en 140 ms al escribir y aparece un botón para borrar cuando hay texto.
+ * Campo de búsqueda del catálogo con el aspecto de .mf-campo de la web: borde de 1px, esquinas de
+ * 10, y al enfocar el borde toma el color de foco en 140 ms con su halo de 3px. Aparece un botón
+ * para borrar cuando hay texto.
  */
 export function BuscadorProductos({ valor, onCambiar }: BuscadorProductosProps) {
   const { colores } = useTheme();
@@ -30,6 +31,8 @@ export function BuscadorProductos({ valor, onCambiar }: BuscadorProductosProps) 
           backgroundColor: colores.campoFondo,
           borderColor: enfocado ? colores.foco : colores.campoBorde,
         },
+        // Halo del foco como .mf-campo:focus (3px de --mf-foco al 22 %).
+        enfocado ? { boxShadow: `0 0 0 3px ${colores.focoHalo}` } : null,
       ]}
     >
       <View accessible={false} importantForAccessibility="no-hide-descendants">
@@ -50,17 +53,27 @@ export function BuscadorProductos({ valor, onCambiar }: BuscadorProductosProps) 
         cursorColor={colores.foco}
         style={[styles.entrada, { color: colores.campoTexto }, valor ? null : styles.entradaSinBorrar]}
       />
-      {valor ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Borrar búsqueda"
-          onPress={() => onCambiar('')}
-          style={styles.borrar}
-        >
-          <X color={colores.campoTexto} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
-        </Pressable>
-      ) : null}
+      {valor ? <BotonBorrar onPress={() => onCambiar('')} /> : null}
     </Animated.View>
+  );
+}
+
+/** Borra la búsqueda: se hunde a 0.97 al tocarlo como cualquier botón. */
+function BotonBorrar({ onPress }: { onPress: () => void }) {
+  const { colores } = useTheme();
+  const { estilo, hundir, soltar } = usePresion();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Borrar búsqueda"
+      onPress={onPress}
+      onPressIn={hundir}
+      onPressOut={soltar}
+    >
+      <Animated.View style={[styles.borrar, estilo]}>
+        <X color={colores.campoTexto} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
+      </Animated.View>
+    </Pressable>
   );
 }
 
@@ -71,8 +84,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: espacio.s,
     paddingLeft: espacio.l,
-    borderRadius: radio.pastilla,
-    borderWidth: borde.hairline,
+    borderRadius: radio.campo,
+    borderWidth: borde.entrada,
   },
   entrada: {
     flex: 1,

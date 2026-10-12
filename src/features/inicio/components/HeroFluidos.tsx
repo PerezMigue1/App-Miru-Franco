@@ -239,9 +239,9 @@ export function HeroFluidos({
           accessibilityLabel="Mirú Franco Beauty Salón"
           style={[styles.marca, estiloSalida]}
         >
-          <Text style={[styles.miru, { color: colores.texto }]}>MIRÚ</Text>
-          <Text style={[styles.franco, { color: colores.oro }]}>Franco</Text>
-          <Text style={[styles.lema, { color: colores.textoSuave }]}>BEAUTY SALÓN</Text>
+          <Text style={[styles.miru, { color: colores.oroGrande }]}>MIRÚ</Text>
+          <Text style={[styles.franco, { color: colores.oroGrande }]}>Franco</Text>
+          <Text style={[styles.lema, { color: colores.texto }]}>BEAUTY SALÓN</Text>
         </Animated.View>
 
         <View style={styles.composicion} onLayout={medirCaja}>
@@ -561,7 +561,7 @@ const Leyenda = memo(function Leyenda({
           key={f.clave}
           accessible
           accessibilityLabel={[f.nombre, f.precio].filter(Boolean).join(', ')}
-          style={[styles.chip, { borderColor: colores.hairline }]}
+          style={[styles.chip, { borderColor: colores.hairlineFuerte }]}
         >
           <View style={[styles.punto, { backgroundColor: f.color }]} />
           {f.nombre ? (

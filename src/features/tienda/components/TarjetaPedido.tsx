@@ -6,6 +6,7 @@ import Animated from 'react-native-reanimated';
 import { usePresion } from '@/shared/ui/movimiento';
 import { Skeleton } from '@/shared/ui/Skeleton';
 import {
+  escalaPresionadoTarjeta,
   espacio,
   esqueleto,
   fuente,
@@ -37,11 +38,11 @@ function conMayuscula(texto: string): string {
 
 /**
  * Un pedido de Mis pedidos: número, fecha, piezas, forma de pago, total y estado. Se hunde al
- * tocarla (usePresion: 0.97 en 140 ms; con movimiento reducido solo baja la opacidad).
+ * tocarla (tarjeta tocable completa: 0.99 en 140 ms; con movimiento reducido solo baja la opacidad).
  */
 export const TarjetaPedido = memo(function TarjetaPedido({ pedido, onAbrir }: TarjetaPedidoProps) {
   const { colores } = useTheme();
-  const { estilo: estiloPresion, hundir, soltar } = usePresion();
+  const { estilo: estiloPresion, hundir, soltar } = usePresion(escalaPresionadoTarjeta);
 
   const fecha = conMayuscula(fechaPedido(pedido));
   const piezas = textoPiezas(pedido.piezas);
@@ -64,7 +65,7 @@ export const TarjetaPedido = memo(function TarjetaPedido({ pedido, onAbrir }: Ta
     <Animated.View
       style={[
         styles.tarjeta,
-        { backgroundColor: colores.superficie, shadowColor: colores.sombra },
+        { backgroundColor: colores.superficie, shadowColor: colores.sombraTarjeta },
         estiloPresion,
       ]}
     >
@@ -121,7 +122,7 @@ export function TarjetaPedidoEsqueleto() {
       style={[
         styles.tarjeta,
         styles.contenido,
-        { backgroundColor: colores.superficie, shadowColor: colores.sombra },
+        { backgroundColor: colores.superficie, shadowColor: colores.sombraTarjeta },
       ]}
     >
       <View style={styles.encabezado}>
@@ -168,7 +169,7 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.subtitulo.tamano,
     lineHeight: tipo.subtitulo.linea,
-    letterSpacing: tracking.titulo,
+    letterSpacing: tracking.subtitulo,
     fontVariant: ['tabular-nums'],
   },
   total: {

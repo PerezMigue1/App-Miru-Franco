@@ -222,8 +222,8 @@ function Avatar({ foto, ocupada, onPress }: { foto: string | null; ocupada: bool
           <Monograma tamano="grande" />
         )}
         {ocupada ? (
-          <View style={[styles.cargaFoto, { backgroundColor: colores.velo }]}>
-            <ActivityIndicator color={colores.oro} />
+          <View style={[styles.cargaFoto, { backgroundColor: colores.veloVisor }]}>
+            <ActivityIndicator color={colores.oroTextoPequeno} />
           </View>
         ) : (
           <View
@@ -316,7 +316,7 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.subtitulo.tamano,
     lineHeight: tipo.subtitulo.linea,
-    letterSpacing: tracking.titulo,
+    letterSpacing: tracking.subtitulo,
   },
   correo: {
     textAlign: 'center',

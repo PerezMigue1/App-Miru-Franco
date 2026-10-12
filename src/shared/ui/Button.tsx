@@ -1,7 +1,8 @@
-import type { ReactNode } from 'react';
+import { useContext, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
+import { DentroDeHoja } from './Hoja';
 import { usePresion } from './movimiento';
 import {
   borde,
@@ -54,8 +55,12 @@ export function Button({
   const primario = variante === 'primario';
   const peligro = variante === 'peligro';
   const contorno = variante === 'contorno' || peligro;
+  // En una hoja (superficie modal) el secundario lleva filete: en oscuro la hoja y su relleno son
+  // el mismo carbón claro y el botón quedaría como texto suelto.
+  const dentroDeHoja = useContext(DentroDeHoja);
+  const filete = variante === 'secundario' && dentroDeHoja;
   const colorContorno = peligro ? colores.peligro : colores.contorno;
-  const fondo = primario ? colores.accion : contorno ? 'transparent' : colores.secundario;
+  const fondo = primario ? colores.accion : contorno ? colores.transparente : colores.secundario;
   const colorTexto = primario
     ? colores.textoSobreAccion
     : contorno
@@ -80,6 +85,7 @@ export function Button({
           styles.boton,
           primario && styles.sombra,
           contorno && [styles.contorno, { borderColor: colorContorno }],
+          filete && [styles.filete, { borderColor: colores.hairlineFuerte }],
           { backgroundColor: fondo, shadowColor: colores.sombra },
           estiloPresion,
         ]}
@@ -107,6 +113,9 @@ const styles = StyleSheet.create({
     shadowRadius: sombra.boton.radio,
     shadowOffset: { width: 0, height: sombra.boton.desplazamientoY },
     elevation: sombra.boton.elevacion,
+  },
+  filete: {
+    borderWidth: borde.hairline,
   },
   contorno: {
     borderWidth: borde.campo,

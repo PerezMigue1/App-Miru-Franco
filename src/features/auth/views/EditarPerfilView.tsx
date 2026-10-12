@@ -109,7 +109,7 @@ export default function EditarPerfilView() {
               error={errores.nombre}
             />
             <View accessible accessibilityLabel={`Correo electrónico: ${vm.correo}. El correo no se puede cambiar desde aquí.`}>
-              <Text style={[styles.etiqueta, { color: colores.texto }]}>Correo electrónico</Text>
+              <Text style={[styles.etiqueta, { color: colores.contorno }]}>Correo electrónico</Text>
               <Text style={[styles.valor, { color: colores.texto }]}>{vm.correo}</Text>
               <Text style={[styles.nota, { color: colores.textoSuave }]}>
                 El correo no se puede cambiar desde aquí.
@@ -252,13 +252,14 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.subtitulo.tamano,
     lineHeight: tipo.subtitulo.linea,
-    letterSpacing: tracking.titulo,
+    letterSpacing: tracking.subtitulo,
   },
+  // Igual que la etiqueta de Input (.mf-etiqueta).
   etiqueta: {
     marginBottom: espacio.s,
     fontFamily: fuente.textoMedio,
-    fontSize: tipo.pequeno.tamano,
-    lineHeight: tipo.pequeno.linea,
+    fontSize: tipo.etiquetaCampo.tamano,
+    lineHeight: tipo.etiquetaCampo.linea,
   },
   valor: {
     fontFamily: fuente.texto,

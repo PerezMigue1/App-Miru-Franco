@@ -219,7 +219,7 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.titulo.tamano,
     lineHeight: tipo.titulo.linea,
-    letterSpacing: tracking.titulo,
+    letterSpacing: tracking.tituloPagina,
     textAlign: 'center',
   },
   mensaje: {

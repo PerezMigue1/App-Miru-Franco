@@ -1,9 +1,9 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import { fuente, insignia, radio, tipo } from '@/shared/ui/tokens';
+import { borde, fuente, insignia, radio, tipo } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
-export type TonoBadge = 'aviso' | 'exito' | 'neutro';
+export type TonoBadge = 'aviso' | 'exito' | 'neutro' | 'peligro' | 'info';
 
 interface BadgeEstadoProps {
   texto: string;
@@ -12,7 +12,8 @@ interface BadgeEstadoProps {
 
 /**
  * Insignia de estado (pendiente de pago, anticipo pagado...): base clara teñida del color del
- * estado y texto oscuro de su familia, en claro y en oscuro (DESIGN.md).
+ * estado, texto oscuro de su familia y filete interior de 1px del mismo color al 30 %, en claro y
+ * en oscuro (.mf-badge de la web).
  */
 export function BadgeEstado({ texto, tono }: BadgeEstadoProps) {
   const { oscuro } = useTheme();
@@ -22,7 +23,7 @@ export function BadgeEstado({ texto, tono }: BadgeEstadoProps) {
       accessible
       accessibilityRole="text"
       accessibilityLabel={`Estado: ${texto}`}
-      style={[styles.badge, { backgroundColor: colores.fondo }]}
+      style={[styles.badge, { backgroundColor: colores.fondo, borderColor: insignia.borde[tono] }]}
     >
       <Text style={[styles.texto, { color: colores.texto }]}>{texto}</Text>
     </View>
@@ -30,11 +31,14 @@ export function BadgeEstado({ texto, tono }: BadgeEstadoProps) {
 }
 
 const styles = StyleSheet.create({
+  // El filete va por dentro (en la web es un box-shadow inset): el relleno descuenta su grosor
+  // para que la insignia mida lo mismo que antes y que su esqueleto.
   badge: {
     alignSelf: 'flex-start',
-    paddingHorizontal: insignia.rellenoHorizontal,
-    paddingVertical: insignia.rellenoVertical,
+    paddingHorizontal: insignia.rellenoHorizontal - borde.hairline,
+    paddingVertical: insignia.rellenoVertical - borde.hairline,
     borderRadius: radio.pastilla,
+    borderWidth: borde.hairline,
   },
   texto: {
     fontFamily: fuente.textoMedio,

@@ -56,7 +56,11 @@ const AJUSTE_PRESION = {
  * El estilo devuelto controla `transform` y `opacity`: va en una vista sin opacidad propia (la
  * atenuación de deshabilitado se pone en la vista de afuera).
  */
-export function usePresion() {
+/**
+ * `escala`: 0.97 para botones y opciones; las tarjetas tocables completas usan
+ * escalaPresionadoTarjeta (0.99), como .mf-tarjeta-tocable de la web.
+ */
+export function usePresion(escala: number = escalaPresionado) {
   const reducido = useMovimientoReducido();
   const presion = useSharedValue(0);
 
@@ -64,7 +68,7 @@ export function usePresion() {
     const p = presion.get();
     return reducido
       ? { opacity: 1 - p * (1 - opacidad.presionadoReducido), transform: [{ scale: 1 }] }
-      : { opacity: 1, transform: [{ scale: 1 - p * (1 - escalaPresionado) }] };
+      : { opacity: 1, transform: [{ scale: 1 - p * (1 - escala) }] };
   });
 
   const hundir = useCallback(() => {

@@ -250,7 +250,7 @@ function Contenido({ vm, pedido }: { vm: PedidoConfirmadoViewModel; pedido: Pedi
 
       {esPagoEnSalon(pedido) && vm.vista !== 'cancelado' ? (
         <View
-          style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombra }]}
+          style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombraTarjeta }]}
         >
           <Text accessibilityRole="header" style={[styles.subtitulo, { color: colores.texto }]}>
             Dónde lo recoges
@@ -353,7 +353,7 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.titulo.tamano,
     lineHeight: tipo.titulo.linea,
-    letterSpacing: tracking.titulo,
+    letterSpacing: tracking.tituloPagina,
     textAlign: 'center',
   },
   mensaje: {
@@ -408,7 +408,7 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.subtitulo.tamano,
     lineHeight: tipo.subtitulo.linea,
-    letterSpacing: tracking.titulo,
+    letterSpacing: tracking.subtitulo,
     fontVariant: ['tabular-nums'],
   },
   fecha: {
@@ -447,7 +447,7 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.subtitulo.tamano,
     lineHeight: tipo.subtitulo.linea,
-    letterSpacing: tracking.titulo,
+    letterSpacing: tracking.subtitulo,
   },
   acciones: {
     gap: espacio.m,

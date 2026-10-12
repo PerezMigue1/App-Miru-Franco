@@ -297,7 +297,7 @@ function PasoConfirmar({ vm }: { vm: ReservarCitaViewModel }) {
       <Subtitulo texto="Confirma tu cita" />
 
       <View
-        style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombra }]}
+        style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombraTarjeta }]}
       >
         <Dato etiqueta="Servicio" valor={servicio.nombre} />
         <Dato etiqueta="Especialista" valor={especialista.nombre} />
@@ -411,7 +411,7 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.subtitulo.tamano,
     lineHeight: tipo.subtitulo.linea,
-    letterSpacing: tracking.titulo,
+    letterSpacing: tracking.subtitulo,
   },
   lista: {
     gap: espacio.m,

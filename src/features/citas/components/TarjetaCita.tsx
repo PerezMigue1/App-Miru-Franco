@@ -6,6 +6,8 @@ import Animated from 'react-native-reanimated';
 import { usePresion } from '@/shared/ui/movimiento';
 import { Skeleton } from '@/shared/ui/Skeleton';
 import {
+  borde,
+  escalaPresionadoTarjeta,
   espacio,
   esqueleto,
   fuente,
@@ -44,11 +46,12 @@ function conMayuscula(texto: string): string {
 /**
  * Una cita de Mis citas: servicio, especialista, fecha y hora, estado de la cita y del anticipo y,
  * con el anticipo pendiente, su plazo y si se paga en el salón. Se hunde al tocarla (respuesta
- * compartida de usePresion: 0.97 en 140 ms; con movimiento reducido solo baja la opacidad).
+ * compartida de usePresion con la escala de tarjeta: 0.99 en 140 ms; con movimiento reducido solo
+ * baja la opacidad).
  */
 export const TarjetaCita = memo(function TarjetaCita({ cita, onPress, accion }: TarjetaCitaProps) {
   const { colores, oscuro } = useTheme();
-  const { estilo: estiloPresion, hundir, soltar } = usePresion();
+  const { estilo: estiloPresion, hundir, soltar } = usePresion(escalaPresionadoTarjeta);
 
   const servicio = cita.servicioNombre || 'Cita en el salón';
   const fecha = conMayuscula(fechaLegible(cita.fechaHoraInicio));
@@ -78,7 +81,7 @@ export const TarjetaCita = memo(function TarjetaCita({ cita, onPress, accion }: 
     <Animated.View
       style={[
         styles.tarjeta,
-        { backgroundColor: colores.superficie, shadowColor: colores.sombra },
+        { backgroundColor: colores.superficie, shadowColor: colores.sombraTarjeta },
         estiloPresion,
       ]}
     >
@@ -109,7 +112,12 @@ export const TarjetaCita = memo(function TarjetaCita({ cita, onPress, accion }: 
                 <BadgeEstado texto={etiquetaAnticipo.texto} tono={etiquetaAnticipo.tono} />
               ) : null}
               {enSalon ? (
-                <View style={[styles.pastilla, { backgroundColor: coloresSalon.fondo }]}>
+                <View
+                  style={[
+                    styles.pastilla,
+                    { backgroundColor: coloresSalon.fondo, borderColor: insignia.borde.neutro },
+                  ]}
+                >
                   <Store
                     color={coloresSalon.texto}
                     size={icono.tamanoPequeno}
@@ -155,7 +163,7 @@ export function TarjetaCitaEsqueleto() {
       style={[
         styles.tarjeta,
         styles.contenido,
-        { backgroundColor: colores.superficie, shadowColor: colores.sombra },
+        { backgroundColor: colores.superficie, shadowColor: colores.sombraTarjeta },
       ]}
     >
       <Skeleton estilo={[styles.lineaTitulo, { width: esqueleto.anchoMedio }]} />
@@ -195,7 +203,7 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.subtitulo.tamano,
     lineHeight: tipo.subtitulo.linea,
-    letterSpacing: tracking.titulo,
+    letterSpacing: tracking.subtitulo,
   },
   dato: {
     flexDirection: 'row',
@@ -218,13 +226,15 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: espacio.s,
   },
+  // Mismo lenguaje que BadgeEstado: filete interior de 1px descontado del relleno.
   pastilla: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: espacio.xs,
-    paddingHorizontal: insignia.rellenoHorizontal,
-    paddingVertical: insignia.rellenoVertical,
+    paddingHorizontal: insignia.rellenoHorizontal - borde.hairline,
+    paddingVertical: insignia.rellenoVertical - borde.hairline,
     borderRadius: radio.pastilla,
+    borderWidth: borde.hairline,
   },
   textoPastilla: {
     fontFamily: fuente.textoMedio,

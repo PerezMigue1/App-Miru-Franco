@@ -177,6 +177,7 @@ function Contenido({ producto, vm }: { producto: ProductoCatalogo; vm: DetallePr
 
         {producto.crueltyFree ? (
           <View style={styles.crueltyFree}>
+            {/* Decorativo: el texto "Cruelty free" ya lo dice; oro como los íconos de la web. */}
             <View accessible={false} importantForAccessibility="no-hide-descendants">
               <Rabbit color={colores.oro} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
             </View>
@@ -361,7 +362,10 @@ function Seccion({ titulo, children }: { titulo: string; children: ReactNode }) 
   );
 }
 
-/** Lista con viñeta dibujada (un punto de oro), no con un carácter de texto. */
+/**
+ * Lista con viñeta dibujada (un punto de oro), no con un carácter de texto. La viñeta es decorativa
+ * (el texto ya dice todo), como los íconos dorados de las secciones de la web (--logo-branding).
+ */
 function ListaVinetas({ elementos }: { elementos: string[] }) {
   const { colores } = useTheme();
   return (
@@ -410,7 +414,8 @@ function BotonRegresar({ sobreImagen, top, onPress }: { sobreImagen: boolean; to
           style={[
             styles.circuloRegresar,
             {
-              backgroundColor: sobreImagen ? colores.velo : pressed ? colores.presionado : colores.fondo,
+              // Sobre la foto, el velo del visor (--carbon-92) para que la flecha se lea en cualquier foto.
+              backgroundColor: sobreImagen ? colores.veloVisor : pressed ? colores.presionado : colores.fondo,
             },
             estilo,
           ]}
@@ -440,7 +445,7 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.titulo.tamano,
     lineHeight: tipo.titulo.linea,
-    letterSpacing: tracking.titulo,
+    letterSpacing: tracking.tituloPagina,
   },
   dato: {
     fontFamily: fuente.texto,
@@ -565,7 +570,7 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.subtitulo.tamano,
     lineHeight: tipo.subtitulo.linea,
-    letterSpacing: tracking.titulo,
+    letterSpacing: tracking.subtitulo,
   },
   cuerpo: {
     fontFamily: fuente.texto,

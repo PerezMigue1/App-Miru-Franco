@@ -33,7 +33,7 @@ export function ResumenCompra({ lineas, totalCentavos, encabezado, children }: R
   const { colores } = useTheme();
   return (
     <View
-      style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombra }]}
+      style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombraTarjeta }]}
     >
       {encabezado}
       <View style={styles.lineas}>

@@ -109,7 +109,7 @@ function Formulario({
               onPress={() => setMotivo(opcion.clave)}
               style={({ pressed }) => [
                 styles.opcion,
-                { backgroundColor: pressed ? colores.presionado : 'transparent' },
+                { backgroundColor: pressed ? colores.presionado : colores.transparente },
               ]}
             >
               <Icono

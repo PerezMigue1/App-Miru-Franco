@@ -160,7 +160,7 @@ function PasoRecoger() {
         texto="Lo preparamos y te lo apartamos en el mostrador."
       />
       <View
-        style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombra }]}
+        style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombraTarjeta }]}
       >
         <DatosRecogerSalon conAviso />
       </View>
@@ -261,7 +261,7 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.subtitulo.tamano,
     lineHeight: tipo.subtitulo.linea,
-    letterSpacing: tracking.titulo,
+    letterSpacing: tracking.subtitulo,
   },
   cuerpo: {
     fontFamily: fuente.texto,

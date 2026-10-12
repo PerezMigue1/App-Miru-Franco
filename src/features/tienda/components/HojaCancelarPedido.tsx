@@ -11,7 +11,7 @@ interface HojaCancelarPedidoProps {
   onCerrar: () => void;
   /** Número del pedido para el título. */
   numero: number | string;
-  /** Texto de la confirmación (textoCancelarPedido: avisa a quién escribir si ya se pagó). */
+  /** Texto de la confirmación (textoCancelarPedido: si ya se pagó en línea, avisa de la devolución). */
   texto: string;
   cancelando: boolean;
   /** Mensaje para la clienta si la cancelación falló, o null. */

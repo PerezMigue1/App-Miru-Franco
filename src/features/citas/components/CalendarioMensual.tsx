@@ -55,7 +55,7 @@ export function CalendarioMensual({ mes, seleccionada, onElegir, onCambiarMes }:
 
   return (
     <View
-      style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombra }]}
+      style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombraTarjeta }]}
     >
       <View style={styles.encabezado}>
         <BotonMes
@@ -219,7 +219,7 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.subtitulo.tamano,
     lineHeight: tipo.subtitulo.linea,
-    letterSpacing: tracking.titulo,
+    letterSpacing: tracking.subtitulo,
     fontVariant: ['tabular-nums'],
   },
   botonMes: {

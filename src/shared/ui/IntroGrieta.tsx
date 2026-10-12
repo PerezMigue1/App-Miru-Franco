@@ -140,7 +140,7 @@ export function IntroGrieta({ onTerminar }: { onTerminar?: () => void } = {}) {
               <Svg width={tamano.ancho} height={tamano.alto}>
                 <AnimatedPath
                   d={trazoDe(tamano.ancho, tamano.alto)}
-                  stroke={paleta.oro}
+                  stroke={paleta.oroFoco}
                   strokeWidth={intro.trazoGrosor}
                   strokeLinejoin="round"
                   fill="none"

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { createContext, useEffect, useState, type ReactNode } from 'react';
 import { KeyboardAvoidingView, Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import Animated, { ReduceMotion, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -27,6 +27,9 @@ interface HojaProps {
  * Sube desde abajo en 240 ms mientras el velo se funde, y al cerrarse baja en 200 ms (salir es más
  * rápido que entrar). Con movimiento reducido, solo se funde. Mientras sale no recibe toques.
  */
+/** true dentro de una Hoja: el botón secundario se dibuja con filete para no perderse en ella. */
+export const DentroDeHoja = createContext(false);
+
 export function Hoja({ visible, onCerrar, titulo, texto, children }: HojaProps) {
   const { colores } = useTheme();
   const { top, bottom } = useSafeAreaInsets();
@@ -49,14 +52,22 @@ export function Hoja({ visible, onCerrar, titulo, texto, children }: HojaProps) 
         altoHoja.set(0);
       }
       progreso.set(
-        withTiming(1, { duration: duracion.hojaEntrada, easing: EASE_HOJA, reduceMotion: ReduceMotion.Never }),
+        withTiming(1, {
+          duration: reducido ? duracion.reducido : duracion.hojaEntrada,
+          easing: EASE_HOJA,
+          reduceMotion: ReduceMotion.Never,
+        }),
       );
       return;
     }
     progreso.set(
       withTiming(
         0,
-        { duration: duracion.hojaSalida, easing: EASE_SALIDA, reduceMotion: ReduceMotion.Never },
+        {
+          duration: reducido ? duracion.reducido : duracion.hojaSalida,
+          easing: EASE_SALIDA,
+          reduceMotion: ReduceMotion.Never,
+        },
         (terminada) => {
           if (terminada) {
             scheduleOnRN(setMontada, false);
@@ -111,7 +122,7 @@ export function Hoja({ visible, onCerrar, titulo, texto, children }: HojaProps) 
           }}
           style={[
             styles.hoja,
-            { backgroundColor: colores.fondo, borderColor: colores.oro, paddingBottom: bottom + espacio.xl },
+            { backgroundColor: colores.superficieModal, borderColor: colores.oro, paddingBottom: bottom + espacio.xl },
             estiloHoja,
           ]}
         >
@@ -121,7 +132,7 @@ export function Hoja({ visible, onCerrar, titulo, texto, children }: HojaProps) 
             </Text>
             {texto ? <Text style={[styles.texto, { color: colores.textoSuave }]}>{texto}</Text> : null}
           </View>
-          {children}
+          <DentroDeHoja.Provider value>{children}</DentroDeHoja.Provider>
         </Animated.View>
       </KeyboardAvoidingView>
     </Modal>
@@ -151,7 +162,7 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.subtitulo.tamano,
     lineHeight: tipo.subtitulo.linea,
-    letterSpacing: tracking.titulo,
+    letterSpacing: tracking.subtitulo,
   },
   texto: {
     fontFamily: fuente.texto,

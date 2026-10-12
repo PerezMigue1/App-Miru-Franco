@@ -96,7 +96,7 @@ export default function InicioView() {
 
         {conSesion ? null : (
           <View style={styles.invitacion}>
-            <View style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombra }]}>
+            <View style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombraTarjeta }]}>
               <Text accessibilityRole="header" style={[styles.tituloTarjeta, { color: colores.texto }]}>
                 Crea tu cuenta para reservar citas y comprar
               </Text>
@@ -140,7 +140,7 @@ export default function InicioView() {
               <Animated.View
                 style={[
                   styles.botonTexto,
-                  { backgroundColor: pressed ? colores.presionado : 'transparent' },
+                  { backgroundColor: pressed ? colores.presionado : colores.transparente },
                   presionAcceso.estilo,
                 ]}
               >
@@ -213,7 +213,7 @@ function BotonIcono({
         <Animated.View
           style={[
             styles.botonIcono,
-            { backgroundColor: pressed ? colores.presionado : 'transparent' },
+            { backgroundColor: pressed ? colores.presionado : colores.transparente },
             estilo,
           ]}
         >
@@ -297,7 +297,7 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.subtitulo.tamano,
     lineHeight: tipo.subtitulo.linea,
-    letterSpacing: tracking.titulo,
+    letterSpacing: tracking.subtitulo,
   },
   botonTexto: {
     minHeight: toqueMinimo,
@@ -333,6 +333,6 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.titulo.tamano,
     lineHeight: tipo.titulo.linea,
-    letterSpacing: tracking.titulo,
+    letterSpacing: tracking.tituloPagina,
   },
 });

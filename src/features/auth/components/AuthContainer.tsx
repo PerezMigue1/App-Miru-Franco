@@ -384,7 +384,8 @@ export function PanelMarca() {
       <View accessible accessibilityRole="header" accessibilityLabel="Mirú Franco Beauty Salón">
         <View style={styles.marca}>
           <Text style={[styles.marcaMiru, { color: colores.textoSobrePanel }]}>Mirú</Text>
-          <Text style={[styles.marcaFranco, { color: colores.oro }]}>Franco</Text>
+          {/* Oro sobre carbón (--oro-sobre-carbon, como .mf-logotipo): el panel es carbón en los dos temas. */}
+          <Text style={[styles.marcaFranco, { color: colores.oroTextoPequeno }]}>Franco</Text>
         </View>
         <Text style={[styles.lema, { color: colores.oroTextoPequeno }]}>BEAUTY SALÓN</Text>
       </View>
@@ -710,7 +711,7 @@ function IndicadorPasos({ paso, refIndicador }: { paso: PasoRegistro; refIndicad
                         borderColor: esActual ? colores.oro : colores.accion,
                         borderWidth: borde.indicador,
                       }
-                    : { backgroundColor: 'transparent', borderColor: colores.textoSuave, borderWidth: borde.campo },
+                    : { backgroundColor: colores.transparente, borderColor: colores.textoSuave, borderWidth: borde.campo },
                 ]}
               >
                 {hecho ? (
@@ -1185,7 +1186,7 @@ export function Opciones<T extends string>({
   const id = useId();
   return (
     <View ref={refContenedor} style={styles.campo}>
-      <Text nativeID={`${id}-etiqueta`} style={[styles.etiqueta, { color: colores.texto }]}>
+      <Text nativeID={`${id}-etiqueta`} style={[styles.etiqueta, { color: colores.contorno }]}>
         {etiqueta}
       </Text>
       <View accessibilityRole="radiogroup" accessibilityLabelledBy={`${id}-etiqueta`} style={styles.opcionesCabello}>
@@ -1381,7 +1382,7 @@ function Selector({
 
   return (
     <View ref={refContenedor} style={styles.campo}>
-      <Text nativeID={`${id}-etiqueta`} style={[styles.etiqueta, { color: colores.texto }]}>
+      <Text nativeID={`${id}-etiqueta`} style={[styles.etiqueta, { color: colores.contorno }]}>
         {etiqueta}
       </Text>
       <Pressable
@@ -1488,7 +1489,7 @@ function ContenidoSelector({
             onPress={() => onElegir(opcion)}
             style={({ pressed }) => [
               styles.opcion,
-              { backgroundColor: pressed ? colores.presionado : 'transparent' },
+              { backgroundColor: pressed ? colores.presionado : colores.transparente },
             ]}
           >
             <Text style={[styles.texto, styles.textoOpcion, { color: colores.texto }]}>{opcion.pregunta}</Text>
@@ -1592,7 +1593,7 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.titulo.tamano,
     lineHeight: tipo.titulo.linea,
-    letterSpacing: tracking.titulo,
+    letterSpacing: tracking.tituloPagina,
   },
   marcaFranco: {
     fontFamily: fuente.manuscrita,
@@ -1648,7 +1649,7 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.titulo.tamano,
     lineHeight: tipo.titulo.linea,
-    letterSpacing: tracking.titulo,
+    letterSpacing: tracking.tituloPagina,
   },
   texto: {
     fontFamily: fuente.texto,
@@ -1695,11 +1696,13 @@ const styles = StyleSheet.create({
   campo: {
     gap: espacio.s,
   },
+  // .mf-etiqueta: 15px, peso 500, en --menu-texto-principal (igual que la etiqueta de Input).
   etiqueta: {
     fontFamily: fuente.textoMedio,
-    fontSize: tipo.pequeno.tamano,
-    lineHeight: tipo.pequeno.linea,
+    fontSize: tipo.etiquetaCampo.tamano,
+    lineHeight: tipo.etiquetaCampo.linea,
   },
+  // El selector se lee como un campo (.mf-campo): borde de 1px, como Input.
   selector: {
     minHeight: toqueMinimo,
     flexDirection: 'row',
@@ -1708,7 +1711,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: espacio.l,
     paddingVertical: espacio.s,
     borderRadius: radio.campo,
-    borderWidth: borde.campo,
+    borderWidth: borde.entrada,
   },
   textoSelector: {
     flex: 1,
@@ -1845,7 +1848,7 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.subtitulo.tamano,
     lineHeight: tipo.subtitulo.linea,
-    letterSpacing: tracking.titulo,
+    letterSpacing: tracking.subtitulo,
   },
   enlaceEnTexto: {
     fontFamily: fuente.textoMedio,

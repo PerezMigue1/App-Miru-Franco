@@ -9,6 +9,7 @@ import { Skeleton } from '@/shared/ui/Skeleton';
 import {
   catalogo,
   duracion,
+  escalaPresionadoTarjeta,
   espacio,
   esqueleto,
   fuente,
@@ -33,7 +34,7 @@ interface TarjetaServicioProps {
 /** Un servicio del catálogo: miniatura, nombre, categoría, duración y precio. Se hunde al tocarla. */
 export function TarjetaServicio({ servicio, onPress }: TarjetaServicioProps) {
   const { colores } = useTheme();
-  const { estilo, hundir, soltar } = usePresion();
+  const { estilo, hundir, soltar } = usePresion(escalaPresionadoTarjeta);
 
   const etiqueta = [servicio.nombre, servicio.duracion, servicio.precio ?? SIN_PRECIO]
     .filter(Boolean)
@@ -51,7 +52,7 @@ export function TarjetaServicio({ servicio, onPress }: TarjetaServicioProps) {
       <Animated.View
         style={[
           styles.tarjeta,
-          { backgroundColor: colores.superficie, shadowColor: colores.sombra },
+          { backgroundColor: colores.superficie, shadowColor: colores.sombraTarjeta },
           estilo,
         ]}
       >
@@ -83,7 +84,9 @@ export function TarjetaServicio({ servicio, onPress }: TarjetaServicioProps) {
             {servicio.duracion ? (
               <View style={styles.duracion}>
                 <Clock color={colores.texto} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
-                <Text style={[styles.dato, { color: colores.texto }]}>{servicio.duracion}</Text>
+                <Text style={[styles.dato, styles.cifra, { color: colores.texto }]}>
+                  {servicio.duracion}
+                </Text>
               </View>
             ) : null}
             <Text
@@ -112,7 +115,7 @@ export function TarjetaServicioEsqueleto() {
     <View
       style={[
         styles.tarjeta,
-        { backgroundColor: colores.superficie, shadowColor: colores.sombra },
+        { backgroundColor: colores.superficie, shadowColor: colores.sombraTarjeta },
       ]}
     >
       <Skeleton estilo={styles.miniatura} />
@@ -154,7 +157,7 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.cuerpo.tamano,
     lineHeight: tipo.cuerpo.linea,
-    letterSpacing: tracking.titulo,
+    letterSpacing: tracking.tituloTarjeta,
   },
   categoria: {
     fontFamily: fuente.texto,
@@ -177,6 +180,9 @@ const styles = StyleSheet.create({
     fontFamily: fuente.texto,
     fontSize: tipo.pequeno.tamano,
     lineHeight: tipo.pequeno.linea,
+  },
+  cifra: {
+    fontVariant: ['tabular-nums'],
   },
   precio: {
     fontFamily: fuente.textoFuerte,

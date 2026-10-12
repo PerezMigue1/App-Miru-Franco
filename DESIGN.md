@@ -13,7 +13,9 @@ Un salón de autor, no un SaaS: superficies de terracota y lino, vino profundo c
 - **Oro** `#9f6d1f`: ornamento. Nunca texto largo. En modo oscuro, los íconos activos y el foco usan `#c4954d`.
 - **Carbón** `#161616`: barras, panel de marca y placeholders. Sin negro puro.
 - **Modo oscuro** (sigue la preferencia del sistema): fondo `#161616`, tarjetas `#2a2a2a` y superficies suaves y campos `#1f1f1f`, con el mismo vino y oro.
-- **Campos de formulario:** fondo `#F2F1ED` (claro) o `#1f1f1f` (oscuro), texto `#600011` (claro) o `#ffffff` (oscuro), borde `#8a7667` (claro) o `#6e6e6e` (oscuro), placeholder `#6b5a4e` (claro) o `#b8a597` (oscuro).
+- **Campos de formulario:** fondo `#F2F1ED` (claro) o `#1f1f1f` (oscuro), texto `#600011` (claro) o `#ffffff` (oscuro), borde de 1px `#7a6658` (claro) o `#787878` (oscuro) (`--campo-borde`), placeholder `#6f6a66` (claro) o `#8c8885` (oscuro), etiqueta de 15px en `#600011` / `#ffffff` y halo de foco de 3px con el color de foco al 22 %.
+- **Oro de texto y de marca:** `--oro-texto` `#37280b` / `#c4954d` para texto en oro; `--oro-grande` `#865a17` / `#c4954d` para "MIRÚ" y "Franco" (solo texto grande); `--iconografia` `#BFA181` solo para ornamento.
+- **Superficies de capa:** hojas y diálogos en `--superficie-modal` (lino / `#2a2a2a`) sobre un velo carbón al 55 %; el visor de fotos y los botones sobre foto usan carbón al 92 %. Sombra de tarjeta tintada de café `rgba(58, 28, 10)` en claro y carbón en oscuro.
 - **Foco y selección:** vino `#710014` en claro y oro `#c4954d` en oscuro.
 - **Oro sobre carbón** para texto pequeño: `#b07a28` en claro (4.9:1) y `#c4954d` en oscuro. El oro de marca queda para ornamento, íconos y texto grande.
 - **Texto, líneas y estados** (variables del sitio web, claro / oscuro): texto `#2a2a2a` / crema al 88 %, texto secundario `#4a4541` / `#b38e6f`, líneas vino al 14 % / blanco al 8 %, error `#600011` / `#e0748f`, éxito `#242d1b` / `#82a163`, aviso `#37280b` / `#D98E04` y enlaces `#600011` / `#ffffff`.
@@ -49,7 +51,7 @@ Se reconstruyen con las herramientas de React Native (Reanimated, Gesture Handle
 
 ## 6. Layout
 - Una sola columna, ritmo de 4px, márgenes laterales consistentes.
-- Navegación principal por pestañas inferiores del cliente: Inicio, Citas, Tienda, Notificaciones y Perfil.
+- Navegación principal por pestañas inferiores del cliente: Inicio, Citas, Carrito (al centro, con el número de piezas), Tienda y Perfil. Notificaciones se abre con la campana de Inicio como pantalla propia con Atrás.
 - Respetar las áreas seguras del dispositivo (barra de estado y barra de navegación).
 - Objetivos táctiles de al menos 48dp. Sin scroll horizontal de pantalla.
 

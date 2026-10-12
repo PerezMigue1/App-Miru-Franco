@@ -5,6 +5,7 @@ import Animated from 'react-native-reanimated';
 import { usePresion } from '@/shared/ui/movimiento';
 import { Skeleton } from '@/shared/ui/Skeleton';
 import {
+  escalaPresionadoTarjeta,
   esqueleto,
   espacio,
   fuente,
@@ -36,8 +37,8 @@ interface TarjetaProductoProps {
 }
 
 /**
- * Producto de la cuadrícula de la Tienda: foto cuadrada arriba, nombre, marca y precio. Se hunde al
- * tocarla. Las tarjetas de una fila se estiran al mismo alto y el precio queda abajo en ambas.
+ * Producto de la cuadrícula de la Tienda: foto cuadrada arriba, nombre, marca y precio. Se hunde a
+ * 0.99 al tocarla. Las tarjetas de una fila se estiran al mismo alto y el precio queda abajo en ambas.
  */
 export const TarjetaProducto = memo(function TarjetaProducto({
   producto,
@@ -45,7 +46,8 @@ export const TarjetaProducto = memo(function TarjetaProducto({
   onAbrir,
 }: TarjetaProductoProps) {
   const { colores } = useTheme();
-  const { estilo, hundir, soltar } = usePresion();
+  // Tarjeta tocable completa: se hunde a 0.99 (.mf-tarjeta-tocable), no a 0.97 como un botón.
+  const { estilo, hundir, soltar } = usePresion(escalaPresionadoTarjeta);
 
   const agotado = estaAgotado(producto);
   const centavos = precioDesdeCentavos(producto);
@@ -75,7 +77,7 @@ export const TarjetaProducto = memo(function TarjetaProducto({
       <Animated.View
         style={[
           styles.tarjeta,
-          { backgroundColor: colores.superficie, shadowColor: colores.sombra },
+          { backgroundColor: colores.superficie, shadowColor: colores.sombraTarjeta },
           estilo,
         ]}
       >
@@ -122,7 +124,7 @@ export function TarjetaProductoEsqueleto({ ancho }: { ancho: number }) {
     <View
       style={[
         styles.tarjeta,
-        { width: ancho, backgroundColor: colores.superficie, shadowColor: colores.sombra },
+        { width: ancho, backgroundColor: colores.superficie, shadowColor: colores.sombraTarjeta },
       ]}
     >
       <Skeleton estilo={styles.foto} />
@@ -177,7 +179,7 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.cuerpo.tamano,
     lineHeight: tipo.cuerpo.linea,
-    letterSpacing: tracking.titulo,
+    letterSpacing: tracking.tituloTarjeta,
   },
   secundario: {
     fontFamily: fuente.texto,

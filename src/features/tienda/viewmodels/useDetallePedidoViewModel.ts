@@ -1,6 +1,7 @@
 import { useFocusEffect, useRouter, type Href } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { esErrorDeRed } from '@/features/auth/models/AuthModel';
 import { ApiError } from '@/shared/api/apiClient';
 import { useCandado } from '@/shared/ui/useCandado';
 
@@ -10,13 +11,18 @@ import {
   mensajeCancelarPedido,
   obtenerPedido,
   type Pedido,
+  type ReembolsoCancelacion,
 } from '../models/pedidoModel';
+import { formatoPrecio } from '../models/productoModel';
 
 export type EstadoDetallePedido = 'cargando' | 'listo' | 'error' | 'noEncontrado';
 
-/** Aviso en la pantalla tras cancelar, o cuando el pedido cambió mientras se cancelaba. */
+/**
+ * Aviso en la pantalla tras cancelar, o cuando el pedido cambió mientras se cancelaba. 'aviso':
+ * cancelado, pero la devolución del pago quedó en revisión.
+ */
 export interface AvisoPedido {
-  tipo: 'exito' | 'info';
+  tipo: 'exito' | 'aviso' | 'info';
   texto: string;
 }
 
@@ -43,6 +49,26 @@ export interface DetallePedidoViewModel {
 }
 
 const MENSAJE_CANCELADO = 'Tu pedido quedó cancelado.';
+
+/** Aviso tras cancelar con lo que respondió el backend sobre la devolución del pago. */
+function avisoCancelado(reembolso: ReembolsoCancelacion | null): AvisoPedido {
+  if (reembolso?.estado === 'reembolsado') {
+    return {
+      tipo: 'exito',
+      // Sin monto válido no se escribe "$0": se dice la devolución sin cifra.
+      texto: `${MENSAJE_CANCELADO} Ya pedimos a Mercado Pago la devolución${
+        reembolso.montoCentavos > 0 ? ` de ${formatoPrecio(reembolso.montoCentavos)}` : ''
+      } a tu tarjeta. Puede tardar unos días en reflejarse, según tu banco.`,
+    };
+  }
+  if (reembolso?.estado === 'en_revision') {
+    return {
+      tipo: 'aviso',
+      texto: `${MENSAJE_CANCELADO} La devolución de tu pago quedó en revisión: el salón la hará y te avisará.`,
+    };
+  }
+  return { tipo: 'exito', texto: MENSAJE_CANCELADO };
+}
 
 /** Id numérico positivo del parámetro de la ruta, en texto; null si no es válido. */
 function numeroValido(id: string | undefined): string | null {
@@ -175,7 +201,7 @@ export function useDetallePedidoViewModel(pedidoId: string | undefined): Detalle
       setCancelando(true);
       setErrorCancelacion(null);
       try {
-        const nuevo = await cancelarPedido(actualPedido.id);
+        const { pedido: nuevo, reembolso } = await cancelarPedido(actualPedido.id);
         if (!montada.current) {
           return;
         }
@@ -184,7 +210,7 @@ export function useDetallePedidoViewModel(pedidoId: string | undefined): Detalle
         hayDatos.current = true;
         setPedido(nuevo);
         setEstado('listo');
-        setAviso({ tipo: 'exito', texto: MENSAJE_CANCELADO });
+        setAviso(avisoCancelado(reembolso));
         setHojaCancelarVisible(false);
       } catch (error) {
         if (!montada.current) {
@@ -192,6 +218,30 @@ export function useDetallePedidoViewModel(pedidoId: string | undefined): Detalle
         }
         const mensaje = mensajeCancelarPedido(error);
         const status = error instanceof ApiError ? error.status : null;
+        // Sin respuesta (el reembolso con Mercado Pago puede tardar): antes de decir que no se pudo,
+        // se lee el pedido; si ya quedó cancelado, se muestra así.
+        if (esErrorDeRed(error) || status === 0) {
+          try {
+            const leido = await obtenerPedido(actualPedido.id);
+            if (!montada.current) {
+              return;
+            }
+            if (leido.estado === 'cancelado') {
+              solicitud.current += 1;
+              hayDatos.current = true;
+              setPedido(leido);
+              setEstado('listo');
+              setAviso({ tipo: 'exito', texto: MENSAJE_CANCELADO });
+              setHojaCancelarVisible(false);
+              return;
+            }
+          } catch {
+            // Tampoco hubo respuesta: queda el mensaje de sin conexión en la hoja.
+          }
+          if (!montada.current) {
+            return;
+          }
+        }
         if (status === 409 || status === 404) {
           // El pedido cambió (o ya no existe): se cierra la hoja y se lee de nuevo.
           setHojaCancelarVisible(false);

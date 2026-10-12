@@ -18,7 +18,6 @@ import { Skeleton } from '@/shared/ui/Skeleton';
 import { espacio, fuente, pantalla, radio, tienda, tipo, toqueMinimo } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
-import { AccesoCarrito } from '../components/AccesoCarrito';
 import { BuscadorProductos } from '../components/BuscadorProductos';
 import { FiltroCategorias } from '../components/FiltroCategorias';
 import { TarjetaProducto, TarjetaProductoEsqueleto } from '../components/TarjetaProducto';
@@ -52,9 +51,8 @@ export default function TiendaView() {
     [anchoTarjeta, abrirProducto],
   );
 
-  const encabezadoPantalla = (
-    <ScreenHeader titulo="Tienda" accion={<AccesoCarrito piezas={vm.piezas} onPress={vm.abrirCarrito} />} />
-  );
+  // El carrito tiene su propia pestaña: la cabecera de la Tienda solo lleva el título.
+  const encabezadoPantalla = <ScreenHeader titulo="Tienda" />;
 
   const refresco = (
     <RefreshControl

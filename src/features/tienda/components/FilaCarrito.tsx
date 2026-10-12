@@ -71,7 +71,7 @@ export const FilaCarrito = memo(function FilaCarrito({
 
   return (
     <View
-      style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombra }]}
+      style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombraTarjeta }]}
     >
       <View style={styles.cabecera}>
         <FotoProducto
@@ -163,7 +163,7 @@ function BotonQuitar({
         <Animated.View
           style={[
             styles.quitar,
-            { backgroundColor: pressed ? colores.presionado : colores.superficie },
+            { backgroundColor: pressed ? colores.presionado : colores.transparente },
             estilo,
           ]}
         >
@@ -179,7 +179,7 @@ export function FilaCarritoEsqueleto() {
   const { colores } = useTheme();
   return (
     <View
-      style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombra }]}
+      style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombraTarjeta }]}
     >
       <View style={styles.cabecera}>
         <Skeleton estilo={styles.foto} />

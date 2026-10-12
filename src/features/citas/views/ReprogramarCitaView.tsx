@@ -190,7 +190,7 @@ function DatosFijos({ vm }: { vm: ReprogramarCitaViewModel }) {
     return null;
   }
   return (
-    <View style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombra }]}>
+    <View style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombraTarjeta }]}>
       <Text style={[styles.servicio, { color: colores.texto }]}>
         {cita.servicioNombre || 'Cita en el salón'}
       </Text>
@@ -262,7 +262,7 @@ function ResumenCambio({ vm }: { vm: ReprogramarCitaViewModel }) {
     <View
       accessible
       accessibilityLabel={`Cambio de tu cita. De: ${antes}. A: ${despues}.`}
-      style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombra }]}
+      style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombraTarjeta }]}
     >
       <Subtitulo texto="Tu cambio" />
       <View style={styles.cambio}>
@@ -322,7 +322,7 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.subtitulo.tamano,
     lineHeight: tipo.subtitulo.linea,
-    letterSpacing: tracking.titulo,
+    letterSpacing: tracking.subtitulo,
   },
   tarjeta: {
     gap: espacio.m,
@@ -337,7 +337,7 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.subtitulo.tamano,
     lineHeight: tipo.subtitulo.linea,
-    letterSpacing: tracking.titulo,
+    letterSpacing: tracking.subtitulo,
   },
   cuerpo: {
     fontFamily: fuente.textoMedio,

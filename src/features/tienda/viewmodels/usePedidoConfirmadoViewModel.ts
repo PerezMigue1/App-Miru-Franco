@@ -394,9 +394,9 @@ export function usePedidoConfirmadoViewModel(
   );
 
   const verMisPedidos = useCallback(() => {
-    // Saca de la pila la compra (o el detalle) y abre Mis pedidos sobre las pestañas: atrás no
-    // regresa a un carrito vacío. Las acciones del router se ejecutan en orden.
-    router.dismissAll();
+    // Saca de la pila la compra (o el detalle), deja las pestañas en la Tienda y abre Mis pedidos
+    // encima: atrás no regresa a la pestaña Carrito vacía. Las acciones del router van en orden.
+    router.dismissTo('/tienda');
     router.push('/mis-pedidos');
   }, [router]);
 

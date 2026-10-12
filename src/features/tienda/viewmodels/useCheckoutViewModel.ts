@@ -22,6 +22,8 @@ import {
   type Pedido,
 } from '../models/pedidoModel';
 
+import { avisarCambioCarrito } from './usePiezasCarrito';
+
 export type PasoCheckout = 1 | 2 | 3;
 export type EstadoCheckout = 'cargando' | 'listo' | 'error';
 
@@ -76,11 +78,12 @@ export function useCheckoutViewModel(): CheckoutViewModel {
   const montada = useRef(true);
 
   const irAlCarrito = useCallback(() => {
-    // El carrito siempre queda debajo del checkout: se regresa a él en lugar de apilar otro.
+    // El checkout se abre desde la pestaña Carrito: back() regresa a ella. Sin nada debajo,
+    // dismissTo abre las pestañas en el Carrito en lugar de apilar otra pantalla.
     if (router.canGoBack()) {
       router.back();
     } else {
-      router.replace('/carrito');
+      router.dismissTo('/carrito');
     }
   }, [router]);
 
@@ -122,7 +125,7 @@ export function useCheckoutViewModel(): CheckoutViewModel {
     if (router.canGoBack()) {
       router.back();
     } else {
-      router.replace('/carrito');
+      router.dismissTo('/carrito');
     }
   }, [router]);
 
@@ -204,6 +207,8 @@ export function useCheckoutViewModel(): CheckoutViewModel {
         }
         // El backend no vacía el carrito: se quitan los ítems enviados (nunca lanza).
         await vaciarCarrito(enviados.map((item) => item.id));
+        // El número de la pestaña Carrito se vuelve a leer: lo enviado ya no está.
+        avisarCambioCarrito();
         if (!montada.current) {
           return;
         }

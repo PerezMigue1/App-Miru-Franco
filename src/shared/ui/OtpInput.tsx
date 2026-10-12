@@ -50,7 +50,7 @@ export function OtpInput({
 
   return (
     <View>
-      <Text nativeID={`${id}-etiqueta`} style={[styles.etiqueta, { color: colores.texto }]}>
+      <Text nativeID={`${id}-etiqueta`} style={[styles.etiqueta, { color: colores.contorno }]}>
         {etiqueta}
       </Text>
       <View>
@@ -112,8 +112,8 @@ const styles = StyleSheet.create({
   etiqueta: {
     marginBottom: espacio.s,
     fontFamily: fuente.textoMedio,
-    fontSize: tipo.pequeno.tamano,
-    lineHeight: tipo.pequeno.linea,
+    fontSize: tipo.etiquetaCampo.tamano,
+    lineHeight: tipo.etiquetaCampo.linea,
   },
   fila: {
     flexDirection: 'row',
@@ -127,7 +127,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radio.campo,
-    borderWidth: borde.campo,
+    borderWidth: borde.entrada,
   },
   digito: {
     fontFamily: fuente.textoFuerte,

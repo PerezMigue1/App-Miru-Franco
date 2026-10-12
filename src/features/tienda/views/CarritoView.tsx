@@ -1,14 +1,13 @@
 import { useCallback, type ReactNode } from 'react';
 import { FlatList, ScrollView, StyleSheet, Text, View, type ListRenderItem } from 'react-native';
 import Animated from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { EncabezadoVolver } from '@/features/auth/components/EncabezadoVolver';
 import { InvitacionSesion } from '@/features/auth/components/InvitacionSesion';
 import { Button } from '@/shared/ui/Button';
 import { EmptyState } from '@/shared/ui/EmptyState';
 import { Hoja } from '@/shared/ui/Hoja';
 import { useEntradaContenido } from '@/shared/ui/movimiento';
+import { ScreenHeader } from '@/shared/ui/ScreenHeader';
 import { borde, espacio, fuente, pantalla, tipo } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
@@ -19,10 +18,12 @@ import { useCarritoViewModel } from '../viewmodels/useCarritoViewModel';
 
 const ESQUELETOS = [0, 1, 2];
 
-/** Carrito: productos con su cantidad, total y el paso a finalizar la compra. */
+/**
+ * Pestaña Carrito: productos con su cantidad, total y el paso a finalizar la compra. Como pestaña
+ * no lleva Volver; el pie del total queda justo arriba de la barra inferior.
+ */
 export default function CarritoView() {
   const { colores } = useTheme();
-  const { bottom } = useSafeAreaInsets();
   const vm = useCarritoViewModel();
   // La lista aparece una vez al terminar de cargar (en el contenedor, nunca en cada fila).
   const entrada = useEntradaContenido();
@@ -41,7 +42,6 @@ export default function CarritoView() {
     [ocupados, errores, cambiarCantidad, pedirQuitar],
   );
 
-  const relleno = { paddingBottom: bottom + espacio.x3 };
   const porQuitar = vm.porQuitar;
   const conItems = vm.estado === 'listo' && vm.items.length > 0;
 
@@ -61,7 +61,7 @@ export default function CarritoView() {
     );
   } else if (!vm.conSesion) {
     cuerpo = (
-      <ScrollView contentContainerStyle={relleno}>
+      <ScrollView contentContainerStyle={styles.relleno}>
         <InvitacionSesion
           titulo="Tu carrito te espera"
           beneficio="Inicia sesión para guardar tus productos y apartarlos en el salón."
@@ -70,7 +70,7 @@ export default function CarritoView() {
     );
   } else if (vm.estado === 'error') {
     cuerpo = (
-      <ScrollView contentContainerStyle={[styles.estado, relleno]}>
+      <ScrollView contentContainerStyle={[styles.estado, styles.relleno]}>
         <EmptyState
           titulo="No pudimos cargar tu carrito"
           mensaje="Revisa tu conexión e intenta de nuevo."
@@ -80,7 +80,7 @@ export default function CarritoView() {
     );
   } else if (vm.items.length === 0) {
     cuerpo = (
-      <ScrollView contentContainerStyle={[styles.estado, relleno]}>
+      <ScrollView contentContainerStyle={[styles.estado, styles.relleno]}>
         <EmptyState
           titulo="Tu carrito está vacío"
           mensaje="Agrega productos desde la tienda y aparecerán aquí."
@@ -104,15 +104,12 @@ export default function CarritoView() {
 
   return (
     <View style={[styles.raiz, { backgroundColor: colores.fondo }]}>
-      <EncabezadoVolver titulo="Carrito" onVolver={vm.regresar} />
+      <ScreenHeader titulo="Carrito" />
       <View style={styles.flex}>{cuerpo}</View>
 
       {vm.conSesion && conItems ? (
         <View
-          style={[
-            styles.pie,
-            { borderTopColor: colores.hairline, backgroundColor: colores.fondo, paddingBottom: bottom + espacio.l },
-          ]}
+          style={[styles.pie, { borderTopColor: colores.hairline, backgroundColor: colores.fondo }]}
         >
           <View
             style={styles.filaTotal}
@@ -176,10 +173,15 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingHorizontal: pantalla.margen,
   },
+  // La barra inferior ya ocupa el área segura de abajo: solo el aire propio del contenido.
+  relleno: {
+    paddingBottom: espacio.x3,
+  },
   pie: {
     gap: espacio.s,
     paddingHorizontal: pantalla.margen,
     paddingTop: espacio.l,
+    paddingBottom: espacio.l,
     borderTopWidth: borde.hairline,
   },
   filaTotal: {

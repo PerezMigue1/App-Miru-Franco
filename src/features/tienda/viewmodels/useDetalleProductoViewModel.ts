@@ -16,6 +16,8 @@ import {
   type ProductoCatalogo,
 } from '../models/productoModel';
 
+import { avisarCambioCarrito } from './usePiezasCarrito';
+
 export type EstadoDetalleProducto = 'cargando' | 'listo' | 'error' | 'noEncontrado';
 
 /**
@@ -179,6 +181,8 @@ export function useDetalleProductoViewModel(id: string | undefined): DetalleProd
         setConfirmacion(null);
         try {
           const resultado = await agregarAlCarrito(linea);
+          // El número de la pestaña Carrito se vuelve a leer (también si la pantalla ya se cerró).
+          avisarCambioCarrito();
           if (!montado.current) {
             return;
           }
@@ -213,7 +217,9 @@ export function useDetalleProductoViewModel(id: string | undefined): DetalleProd
   }, [producto, presentacion, cantidad, requiereSesion, candado]);
 
   const verCarrito = useCallback(() => {
-    router.push('/carrito' as Href);
+    // El carrito es una pestaña: dismissTo regresa a las pestañas que ya están abajo y abre esa;
+    // push apilaría otra copia de las pestañas encima del detalle.
+    router.dismissTo('/carrito' as Href);
   }, [router]);
 
   const volver = useCallback(() => {

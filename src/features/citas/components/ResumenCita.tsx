@@ -34,7 +34,7 @@ export function ResumenCita({ cita, conEspecialista = false, children }: Resumen
 
   return (
     <View
-      style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombra }]}
+      style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombraTarjeta }]}
     >
       {cita.servicioNombre ? (
         <Text style={[styles.servicio, { color: colores.texto }]}>{cita.servicioNombre}</Text>
@@ -78,7 +78,7 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.subtitulo.tamano,
     lineHeight: tipo.subtitulo.linea,
-    letterSpacing: tracking.titulo,
+    letterSpacing: tracking.subtitulo,
   },
   datos: {
     gap: espacio.s,

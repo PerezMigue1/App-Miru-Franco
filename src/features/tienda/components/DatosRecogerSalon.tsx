@@ -1,7 +1,9 @@
 import { Clock, MapPin, Phone } from 'lucide-react-native';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 
-import { espacio, fuente, icono, tipo, toqueMinimo } from '@/shared/ui/tokens';
+import { usePresion } from '@/shared/ui/movimiento';
+import { espacio, fuente, icono, radio, tipo, toqueMinimo } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
 import { SALON_RECOGER } from '../models/pedidoModel';
@@ -17,6 +19,7 @@ interface DatosRecogerSalonProps {
  */
 export function DatosRecogerSalon({ conAviso = false }: DatosRecogerSalonProps) {
   const { colores } = useTheme();
+  const { estilo, hundir, soltar } = usePresion();
   const llamar = () => {
     Linking.openURL(SALON_RECOGER.telefonoMarcable).catch(() => {
       // Sin app de teléfono, el número queda escrito en pantalla.
@@ -48,12 +51,24 @@ export function DatosRecogerSalon({ conAviso = false }: DatosRecogerSalonProps) 
         accessibilityRole="link"
         accessibilityLabel={`Llamar al salón, ${SALON_RECOGER.telefono}`}
         onPress={llamar}
-        style={({ pressed }) => [styles.fila, styles.telefono, pressed ? { backgroundColor: colores.presionado } : null]}
+        onPressIn={hundir}
+        onPressOut={soltar}
       >
-        <Phone color={colores.texto} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
-        <Text style={[styles.dato, styles.enlace, { color: colores.texto }]}>
-          ¿Dudas para llegar? Llámanos al {SALON_RECOGER.telefono}
-        </Text>
+        {({ pressed }) => (
+          <Animated.View
+            style={[
+              styles.fila,
+              styles.telefono,
+              { backgroundColor: pressed ? colores.presionado : colores.transparente },
+              estilo,
+            ]}
+          >
+            <Phone color={colores.texto} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
+            <Text style={[styles.dato, styles.enlace, { color: colores.texto }]}>
+              ¿Dudas para llegar? Llámanos al {SALON_RECOGER.telefono}
+            </Text>
+          </Animated.View>
+        )}
       </Pressable>
 
       {conAviso ? (
@@ -75,6 +90,7 @@ const styles = StyleSheet.create({
   telefono: {
     minHeight: toqueMinimo,
     alignItems: 'center',
+    borderRadius: radio.campo,
   },
   textos: {
     flex: 1,
@@ -90,6 +106,7 @@ const styles = StyleSheet.create({
     fontFamily: fuente.texto,
     fontSize: tipo.pequeno.tamano,
     lineHeight: tipo.pequeno.linea,
+    fontVariant: ['tabular-nums'],
   },
   enlace: {
     textDecorationLine: 'underline',

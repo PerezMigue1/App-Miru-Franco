@@ -26,7 +26,7 @@ export function EncabezadoVolver({ titulo, onVolver }: { titulo: string; onVolve
           <Animated.View
             style={[
               styles.volver,
-              { backgroundColor: pressed ? colores.presionado : 'transparent' },
+              { backgroundColor: pressed ? colores.presionado : colores.transparente },
               estiloPresion,
             ]}
           >
@@ -61,6 +61,6 @@ const styles = StyleSheet.create({
     fontFamily: fuente.titulo,
     fontSize: tipo.titulo.tamano,
     lineHeight: tipo.titulo.linea,
-    letterSpacing: tracking.titulo,
+    letterSpacing: tracking.tituloPagina,
   },
 });

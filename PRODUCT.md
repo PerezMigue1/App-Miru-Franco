@@ -17,7 +17,7 @@ React Native con Expo SDK 57, solo Android en la v1, sin iOS ni web.
 Mirú Franco Beauty Salón (Huejutla de Reyes, Hidalgo, México) ya opera un sistema web completo. La app móvil es un segundo cliente del mismo backend para que una clienta reserve, pague su anticipo o compre sin fricción desde su teléfono, con la misma identidad de marca que el sitio. El éxito es que una clienta agende una cita o complete una compra en pocos toques y llegue puntual gracias a los recordatorios.
 
 ## Operating Context
-- Horario del salón: lunes a sábado de 9:00 a 20:00. Contacto: contacto@mirufranco.com.
+- Horario del salón: lunes a viernes de 9:30 a 19:30, sábado de 9:30 a 19:00 y domingo cerrado. Teléfono: +52 771 268 1432.
 - Backend propio NestJS ya desplegado sobre Neon PostgreSQL con datos reales de clientas. La app no crea backend nuevo ni modifica contratos de API.
 - Autenticación con JWT Bearer. El token se guarda en el almacenamiento seguro del dispositivo, nunca en texto plano ni en el bundle.
 - Pagos con Mercado Pago Checkout Pro, que se abre en un navegador interno y se confirma consultando el estado al volver a la app.

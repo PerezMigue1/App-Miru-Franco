@@ -87,11 +87,13 @@ function Navegacion({ fuentesListas }: { fuentesListas: boolean }) {
           <Stack.Screen name="servicio/[id]" />
           {/* Mis citas es pública: sin sesión muestra la invitación a iniciar sesión. */}
           <Stack.Screen name="mis-citas" />
-          {/* Tienda (GP-06.4): el detalle de un producto, el carrito y Mis pedidos son públicos; sin
-              sesión, el carrito y Mis pedidos muestran la invitación a iniciar sesión. */}
+          {/* Tienda (GP-06.4): el detalle de un producto y Mis pedidos son públicos; sin sesión, Mis
+              pedidos muestra la invitación a iniciar sesión. El carrito es una pestaña. */}
           <Stack.Screen name="producto/[id]" />
-          <Stack.Screen name="carrito" />
           <Stack.Screen name="mis-pedidos" />
+          {/* Notificaciones se abre con la campana de Inicio, encima de las pestañas; sin sesión
+              muestra la invitación a iniciar sesión. */}
+          <Stack.Screen name="notificaciones" />
           {/* Acceso se abre encima de las pestañas y solo sin sesión: al iniciar sesión el guard lo
               saca de la pila y queda a la vista la pestaña donde estaba la clienta. */}
           <Stack.Protected guard={estado !== 'autenticado'}>

@@ -100,11 +100,12 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: borde.hairline,
+    borderWidth: borde.entrada,
     borderRadius: radio.pastilla,
   },
+  // Mismo lenguaje que un campo deshabilitado (.mf-campo:disabled 0.55).
   deshabilitado: {
-    opacity: opacidad.deshabilitado,
+    opacity: opacidad.deshabilitadoCampo,
   },
   paso: {
     width: toqueMinimo,

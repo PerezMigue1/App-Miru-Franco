@@ -204,7 +204,7 @@ export function Input({
 
   return (
     <View>
-      <Text nativeID={`${id}-etiqueta`} style={[styles.etiqueta, { color: colores.texto }]}>
+      <Text nativeID={`${id}-etiqueta`} style={[styles.etiqueta, { color: colores.contorno }]}>
         {etiqueta}
       </Text>
       {/* El borde cambia de color en 140 ms al enfocar, al salir y al marcar un error. */}
@@ -213,6 +213,8 @@ export function Input({
           styles.caja,
           transicionBorde,
           { backgroundColor: colores.campoFondo, borderColor: colorBorde },
+          // Halo del foco como .mf-campo:focus (3px de --mf-foco al 22 %); con error, solo el borde.
+          enfocado && !hayError && !estadoEsError ? { boxShadow: `0 0 0 3px ${colores.focoHalo}` } : null,
         ]}
       >
         <TextInput
@@ -344,15 +346,15 @@ const styles = StyleSheet.create({
   etiqueta: {
     marginBottom: espacio.s,
     fontFamily: fuente.textoMedio,
-    fontSize: tipo.pequeno.tamano,
-    lineHeight: tipo.pequeno.linea,
+    fontSize: tipo.etiquetaCampo.tamano,
+    lineHeight: tipo.etiquetaCampo.linea,
   },
   caja: {
     minHeight: toqueMinimo,
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: radio.campo,
-    borderWidth: borde.campo,
+    borderWidth: borde.entrada,
   },
   entrada: {
     flex: 1,

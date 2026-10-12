@@ -7,7 +7,7 @@ import { EmptyState } from '@/shared/ui/EmptyState';
 import { Monograma } from '@/shared/ui/Monograma';
 import { useEntradaContenido, usePresion } from '@/shared/ui/movimiento';
 import { Skeleton } from '@/shared/ui/Skeleton';
-import { duracion, galeria, radio } from '@/shared/ui/tokens';
+import { duracion, escalaPresionadoTarjeta, galeria, radio, sombra } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
 import type { FotoGaleria } from '../models/FotoModel';
@@ -114,7 +114,8 @@ const Celda = memo(function Celda({
   onAbrir: (indice: number) => void;
 }) {
   const { colores } = useTheme();
-  const { estilo, hundir, soltar } = usePresion();
+  // La foto entera es tocable: se hunde como tarjeta (0.99), no como botón.
+  const { estilo, hundir, soltar } = usePresion(escalaPresionadoTarjeta);
 
   return (
     <Pressable
@@ -125,7 +126,13 @@ const Celda = memo(function Celda({
       onPressOut={soltar}
       style={[styles.celda, posicion]}
     >
-      <Animated.View style={[styles.marco, { backgroundColor: colores.panel }, estilo]}>
+      <Animated.View
+        style={[
+          styles.marco,
+          { backgroundColor: colores.panel, shadowColor: colores.sombraTarjeta },
+          estilo,
+        ]}
+      >
         <Monograma tamano="pequeno" />
         <Image
           source={{ uri: foto.url }}
@@ -174,6 +181,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: radio.tarjeta,
     overflow: 'hidden',
+    // Sombra tintada de tarjeta, como .mf-foto de la web (--mf-sombra-1).
+    shadowOpacity: sombra.tarjeta.opacidad,
+    shadowRadius: sombra.tarjeta.radio,
+    shadowOffset: { width: 0, height: sombra.tarjeta.desplazamientoY },
+    elevation: sombra.tarjeta.elevacion,
   },
   esqueleto: {
     borderRadius: radio.tarjeta,

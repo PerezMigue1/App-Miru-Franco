@@ -36,7 +36,7 @@ export function HojaApariencia({ visible, preferencia, onElegir, onCerrar }: Hoj
               onPress={() => onElegir(opcion.valor)}
               style={({ pressed }) => [
                 styles.opcion,
-                { backgroundColor: pressed ? colores.presionado : 'transparent' },
+                { backgroundColor: pressed ? colores.presionado : colores.transparente },
               ]}
             >
               <View style={styles.textos}>

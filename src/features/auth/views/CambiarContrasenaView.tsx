@@ -178,7 +178,7 @@ export default function CambiarContrasenaView() {
                 {vm.espera > 0 ? (
                   <Text
                     accessibilityLabel={`Podrás pedir otro código en ${vm.espera} segundos`}
-                    style={[styles.nota, styles.centrado, { color: colores.textoSuave }]}
+                    style={[styles.nota, styles.espera, { color: colores.textoSuave }]}
                   >
                     Podrás pedir otro código en {vm.espera} s
                   </Text>
@@ -222,8 +222,10 @@ const styles = StyleSheet.create({
     fontSize: tipo.pequeno.tamano,
     lineHeight: tipo.pequeno.linea,
   },
-  centrado: {
+  // Cuenta regresiva: cifras tabulares para que el texto no tiemble cada segundo.
+  espera: {
     textAlign: 'center',
+    fontVariant: ['tabular-nums'],
   },
   campoEsqueleto: {
     height: toqueMinimo,

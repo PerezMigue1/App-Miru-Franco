@@ -263,14 +263,44 @@ export function obtenerPedido(id: string | number): Promise<Pedido> {
 }
 
 /**
+ * Reembolso de un pedido pagado que la clienta canceló: 'reembolsado' (ya se pidió la devolución a
+ * Mercado Pago) o 'en_revision' (el salón la hará a mano). Monto en centavos.
+ */
+export interface ReembolsoCancelacion {
+  estado: 'reembolsado' | 'en_revision';
+  montoCentavos: number;
+}
+
+export interface ResultadoCancelarPedido {
+  pedido: Pedido;
+  /** Solo si el pedido estaba pagado; null en los demás casos o con un estado desconocido. */
+  reembolso: ReembolsoCancelacion | null;
+}
+
+function reembolsoDe(respuesta: unknown): ReembolsoCancelacion | null {
+  const crudo = esObjeto(respuesta) && esObjeto(respuesta.reembolso) ? respuesta.reembolso : undefined;
+  if (!crudo) {
+    return null;
+  }
+  const estado = texto(crudo.estado);
+  if (estado !== 'reembolsado' && estado !== 'en_revision') {
+    return null;
+  }
+  return { estado, montoCentavos: aCentavos(crudo.monto) };
+}
+
+/**
  * Cancela el pedido: PUT /api/pedidos/:id?propios=true { estado: 'cancelado' } (sin motivo: el
  * backend no lo acepta). Solo en pendiente_pago o pagado; las existencias regresan a la tienda.
- * Responde { success, data } con el pedido ya cancelado. Errores: mensajeCancelarPedido.
+ * Responde { success, data, reembolso? } con el pedido ya cancelado; `reembolso` ({ estado, monto }
+ * en pesos) solo viene si estaba pagado. Errores: mensajeCancelarPedido.
  */
-export function cancelarPedido(id: string | number): Promise<Pedido> {
+export function cancelarPedido(id: string | number): Promise<ResultadoCancelarPedido> {
   return apiPut<unknown>(`/api/pedidos/${idParaRuta(id)}?propios=true`, { estado: 'cancelado' }).then(
-    (respuesta) =>
-      esObjeto(respuesta) && esObjeto(respuesta.data) ? pedidoDe(respuesta) : obtenerPedido(id),
+    async (respuesta) =>
+      esObjeto(respuesta) && esObjeto(respuesta.data)
+        ? { pedido: pedidoDe(respuesta), reembolso: reembolsoDe(respuesta) }
+        : { pedido: await obtenerPedido(id), reembolso: null },
   );
 }
 
@@ -459,13 +489,13 @@ export function textoQueSigue(
 }
 
 /**
- * Texto de la confirmación para cancelar. Un pedido pagado no se reembolsa solo (el backend no lo
- * hace): se le dice a la clienta a quién escribir, sin prometer nada más.
+ * Texto de la confirmación para cancelar. Un pedido pagado en línea se reembolsa completo con
+ * Mercado Pago al cancelarlo (el backend lo pide en la misma cancelación).
  */
-export function textoCancelarPedido(pedido: Pick<Pedido, 'estado'>): string {
+export function textoCancelarPedido(pedido: Pick<Pedido, 'estado' | 'metodoPago'>): string {
   const base = 'Se cancela tu pedido y los productos vuelven a la tienda. Esta acción no se puede deshacer.';
-  return pedido.estado === 'pagado'
-    ? `${base} Como ya lo pagaste, escríbenos a contacto@mirufranco.com para la devolución de tu pago.`
+  return pedido.estado === 'pagado' && esPagoEnLinea(pedido)
+    ? `${base} Te devolvemos el pago completo a tu tarjeta con Mercado Pago. Puede tardar unos días en reflejarse, según tu banco.`
     : base;
 }
 
@@ -537,7 +567,7 @@ export function motivoConflictoPedido(error: unknown): MotivoConflictoPedido | n
 const MENSAJES_CONFLICTO: Record<MotivoConflictoPedido, string> = {
   noPendiente: 'Este pedido ya no está pendiente de pago.',
   vencido: 'El plazo de 24 horas para pagar terminó y el pedido se canceló. Puedes volver a hacer tu compra.',
-  total: 'El total de tu pedido no coincide con sus productos. Escríbenos a contacto@mirufranco.com para revisarlo.',
+  total: `El total de tu pedido no coincide con sus productos. Llámanos al salón para revisarlo: ${SALON_RECOGER.telefono}.`,
   enSalon: 'Este pedido se paga al recogerlo en el salón.',
   noDisponible: 'El pago en línea no está disponible por ahora. Intenta más tarde.',
 };

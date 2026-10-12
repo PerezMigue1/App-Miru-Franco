@@ -9,10 +9,13 @@ import {
   itemConProblema,
   mensajeErrorCarrito,
   obtenerCarrito,
+  piezasCarrito,
   quitarDelCarrito,
   totalCarrito,
   type ItemCarrito,
 } from '../models/carritoModel';
+
+import { avisarCambioCarrito, publicarPiezasCarrito } from './usePiezasCarrito';
 
 export type EstadoCarrito = 'cargando' | 'listo' | 'error';
 
@@ -39,7 +42,6 @@ export interface CarritoViewModel {
   cancelarQuitar: () => void;
   confirmarQuitar: () => void;
   quitando: boolean;
-  regresar: () => void;
   verTienda: () => void;
   continuar: () => void;
 }
@@ -51,8 +53,10 @@ export interface CarritoViewModel {
  */
 export function useCarritoViewModel(): CarritoViewModel {
   const router = useRouter();
-  const { estado: estadoSesion } = useAuth();
+  const { estado: estadoSesion, usuario } = useAuth();
   const conSesion = estadoSesion === 'autenticado';
+  // La pestaña se queda montada entre sesiones: la cuenta decide de quién es la lista en pantalla.
+  const cuenta = conSesion ? (usuario?.id ?? null) : null;
 
   const [estado, setEstado] = useState<EstadoCarrito>('cargando');
   const [items, setItems] = useState<ItemCarrito[]>([]);
@@ -76,6 +80,19 @@ export function useCarritoViewModel(): CarritoViewModel {
       solicitud.current += 1;
     };
   }, []);
+
+  // Al cerrar sesión o entrar con otra cuenta no queda nada de la anterior: lista, errores, hoja de
+  // quitar y lecturas en camino. La siguiente lectura vuelve a mostrar el skeleton.
+  useEffect(() => {
+    solicitud.current += 1;
+    yaCargo.current = false;
+    ocupadosRef.current.clear();
+    setItems([]);
+    setOcupados(new Set());
+    setErrores({});
+    setPorQuitar(null);
+    setEstado('cargando');
+  }, [cuenta]);
 
   const marcar = useCallback((id: number, ocupado: boolean) => {
     if (ocupado) {
@@ -124,6 +141,8 @@ export function useCarritoViewModel(): CarritoViewModel {
         );
         yaCargo.current = true;
         setEstado('listo');
+        // El número de la pestaña Carrito toma lo que ya se leyó, sin otra lectura.
+        publicarPiezasCarrito(piezasCarrito(lista));
       })
       .catch(() => {
         if (actual !== solicitud.current) {
@@ -165,6 +184,9 @@ export function useCarritoViewModel(): CarritoViewModel {
       // El valor nuevo se ve de inmediato; si el servidor no lo acepta, regresa.
       setItems((lista) => lista.map((fila) => (fila.id === item.id ? { ...fila, cantidad } : fila)));
       actualizarCantidad(item.id, cantidad)
+        .then(() => {
+          avisarCambioCarrito();
+        })
         .catch((error: unknown) => {
           if (!montada.current) {
             return;
@@ -206,6 +228,7 @@ export function useCarritoViewModel(): CarritoViewModel {
     setQuitando(true);
     quitarDelCarrito(item.id)
       .then(() => {
+        avisarCambioCarrito();
         if (montada.current) {
           setItems((lista) => lista.filter((fila) => fila.id !== item.id));
         }
@@ -216,6 +239,7 @@ export function useCarritoViewModel(): CarritoViewModel {
         }
         // 404: ya no estaba en el carrito; se quita de la lista igual.
         if (error instanceof ApiError && error.status === 404) {
+          avisarCambioCarrito();
           setItems((lista) => lista.filter((fila) => fila.id !== item.id));
           return;
         }
@@ -230,17 +254,9 @@ export function useCarritoViewModel(): CarritoViewModel {
       });
   }, [porQuitar, marcar, ponerError]);
 
-  const regresar = useCallback(() => {
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/tienda');
-    }
-  }, [router]);
-
   const verTienda = useCallback(() => {
-    // dismissTo regresa a las pestañas que ya están abajo; navigate apilaría otra copia.
-    router.dismissTo('/tienda');
+    // El carrito es una pestaña: navigate solo cambia a la pestaña Tienda, no apila otra pantalla.
+    router.navigate('/tienda');
   }, [router]);
 
   const hayProblemas = items.some(itemConProblema);
@@ -268,7 +284,6 @@ export function useCarritoViewModel(): CarritoViewModel {
     cancelarQuitar,
     confirmarQuitar,
     quitando,
-    regresar,
     verTienda,
     continuar,
   };

@@ -14,6 +14,9 @@ export const paleta = {
   vino: '#710014', // --botones-principales, --mf-foco (claro)
   vinoProfundo: '#600011', // --menu-texto-principal, --danger-texto (claro)
   oro: '#9f6d1f', // --logo-branding
+  oroGrande: '#865a17', // --oro-grande (claro): oro para texto grande (3.7:1 sobre lino)
+  iconografia: '#BFA181', // --iconografia: solo decorativo (1.5:1 sobre lino)
+  cafeSombra: '#3A1C0A', // rgba(58, 28, 10) de --mf-sombra-1 (claro): sombra tintada de café
   oroFoco: '#c4954d', // --mf-foco, --oro-sobre-carbon, --nav-activo-icono (oscuro)
   oroSobreCarbon: '#b07a28', // --oro-sobre-carbon (claro)
   carbon: '#161616', // --header-footer, --fondo-general (oscuro)
@@ -22,10 +25,13 @@ export const paleta = {
   crema: '#F2F1ED', // --input-bg, --texto-fondo-oscuro (claro), --btn-secundario-texto (oscuro)
   blanco: '#ffffff', // --menu-texto-principal, --texto-fondo-oscuro (oscuro)
   textoSecundario: '#4a4541', // --texto-secundario (claro)
-  bordeCampoClaro: '#8a7667', // --campo-borde (claro)
-  bordeCampoOscuro: '#6e6e6e', // --campo-borde (oscuro)
-  placeholderClaro: '#6b5a4e', // --campo-placeholder (claro)
-  placeholderOscuro: '#b8a597', // --campo-placeholder (oscuro)
+  bordeCampoClaro: '#7a6658', // --campo-borde (claro): 4.8:1 contra el fondo del campo
+  bordeCampoOscuro: '#787878', // --campo-borde (oscuro): 3.25:1 sobre la tarjeta #2a2a2a
+  placeholderClaro: '#6f6a66', // --campo-placeholder-texto (claro), el de .mf-campo: 4.7:1
+  placeholderOscuro: '#8c8885', // --campo-placeholder-texto (oscuro), el de .mf-campo: 4.7:1
+  esqueletoOscuro: '#787878', // --skeleton-bg (oscuro)
+  infoClaro: '#1f4466', // --info-texto (claro)
+  infoOscuro: '#8fb6d9', // --info-texto (oscuro)
   peligroOscuro: '#e0748f', // --danger-texto (oscuro)
   exitoClaro: '#242d1b', // --success-texto (claro)
   exitoOscuro: '#82a163', // --success-texto (oscuro)
@@ -50,8 +56,16 @@ const transparencias = {
   lineaOscuro: 'rgba(255, 255, 255, 0.08)', // --mf-linea (oscuro)
   presionadoClaro: 'rgba(113, 0, 20, 0.05)', // --nav-hover-bg (claro)
   presionadoOscuro: 'rgba(255, 255, 255, 0.04)', // --nav-hover-bg (oscuro)
-  // Sin variable equivalente en la web (se conserva y se reporta): velo del visor y de las hojas.
-  velo: 'rgba(22, 22, 22, 0.94)',
+  lineaFuerteClaro: 'rgba(42, 42, 42, 0.22)', // --mf-linea-fuerte (claro)
+  lineaFuerteOscuro: 'rgba(255, 255, 255, 0.16)', // --mf-linea-fuerte (oscuro)
+  focoHaloClaro: 'rgba(113, 0, 20, 0.22)', // halo del foco del campo: --mf-foco al 22 % (claro)
+  focoHaloOscuro: 'rgba(196, 149, 77, 0.22)', // halo del foco del campo: --mf-foco al 22 % (oscuro)
+  activoClaro: 'rgba(113, 0, 20, 0.1)', // --nav-activo-bg (claro)
+  activoOscuro: 'rgba(255, 255, 255, 0.08)', // --nav-activo-bg (oscuro)
+  velo: 'rgba(22, 22, 22, 0.55)', // .mf-velo: detrás de hojas y diálogos
+  veloVisor: 'rgba(22, 22, 22, 0.92)', // --carbon-92: visor de fotos y botones sobre foto
+  // --segmentado-borde (claro) y fondos que no se pintan (pressable en reposo, botón con borde).
+  transparente: 'transparent',
 } as const;
 
 export interface Colores {
@@ -84,8 +98,40 @@ export interface Colores {
   textoSuaveSobrePanel: string;
   oro: string;
   oroTextoPequeno: string;
+  /** --oro-texto: oro para texto de cualquier tamaño (8.8:1 sobre lino; 6.7:1 sobre carbón). */
+  oroTexto: string;
+  /** --oro-grande: "MIRÚ" y "Franco" de la marca; solo texto grande, nunca sobre terracota. */
+  oroGrande: string;
+  /** --iconografia: íconos y filetes decorativos (no lleva significado: 1.5:1 sobre lino). */
+  iconografia: string;
+  /** Sombra tintada del botón primario (vino en claro). */
   sombra: string;
+  /** Sombra de tarjetas: café rgba(58, 28, 10) en claro (--mf-sombra-1); carbón en oscuro. */
+  sombraTarjeta: string;
+  /** Velo detrás de hojas y diálogos (.mf-velo, 55 %). */
   velo: string;
+  /** Velo del visor de fotos y de los botones sobre una foto (--carbon-92). */
+  veloVisor: string;
+  /** --superficie-elevada: tarjeta interna sobre una tarjeta o un panel. */
+  superficieElevada: string;
+  /** --superficie-modal: fondo de hojas y diálogos. */
+  superficieModal: string;
+  /** --skeleton-bg. */
+  esqueleto: string;
+  /** --mf-linea-fuerte: borde de tarjetas con borde y encabezado de hojas. */
+  hairlineFuerte: string;
+  /** Halo del foco de un campo (--mf-foco al 22 %). */
+  focoHalo: string;
+  /** --info-texto. */
+  info: string;
+  /** --nav-activo-texto: etiqueta de la pestaña activa. */
+  textoActivo: string;
+  /** --nav-activo-bg: fondo de la opción de navegación activa. */
+  fondoActivo: string;
+  /** --segmentado-borde: borde del control segmentado (sin borde en claro). */
+  segmentadoBorde: string;
+  /** Fondo que no se pinta (pressable en reposo, botón con borde). */
+  transparente: string;
   /** Errores de formulario y acciones destructivas. */
   peligro: string;
   /** Fondo de una fila mientras se presiona. */
@@ -132,9 +178,24 @@ export const temaClaro: Colores = {
   textoSuaveSobrePanel: transparencias.cremaSobreCarbon,
   oro: paleta.oro,
   oroTextoPequeno: paleta.oroSobreCarbon,
-  // Sombra tintada de vino del botón primario (identidad de la marca; sin variable equivalente en la web).
+  oroTexto: paleta.avisoClaro,
+  oroGrande: paleta.oroGrande,
+  iconografia: paleta.iconografia,
+  // Sombra tintada de vino del botón primario (precedente en la web: indicador de pestañas, cliente.css).
   sombra: paleta.vino,
+  sombraTarjeta: paleta.cafeSombra,
   velo: transparencias.velo,
+  veloVisor: transparencias.veloVisor,
+  superficieElevada: paleta.blanco,
+  superficieModal: paleta.lino,
+  esqueleto: paleta.arena,
+  hairlineFuerte: transparencias.lineaFuerteClaro,
+  focoHalo: transparencias.focoHaloClaro,
+  info: paleta.infoClaro,
+  textoActivo: paleta.vino,
+  fondoActivo: transparencias.activoClaro,
+  segmentadoBorde: transparencias.transparente,
+  transparente: transparencias.transparente,
   peligro: paleta.vinoProfundo,
   presionado: transparencias.presionadoClaro,
   exito: paleta.exitoClaro,
@@ -169,9 +230,24 @@ export const temaOscuro: Colores = {
   textoSuaveSobrePanel: transparencias.blancoSobreCarbon,
   oro: paleta.oro,
   oroTextoPequeno: paleta.oroFoco,
+  oroTexto: paleta.oroFoco,
+  oroGrande: paleta.oroFoco,
+  iconografia: paleta.iconografia,
   // La web usa negro puro en sombras oscuras; DESIGN.md lo prohíbe, así que se conserva carbón.
   sombra: paleta.carbon,
+  sombraTarjeta: paleta.carbon,
   velo: transparencias.velo,
+  veloVisor: transparencias.veloVisor,
+  superficieElevada: paleta.carbonClaro,
+  superficieModal: paleta.carbonClaro,
+  esqueleto: paleta.esqueletoOscuro,
+  hairlineFuerte: transparencias.lineaFuerteOscuro,
+  focoHalo: transparencias.focoHaloOscuro,
+  info: paleta.infoOscuro,
+  textoActivo: paleta.blanco,
+  fondoActivo: transparencias.activoOscuro,
+  segmentadoBorde: paleta.esqueletoOscuro,
+  transparente: transparencias.transparente,
   peligro: paleta.peligroOscuro,
   presionado: transparencias.presionadoOscuro,
   exito: paleta.exitoOscuro,
@@ -207,7 +283,10 @@ export const radio = {
 
 export const borde = {
   hairline: 1,
+  /** Botón con borde, anillos y casillas (--btn-borde 1.5px). */
   campo: 1.5,
+  /** Borde del campo de texto (.mf-campo: 1px). */
+  entrada: 1,
   indicador: 2,
 } as const;
 
@@ -235,10 +314,13 @@ export const fuente = {
 /** Tamaño y alto de línea (texto en 1.5–1.6; títulos más cerrados). */
 export const tipo = {
   etiqueta: { tamano: 13, linea: 20 },
+  /** Etiqueta de un campo de formulario (.mf-etiqueta: 15px, peso 500). */
+  etiquetaCampo: { tamano: 15, linea: 22 },
   pequeno: { tamano: 14, linea: 22 },
   cuerpo: { tamano: 16, linea: 25 },
   subtitulo: { tamano: 20, linea: 28 },
-  titulo: { tamano: 28, linea: 34 },
+  /** .mf-titulo-pagina: clamp(30px…) con interlineado 1.15; a 360dp mide 30. */
+  titulo: { tamano: 30, linea: 35 },
   marca: { tamano: 44, linea: 48 },
   marcaManuscrita: { tamano: 40, linea: 52 },
   gigante: { tamano: 52, linea: 54 },
@@ -246,9 +328,18 @@ export const tipo = {
   pestana: { tamano: 10, linea: 13 },
 } as const;
 
-/** Espaciado de letra: títulos ligeramente cerrados, lema abierto. */
+/**
+ * Espaciado de letra: títulos en Playfair con -0.02em como la web (em × tamaño en px), lema abierto.
+ * `titulo`, `gigante` y `lema` los usa también el hero de fluidos, que no se toca: se conservan.
+ */
 export const tracking = {
   titulo: -0.4,
+  /** Título de pantalla (tipo.titulo, 30): -0.02em. */
+  tituloPagina: -0.6,
+  /** Subtítulo y título de hoja (tipo.subtitulo, 20): -0.02em. */
+  subtitulo: -0.4,
+  /** Título de tarjeta en Playfair (tipo.cuerpo, 16): -0.02em. */
+  tituloTarjeta: -0.32,
   gigante: -1.2,
   lema: 2.4,
   monograma: 1,
@@ -283,6 +374,8 @@ export const duracion = {
   intro: 1300,
   /** Amortiguado del parallax: cada lectura del giroscopio se alcanza en este tiempo. */
   parallax: 600,
+  /** Con movimiento reducido, hojas y diálogos solo se funden en este tiempo (sistema.css). */
+  reducido: 160,
   /** Medio ciclo del pulso de los skeletons. */
   pulso: 900,
   /** Cambio de estado de un campo (verificando, disponible, requisito cumplido): igual que presionar. */
@@ -311,14 +404,20 @@ export const duracion = {
 /** Intervalo de lectura del giroscopio. */
 export const intervaloSensor = 50;
 
-/** Escala al presionar: se hunde sin animar desde escala 0. */
+/** Escala al presionar un botón u opción: se hunde sin animar desde escala 0 (sistema.css: 0.97). */
 export const escalaPresionado = 0.97;
+
+/** Escala al presionar una tarjeta tocable completa (sistema.css: .mf-tarjeta-tocable 0.99). */
+export const escalaPresionadoTarjeta = 0.99;
 
 /** Escala desde la que entra un ícono de estado (nunca desde 0). */
 export const escalaEntrada = 0.9;
 
 export const opacidad = {
-  deshabilitado: 0.45,
+  /** Botón deshabilitado (Button de la web: 0.5). */
+  deshabilitado: 0.5,
+  /** Campo deshabilitado (.mf-campo:disabled 0.55). */
+  deshabilitadoCampo: 0.55,
   /** Pulso de los skeletons. */
   pulsoMinimo: 0.55,
   /** Respuesta al presionar con movimiento reducido: baja la opacidad en lugar de hundirse. */
@@ -559,8 +658,12 @@ export const insignia = {
     aviso: { fondo: '#EEE1C8', texto: paleta.avisoClaro },
     /** --success #6E7D57 al 16 % sobre crema; texto --success-texto. */
     exito: { fondo: '#DDDED5', texto: paleta.exitoClaro },
-    /** --logo-branding #9f6d1f al 16 % sobre crema; texto secundario. */
-    neutro: { fondo: '#E5DCCC', texto: paleta.textoSecundario },
+    /** --logo-branding #9f6d1f al 16 % sobre crema; texto --oro-texto (10.5:1). */
+    neutro: { fondo: '#E5DCCC', texto: paleta.avisoClaro },
+    /** --danger #710014 al 16 % sobre crema; texto --danger-texto (8.9:1). */
+    peligro: { fondo: '#DDCACA', texto: paleta.vinoProfundo },
+    /** --enlaces-textos-interactivos #4A7BA7 al 16 % sobre crema; texto --info-texto (7.4:1). */
+    info: { fondo: '#D7DEE2', texto: paleta.infoClaro },
   },
   oscuro: {
     /** --warning al 16 % sobre #1f1f1f; texto --warning-texto oscuro (4.7:1). */
@@ -569,6 +672,18 @@ export const insignia = {
     exito: { fondo: '#2C2E28', texto: paleta.exitoOscuro },
     /** --logo-branding al 16 % sobre #1f1f1f; texto oro sobre carbón (5.1:1). */
     neutro: { fondo: '#332B1F', texto: paleta.oroFoco },
+    /** --danger al 16 % sobre #1f1f1f; texto --danger-texto oscuro (5.6:1). */
+    peligro: { fondo: '#2C1A1D', texto: paleta.peligroOscuro },
+    /** #4a7ba7 al 16 % sobre #1f1f1f; texto --info-texto oscuro (6.5:1). */
+    info: { fondo: '#262E35', texto: paleta.infoOscuro },
+  },
+  /** Filete interior de 1px: el color del estado al 30 % (.mf-badge), igual en claro y oscuro. */
+  borde: {
+    aviso: 'rgba(217, 142, 4, 0.3)',
+    exito: 'rgba(110, 125, 87, 0.3)',
+    neutro: 'rgba(159, 109, 31, 0.3)',
+    peligro: 'rgba(113, 0, 20, 0.3)',
+    info: 'rgba(74, 123, 167, 0.3)',
   },
   rellenoHorizontal: espacio.m,
   rellenoVertical: espacio.xs,
@@ -588,15 +703,13 @@ export const cancelacion = {
 
 /** Catálogo y detalle de productos de la tienda (GP-06.4). */
 export const tiendaCatalogo = {
-  /** Lado mínimo de la pastilla con las piezas del carrito sobre el ícono de la Tienda. */
-  pastillaCarrito: 20,
   /** Ancho del punto de la foto actual de la galería: pastilla más larga que los demás puntos. */
   puntoActivo: 20,
   /** Diámetro de la viñeta de las características del producto. */
   vineta: 6,
-  /** Cifra más alta que muestra la pastilla del carrito; arriba de ella se lee "99+". */
+  /** Cifra más alta del número de piezas de la pestaña Carrito; arriba de ella se lee "99+". */
   maximoPiezasVisibles: 99,
-  /** Cifra dentro de la pastilla del carrito: cabe en los 20dp de alto. */
+  /** Cifra del número de piezas de la pestaña Carrito: cabe en el círculo de 18dp de la barra. */
   cifraPastilla: { tamano: 11, linea: 14 },
 } as const;
 
