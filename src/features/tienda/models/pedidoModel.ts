@@ -219,8 +219,8 @@ export function listarMisPedidos(): Promise<Pedido[]> {
 /** Las líneas del pedido son exactamente las enviadas (misma presentación y cantidad, sin orden). */
 function mismasLineas(pedido: Pedido, lineas: LineaPedido[]): boolean {
   const clave = (presentacionId: number, cantidad: number) => `${presentacionId}x${cantidad}`;
-  const delPedido = pedido.items.map((item) => clave(item.presentacionId, item.cantidad)).sort();
-  const enviadas = lineas.map((linea) => clave(linea.presentacionId, linea.cantidad)).sort();
+  const delPedido = pedido.items.map((item) => clave(item.presentacionId, item.cantidad)).sort((a, b) => a.localeCompare(b));
+  const enviadas = lineas.map((linea) => clave(linea.presentacionId, linea.cantidad)).sort((a, b) => a.localeCompare(b));
   return delPedido.length === enviadas.length && delPedido.every((valor, i) => valor === enviadas[i]);
 }
 
@@ -437,7 +437,7 @@ export function etiquetaMetodoPago(metodoPago: string): string {
   }
   return Object.prototype.hasOwnProperty.call(METODOS_PAGO, metodoPago)
     ? METODOS_PAGO[metodoPago]
-    : metodoPago.split('_').join(' ');
+    : metodoPago.replaceAll('_', ' ');
 }
 
 /** Forma de pago corta para la lista de pedidos; los métodos viejos de la web usan etiquetaMetodoPago. */

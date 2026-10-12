@@ -147,24 +147,20 @@ function contarActivos(filtros: FiltrosTienda, visibles: Set<GrupoFiltroTienda>)
   return [...visibles].reduce((total, grupo) => total + filtros.opciones[grupo].length, precio);
 }
 
-/**
- * El producto cumple el panel de filtros, con la lógica de la web (page.tsx:155-172): "y" entre
- * grupos y "o" dentro de un grupo; un grupo sin opciones o que no aplica a la categoría no filtra.
- * Un producto sin precio vale 0: no pasa un mínimo, pero sí un máximo.
- */
-function cumpleFiltros(
-  producto: ProductoCatalogo,
-  filtros: FiltrosTienda,
-  visibles: Set<GrupoFiltroTienda>,
-): boolean {
+/** Un producto sin precio vale 0: no pasa un mínimo, pero sí un máximo. */
+function cumplePrecio(producto: ProductoCatalogo, filtros: FiltrosTienda): boolean {
   const precio = precioDesdeCentavos(producto) / 100;
   const minimo = filtros.precioMinimo !== '' ? Number(filtros.precioMinimo) : null;
   const maximo = filtros.precioMaximo !== '' ? Number(filtros.precioMaximo) : null;
-  if ((minimo !== null && precio < minimo) || (maximo !== null && precio > maximo)) {
-    return false;
-  }
+  return !((minimo !== null && precio < minimo) || (maximo !== null && precio > maximo));
+}
 
-  const { opciones } = filtros;
+/** Grupos que se comparan contra campos del producto: descuento, marca y otras características. */
+function cumpleOpcionesFijas(
+  producto: ProductoCatalogo,
+  opciones: FiltrosTienda['opciones'],
+  visibles: Set<GrupoFiltroTienda>,
+): boolean {
   if (visibles.has('descuento') && opciones.descuento.length > 0) {
     const minimos = OPCIONES_DESCUENTO.filter((o) => opciones.descuento.includes(o.texto)).map(
       (o) => o.minimo,
@@ -182,6 +178,26 @@ function cumpleFiltros(
     if (!opciones.otrasCaracteristicas.some((c) => producto.caracteristicas.includes(c))) {
       return false;
     }
+  }
+  return true;
+}
+
+/**
+ * El producto cumple el panel de filtros, con la lógica de la web (page.tsx:155-172): "y" entre
+ * grupos y "o" dentro de un grupo; un grupo sin opciones o que no aplica a la categoría no filtra.
+ */
+function cumpleFiltros(
+  producto: ProductoCatalogo,
+  filtros: FiltrosTienda,
+  visibles: Set<GrupoFiltroTienda>,
+): boolean {
+  if (!cumplePrecio(producto, filtros)) {
+    return false;
+  }
+
+  const { opciones } = filtros;
+  if (!cumpleOpcionesFijas(producto, opciones, visibles)) {
+    return false;
   }
 
   const textoProducto = [producto.nombre, producto.descripcion, ...producto.caracteristicas]

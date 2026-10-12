@@ -87,6 +87,45 @@ interface OpcionesConsulta {
   trasRegreso: boolean;
 }
 
+/** Qué cuenta la pantalla según el pedido, el último estado del pago y las consultas en curso. */
+function calcularVista(
+  pedido: Pedido | null,
+  estadoPago: EstadoPagoPedido | null,
+  consultando: boolean,
+  trasRegreso: boolean,
+): VistaPedido {
+  if (!pedido) {
+    return 'apartado';
+  }
+  if (pedido.estado === 'cancelado' || estadoPago === 'cancelado') {
+    return 'cancelado';
+  }
+  if (!esPagoEnLinea(pedido)) {
+    return 'apartado';
+  }
+  // Sin respuesta del pago todavía, la consulta en curso manda sobre el estado del pedido.
+  if (estadoPago === null && consultando) {
+    return 'consultando';
+  }
+  if (estadoPago === 'aprobado' || ESTADOS_PAGADOS.includes(pedido.estado)) {
+    return 'aprobado';
+  }
+  if (estadoPago === null) {
+    return 'porPagar';
+  }
+  if (estadoPago === 'revision') {
+    return 'revision';
+  }
+  if (estadoPago === 'pendiente') {
+    return 'pendiente';
+  }
+  if (estadoPago === 'sin_pago' && consultando && trasRegreso) {
+    // Recién vuelve de Mercado Pago: puede tardar en reflejarse. Texto neutro, no "procesando".
+    return 'consultando';
+  }
+  return 'noCompletado';
+}
+
 /**
  * Confirmación de un pedido (GP-06.4). El estado siempre sale del servidor (pedido y estado del
  * pago), nunca de los parámetros de la ruta:
@@ -280,18 +319,17 @@ export function usePedidoConfirmadoViewModel(
     };
   }, [recargar]);
 
-  const pagarPedido = useCallback(
-    async (id: number) => {
-      detenerConsultas();
-      setErrorPago(null);
-      setErrorConsulta(null);
-      setAbriendo(true);
-      // Antes de pedir otra preferencia se pregunta al servidor: con un pago en proceso, en revisión
-      // o aprobado no se abre Mercado Pago (evita un doble cobro, también con ?pagar=1).
+  /**
+   * Antes de pedir otra preferencia se pregunta al servidor: con un pago en proceso, en revisión
+   * o aprobado no se abre Mercado Pago (evita un doble cobro, también con ?pagar=1).
+   * Devuelve true si se puede seguir con el pago.
+   */
+  const revisarPagoPrevio = useCallback(
+    async (id: number): Promise<boolean> => {
       try {
         const previo = await obtenerEstadoPagoPedido(id);
         if (!montada.current) {
-          return;
+          return false;
         }
         if (previo.estado !== 'sin_pago' && previo.estado !== 'rechazado') {
           setAbriendo(false);
@@ -299,34 +337,59 @@ export function usePedidoConfirmadoViewModel(
           if (previo.estado === 'pendiente') {
             iniciarConsultas(id, { repetir: true, trasRegreso: false });
           }
-          return;
+          return false;
         }
       } catch (error) {
         if (!montada.current) {
-          return;
+          return false;
         }
         setAbriendo(false);
         setErrorConsulta(mensajeComunTienda(error) ?? MENSAJE_NO_REVISO);
-        return;
+        return false;
       }
-      let initPoint: string;
+      return true;
+    },
+    [aplicarResultado, iniciarConsultas],
+  );
+
+  /** Pide la preferencia de Mercado Pago; si falla, deja el aviso y devuelve null. */
+  const pedirPreferencia = useCallback(
+    async (id: number): Promise<string | null> => {
       try {
-        initPoint = await crearPreferenciaPedido(id);
+        return await crearPreferenciaPedido(id);
       } catch (error) {
         if (!montada.current) {
-          return;
+          return null;
         }
         setAbriendo(false);
         const motivo = motivoConflictoPedido(error);
         if (motivo === 'noPendiente') {
           // Ya se pagó o cambió: se lee de nuevo el pedido y su pago.
           recargar();
-          return;
+          return null;
         }
         if (motivo === 'vencido') {
           setPagoCerrado(true);
         }
         setErrorPago(mensajePreferenciaPedido(error));
+        return null;
+      }
+    },
+    [recargar],
+  );
+
+  const pagarPedido = useCallback(
+    async (id: number) => {
+      detenerConsultas();
+      setErrorPago(null);
+      setErrorConsulta(null);
+      setAbriendo(true);
+      const sigue = await revisarPagoPrevio(id);
+      if (!sigue) {
+        return;
+      }
+      const initPoint = await pedirPreferencia(id);
+      if (initPoint === null) {
         return;
       }
       if (!montada.current) {
@@ -346,7 +409,7 @@ export function usePedidoConfirmadoViewModel(
       }
       iniciarConsultas(id, { repetir: true, trasRegreso: true });
     },
-    [aplicarResultado, detenerConsultas, iniciarConsultas, recargar],
+    [detenerConsultas, revisarPagoPrevio, pedirPreferencia],
   );
 
   // Al terminar cada carga: la acción automática de la ruta (una vez) o la consulta del pago.
@@ -436,31 +499,7 @@ export function usePedidoConfirmadoViewModel(
   }, [pedido, abriendo, iniciarConsultas]);
 
   // ── Lo que se muestra ──────────────────────────────────────────────────────────────────
-  let vista: VistaPedido = 'apartado';
-  if (pedido) {
-    if (pedido.estado === 'cancelado' || estadoPago === 'cancelado') {
-      vista = 'cancelado';
-    } else if (!esPagoEnLinea(pedido)) {
-      vista = 'apartado';
-    } else if (estadoPago === null) {
-      vista = consultando
-        ? 'consultando'
-        : ESTADOS_PAGADOS.includes(pedido.estado)
-          ? 'aprobado'
-          : 'porPagar';
-    } else if (estadoPago === 'aprobado' || ESTADOS_PAGADOS.includes(pedido.estado)) {
-      vista = 'aprobado';
-    } else if (estadoPago === 'revision') {
-      vista = 'revision';
-    } else if (estadoPago === 'pendiente') {
-      vista = 'pendiente';
-    } else if (estadoPago === 'sin_pago' && consultando && trasRegreso) {
-      // Recién vuelve de Mercado Pago: puede tardar en reflejarse. Texto neutro, no "procesando".
-      vista = 'consultando';
-    } else {
-      vista = 'noCompletado';
-    }
-  }
+  const vista = calcularVista(pedido, estadoPago, consultando, trasRegreso);
 
   const sePuedePagar = pedido != null && pidePagoEnLinea(pedido) && !pagoCerrado;
   const puedePagar =

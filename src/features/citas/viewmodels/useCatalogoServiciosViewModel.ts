@@ -79,14 +79,46 @@ function precioEnPesos(precio: string | null): number {
   return Number.isFinite(numero) ? numero : 0;
 }
 
+function esDigito(caracter: string): boolean {
+  return caracter >= '0' && caracter <= '9';
+}
+
+/**
+ * Primer número seguido (con o sin espacios) de `unidad`, como /(\d+)\s*unidad/ pero en un solo
+ * recorrido: una regex sin ancla tarda O(n²) con una cadena larga de dígitos.
+ */
+function numeroAntesDe(texto: string, unidad: string): number | undefined {
+  let i = 0;
+  while (i < texto.length) {
+    if (!esDigito(texto[i])) {
+      i++;
+      continue;
+    }
+    const inicio = i;
+    while (i < texto.length && esDigito(texto[i])) {
+      i++;
+    }
+    const numero = texto.slice(inicio, i);
+    let j = i;
+    while (j < texto.length && texto[j].trim() === '') {
+      j++;
+    }
+    if (texto.startsWith(unidad, j)) {
+      return Number(numero);
+    }
+    i = j;
+  }
+  return undefined;
+}
+
 /** "45 min", "1 h 30 min" o "3 h" a minutos. Sin duración cuenta como 0, igual que en la web. */
 function duracionEnMinutos(duracion: string | null): number {
   if (!duracion) {
     return 0;
   }
-  const horas = /(\d+)\s*h/.exec(duracion);
-  const minutos = /(\d+)\s*min/.exec(duracion);
-  return (horas ? Number(horas[1]) * 60 : 0) + (minutos ? Number(minutos[1]) : 0);
+  const horas = numeroAntesDe(duracion, 'h');
+  const minutos = numeroAntesDe(duracion, 'min');
+  return (horas === undefined ? 0 : horas * 60) + (minutos ?? 0);
 }
 
 /** Rango inclusivo; un límite vacío no filtra. */

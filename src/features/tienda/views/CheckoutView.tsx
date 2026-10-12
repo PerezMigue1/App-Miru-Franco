@@ -1,5 +1,5 @@
 import { CreditCard, Store } from 'lucide-react-native';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type RefObject } from 'react';
 import { AccessibilityInfo, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -59,9 +59,6 @@ export default function CheckoutView() {
     }
   }, [vm.paso, reducido]);
 
-  const enLinea = vm.metodo === 'mercado_pago';
-  const tituloFinal = enLinea ? 'Ir a pagar con Mercado Pago' : 'Apartar mi pedido';
-
   return (
     <View style={[styles.raiz, { backgroundColor: colores.fondo }]}>
       <EncabezadoVolver
@@ -95,49 +92,85 @@ export default function CheckoutView() {
       ) : null}
 
       {vm.estado === 'listo' ? (
-        <>
-          <ScrollView
-            ref={refScroll}
-            contentContainerStyle={[styles.contenido, { paddingBottom: espacio.xxl }]}
-          >
-            <IndicadorPasos ref={refIndicador} pasos={PASOS_CHECKOUT} actual={vm.paso} />
-            <Animated.View key={vm.paso} entering={entrada} style={styles.paso}>
-              {vm.paso === 1 ? <PasoRecoger /> : null}
-              {vm.paso === 2 ? <PasoFormaPago vm={vm} /> : null}
-              {vm.paso === 3 ? <PasoConfirmar vm={vm} /> : null}
-            </Animated.View>
-          </ScrollView>
-
-          <View
-            style={[
-              styles.pie,
-              { borderTopColor: colores.hairline, paddingBottom: bottom + espacio.l },
-            ]}
-          >
-            {/* Región en vivo siempre montada: el error se anuncia una vez al aparecer. */}
-            <View collapsable={false} accessibilityLiveRegion="polite">
-              {vm.paso === 3 && vm.errorEnvio ? (
-                <Text style={[styles.error, { color: colores.peligro }]}>{vm.errorEnvio}</Text>
-              ) : null}
-            </View>
-            {vm.paso === 3 && vm.revisarCarrito ? (
-              <Button titulo="Revisar mi carrito" variante="secundario" onPress={vm.irAlCarrito} />
-            ) : null}
-            {vm.paso === 3 ? (
-              <Button
-                titulo={tituloFinal}
-                onPress={vm.confirmar}
-                cargando={vm.enviando}
-                accessibilityHint={
-                  enLinea ? 'Crea tu pedido y abre Mercado Pago en el navegador' : 'Crea tu pedido'
-                }
-              />
-            ) : (
-              <Button titulo="Continuar" onPress={vm.continuar} />
-            )}
-          </View>
-        </>
+        <ContenidoListo
+          vm={vm}
+          bottom={bottom}
+          entrada={entrada}
+          refScroll={refScroll}
+          refIndicador={refIndicador}
+        />
       ) : null}
+    </View>
+  );
+}
+
+/** Pasos del checkout con su indicador y el pie de acciones. */
+function ContenidoListo({
+  vm,
+  bottom,
+  entrada,
+  refScroll,
+  refIndicador,
+}: {
+  vm: CheckoutViewModel;
+  bottom: number;
+  entrada: ReturnType<typeof useEntradaContenido>;
+  refScroll: RefObject<ScrollView | null>;
+  refIndicador: RefObject<View | null>;
+}) {
+  return (
+    <>
+      <ScrollView
+        ref={refScroll}
+        contentContainerStyle={[styles.contenido, { paddingBottom: espacio.xxl }]}
+      >
+        <IndicadorPasos ref={refIndicador} pasos={PASOS_CHECKOUT} actual={vm.paso} />
+        <Animated.View key={vm.paso} entering={entrada} style={styles.paso}>
+          {vm.paso === 1 ? <PasoRecoger /> : null}
+          {vm.paso === 2 ? <PasoFormaPago vm={vm} /> : null}
+          {vm.paso === 3 ? <PasoConfirmar vm={vm} /> : null}
+        </Animated.View>
+      </ScrollView>
+
+      <PieCheckout vm={vm} bottom={bottom} />
+    </>
+  );
+}
+
+/** Pie fijo: error de envío, revisar carrito y el botón para avanzar o confirmar. */
+function PieCheckout({ vm, bottom }: { vm: CheckoutViewModel; bottom: number }) {
+  const { colores } = useTheme();
+  const enLinea = vm.metodo === 'mercado_pago';
+  const tituloFinal = enLinea ? 'Ir a pagar con Mercado Pago' : 'Apartar mi pedido';
+
+  return (
+    <View
+      style={[
+        styles.pie,
+        { borderTopColor: colores.hairline, paddingBottom: bottom + espacio.l },
+      ]}
+    >
+      {/* Región en vivo siempre montada: el error se anuncia una vez al aparecer. */}
+      <View collapsable={false} accessibilityLiveRegion="polite">
+        {vm.paso === 3 && vm.errorEnvio ? (
+          <Text style={[styles.error, { color: colores.peligro }]}>{vm.errorEnvio}</Text>
+        ) : null}
+      </View>
+      {vm.paso === 3 && vm.revisarCarrito ? (
+        <Button titulo="Revisar mi carrito" variante="secundario" onPress={vm.irAlCarrito} />
+      ) : null}
+      {vm.paso === 3 ? (
+        <Button
+          titulo={tituloFinal}
+          onPress={vm.confirmar}
+          cargando={vm.enviando}
+          accessibilityHint={
+            enLinea ? 'Crea tu pedido y abre Mercado Pago en el navegador' : 'Crea tu pedido'
+          }
+        />
+      ) : (
+        <Button titulo="Continuar" onPress={vm.continuar} />
+      )}
     </View>
   );
 }

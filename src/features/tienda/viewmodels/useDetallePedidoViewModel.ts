@@ -192,6 +192,56 @@ export function useDetallePedidoViewModel(pedidoId: string | undefined): Detalle
     setErrorCancelacion(null);
   }, [cancelando]);
 
+  /** Muestra el pedido ya cancelado, cierra la hoja y deja el aviso. */
+  const mostrarCancelado = useCallback((cancelado: Pedido, nuevoAviso: AvisoPedido) => {
+    // Ninguna recarga anterior pisa el pedido ya cancelado.
+    solicitud.current += 1;
+    hayDatos.current = true;
+    setPedido(cancelado);
+    setEstado('listo');
+    setAviso(nuevoAviso);
+    setHojaCancelarVisible(false);
+  }, []);
+
+  /**
+   * Tras cancelar sin respuesta, lee el pedido; si ya quedó cancelado, se muestra así. Devuelve
+   * true si ya no hay nada más que hacer (se mostró cancelado o la pantalla se desmontó).
+   */
+  const releerTrasFalloDeRed = useCallback(
+    async (id: number): Promise<boolean> => {
+      try {
+        const leido = await obtenerPedido(id);
+        if (montada.current && leido.estado === 'cancelado') {
+          mostrarCancelado(leido, { tipo: 'exito', texto: MENSAJE_CANCELADO });
+          return true;
+        }
+      } catch {
+        // Tampoco hubo respuesta: queda el mensaje de sin conexión en la hoja.
+      }
+      return !montada.current;
+    },
+    [mostrarCancelado],
+  );
+
+  /** Muestra en la hoja o en la pantalla el error de cancelar, según el código del servidor. */
+  const atenderErrorCancelacion = useCallback(
+    (status: number | null, mensaje: string) => {
+      if (status === 409 || status === 404) {
+        // El pedido cambió (o ya no existe): se cierra la hoja y se lee de nuevo.
+        setHojaCancelarVisible(false);
+        setAviso(status === 409 ? { tipo: 'info', texto: mensaje } : null);
+        cargar(true);
+      } else {
+        setErrorCancelacion(mensaje);
+        if (status === 403) {
+          // Ya está en preparación: la recarga quita la opción de cancelar de la pantalla.
+          cargar(true);
+        }
+      }
+    },
+    [cargar],
+  );
+
   const cancelar = useCallback(() => {
     const actualPedido = pedido;
     if (!actualPedido) {
@@ -205,13 +255,7 @@ export function useDetallePedidoViewModel(pedidoId: string | undefined): Detalle
         if (!montada.current) {
           return;
         }
-        // Ninguna recarga anterior pisa el pedido ya cancelado.
-        solicitud.current += 1;
-        hayDatos.current = true;
-        setPedido(nuevo);
-        setEstado('listo');
-        setAviso(avisoCancelado(reembolso));
-        setHojaCancelarVisible(false);
+        mostrarCancelado(nuevo, avisoCancelado(reembolso));
       } catch (error) {
         if (!montada.current) {
           return;
@@ -221,46 +265,19 @@ export function useDetallePedidoViewModel(pedidoId: string | undefined): Detalle
         // Sin respuesta (el reembolso con Mercado Pago puede tardar): antes de decir que no se pudo,
         // se lee el pedido; si ya quedó cancelado, se muestra así.
         if (esErrorDeRed(error) || status === 0) {
-          try {
-            const leido = await obtenerPedido(actualPedido.id);
-            if (!montada.current) {
-              return;
-            }
-            if (leido.estado === 'cancelado') {
-              solicitud.current += 1;
-              hayDatos.current = true;
-              setPedido(leido);
-              setEstado('listo');
-              setAviso({ tipo: 'exito', texto: MENSAJE_CANCELADO });
-              setHojaCancelarVisible(false);
-              return;
-            }
-          } catch {
-            // Tampoco hubo respuesta: queda el mensaje de sin conexión en la hoja.
-          }
-          if (!montada.current) {
+          const terminado = await releerTrasFalloDeRed(actualPedido.id);
+          if (terminado) {
             return;
           }
         }
-        if (status === 409 || status === 404) {
-          // El pedido cambió (o ya no existe): se cierra la hoja y se lee de nuevo.
-          setHojaCancelarVisible(false);
-          setAviso(status === 409 ? { tipo: 'info', texto: mensaje } : null);
-          cargar(true);
-        } else {
-          setErrorCancelacion(mensaje);
-          if (status === 403) {
-            // Ya está en preparación: la recarga quita la opción de cancelar de la pantalla.
-            cargar(true);
-          }
-        }
+        atenderErrorCancelacion(status, mensaje);
       } finally {
         if (montada.current) {
           setCancelando(false);
         }
       }
     });
-  }, [pedido, candado, cargar]);
+  }, [pedido, candado, mostrarCancelado, releerTrasFalloDeRed, atenderErrorCancelacion]);
 
   return {
     estado,

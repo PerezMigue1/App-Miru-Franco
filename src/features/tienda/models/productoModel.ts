@@ -57,7 +57,7 @@ export interface ProductoCatalogo extends Producto {
 
 /** "1,200.50", "$380" o 380 a centavos; 0 si no es un precio positivo. */
 export function aCentavos(valor: unknown): number {
-  const numero = Number(texto(valor).split('$').join('').split(',').join(''));
+  const numero = Number(texto(valor).replaceAll('$', '').replaceAll(',', ''));
   return Number.isFinite(numero) && numero > 0 ? Math.round(numero * 100) : 0;
 }
 
@@ -103,7 +103,7 @@ function lineasDe(valor: unknown): string[] {
   return crudo
     .slice(1, -1)
     .split('","')
-    .map((parte) => parte.split('"').join('').trim())
+    .map((parte) => parte.replaceAll('"', '').trim())
     .filter(Boolean);
 }
 

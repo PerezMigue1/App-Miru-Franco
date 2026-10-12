@@ -1,3 +1,4 @@
+import * as Crypto from 'expo-crypto';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { obtenerServicios, type Servicio } from '@/features/citas/models/servicioModel';
@@ -33,12 +34,15 @@ export interface InicioViewModel {
 
 /**
  * Hasta `cantidad` elementos de `lista` al azar, sin repetir: Fisher-Yates sobre una copia (la
- * lista original no se toca) y se toman los primeros.
+ * lista original no se toca) y se toman los primeros. El azar sale del generador criptográfico de
+ * expo-crypto, un Uint32 por posición pedidos de una sola vez.
  */
 function elegirAlAzar<T>(lista: T[], cantidad: number): T[] {
   const copia = [...lista];
+  const aleatorios = Crypto.getRandomValues(new Uint32Array(copia.length));
   for (let i = copia.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
+    // Uint32 escalado a [0, i]: con listas tan cortas el sesgo es despreciable.
+    const j = Math.floor((aleatorios[i] / 2 ** 32) * (i + 1));
     [copia[i], copia[j]] = [copia[j], copia[i]];
   }
   return copia.slice(0, cantidad);

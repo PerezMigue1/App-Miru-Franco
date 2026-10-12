@@ -129,10 +129,6 @@ export default function DetalleProductoView() {
 function Contenido({ producto, vm }: { producto: ProductoCatalogo; vm: DetalleProductoViewModel }) {
   const { colores } = useTheme();
   const { presentacion, comprable } = vm;
-  const descripcion = producto.descripcionLarga.trim() || producto.descripcion.trim();
-  const precio = presentacion && presentacion.precioCentavos > 0 ? formatoPrecio(presentacion.precioCentavos) : null;
-  const original =
-    presentacion?.precioOriginalCentavos != null ? formatoPrecio(presentacion.precioOriginalCentavos) : null;
   const mostrarPresentaciones =
     producto.presentaciones.length > 1 || Boolean(producto.presentaciones[0]?.tamanio);
 
@@ -151,29 +147,7 @@ function Contenido({ producto, vm }: { producto: ProductoCatalogo; vm: DetallePr
           <Text style={[styles.dato, { color: colores.textoSuave }]}>{producto.categoria}</Text>
         ) : null}
 
-        {precio ? (
-          <View
-            style={styles.precios}
-            accessible
-            accessibilityLabel={[
-              `Precio: ${precio}`,
-              original ? `antes ${original}` : '',
-              producto.descuento > 0 ? `${producto.descuento} por ciento de descuento` : '',
-            ]
-              .filter(Boolean)
-              .join(', ')}
-          >
-            <Text style={[styles.precio, { color: colores.texto }]}>{precio}</Text>
-            {original ? (
-              <Text style={[styles.precioOriginal, { color: colores.textoSuave }]}>{original}</Text>
-            ) : null}
-            {producto.descuento > 0 ? (
-              <Text style={[styles.descuento, { color: colores.texto }]}>-{producto.descuento}%</Text>
-            ) : null}
-          </View>
-        ) : (
-          <Text style={[styles.sinPrecio, { color: colores.texto }]}>Consulta el precio en el salón</Text>
-        )}
+        <Precios presentacion={presentacion} descuento={producto.descuento} />
 
         {producto.crueltyFree ? (
           <View style={styles.crueltyFree}>
@@ -220,27 +194,98 @@ function Contenido({ producto, vm }: { producto: ProductoCatalogo; vm: DetallePr
         </View>
       ) : null}
 
-      <View style={styles.accion}>
-        <Button
-          titulo="Agregar al carrito"
-          onPress={vm.agregar}
-          deshabilitado={!comprable}
-          cargando={vm.agregando}
-          icono={
-            <ShoppingBag color={colores.textoSobreAccion} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
-          }
-          posicionIcono="inicio"
-        />
-        {vm.confirmacion ? (
-          <Confirmacion key={vm.confirmacion.clave} confirmacion={vm.confirmacion} onVerCarrito={vm.verCarrito} />
-        ) : null}
-        {vm.errorAgregar ? (
-          <Text accessibilityLiveRegion="polite" style={[styles.error, { color: colores.peligro }]}>
-            {vm.errorAgregar}
-          </Text>
-        ) : null}
-      </View>
+      <AccionAgregar
+        comprable={comprable}
+        agregando={vm.agregando}
+        confirmacion={vm.confirmacion}
+        errorAgregar={vm.errorAgregar}
+        onAgregar={vm.agregar}
+        onVerCarrito={vm.verCarrito}
+      />
 
+      <SeccionesInformacion producto={producto} />
+    </>
+  );
+}
+
+/** Precio de la presentación elegida, con el original tachado y el descuento si los hay. */
+function Precios({ presentacion, descuento }: { presentacion: Presentacion | null; descuento: number }) {
+  const { colores } = useTheme();
+  const precio = presentacion && presentacion.precioCentavos > 0 ? formatoPrecio(presentacion.precioCentavos) : null;
+  const original =
+    presentacion?.precioOriginalCentavos != null ? formatoPrecio(presentacion.precioOriginalCentavos) : null;
+
+  if (!precio) {
+    return <Text style={[styles.sinPrecio, { color: colores.texto }]}>Consulta el precio en el salón</Text>;
+  }
+  return (
+    <View
+      style={styles.precios}
+      accessible
+      accessibilityLabel={[
+        `Precio: ${precio}`,
+        original ? `antes ${original}` : '',
+        descuento > 0 ? `${descuento} por ciento de descuento` : '',
+      ]
+        .filter(Boolean)
+        .join(', ')}
+    >
+      <Text style={[styles.precio, { color: colores.texto }]}>{precio}</Text>
+      {original ? (
+        <Text style={[styles.precioOriginal, { color: colores.textoSuave }]}>{original}</Text>
+      ) : null}
+      {descuento > 0 ? <Text style={[styles.descuento, { color: colores.texto }]}>-{descuento}%</Text> : null}
+    </View>
+  );
+}
+
+/** Botón Agregar al carrito con su confirmación y su error en línea. */
+function AccionAgregar({
+  comprable,
+  agregando,
+  confirmacion,
+  errorAgregar,
+  onAgregar,
+  onVerCarrito,
+}: {
+  comprable: boolean;
+  agregando: boolean;
+  confirmacion: ConfirmacionCarrito | null;
+  errorAgregar: string | null;
+  onAgregar: () => void;
+  onVerCarrito: () => void;
+}) {
+  const { colores } = useTheme();
+  return (
+    <View style={styles.accion}>
+      <Button
+        titulo="Agregar al carrito"
+        onPress={onAgregar}
+        deshabilitado={!comprable}
+        cargando={agregando}
+        icono={
+          <ShoppingBag color={colores.textoSobreAccion} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
+        }
+        posicionIcono="inicio"
+      />
+      {confirmacion ? (
+        <Confirmacion key={confirmacion.clave} confirmacion={confirmacion} onVerCarrito={onVerCarrito} />
+      ) : null}
+      {errorAgregar ? (
+        <Text accessibilityLiveRegion="polite" style={[styles.error, { color: colores.peligro }]}>
+          {errorAgregar}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+/** Descripción, características, modo de uso, ingredientes y resultado; cada sección solo si trae texto. */
+function SeccionesInformacion({ producto }: { producto: ProductoCatalogo }) {
+  const { colores } = useTheme();
+  const descripcion = producto.descripcionLarga.trim() || producto.descripcion.trim();
+  return (
+    <>
       {descripcion ? (
         <Seccion titulo="Descripción">
           <Text style={[styles.cuerpo, { color: colores.texto }]}>{descripcion}</Text>

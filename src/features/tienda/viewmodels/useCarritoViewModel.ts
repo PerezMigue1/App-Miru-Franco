@@ -46,6 +46,20 @@ export interface CarritoViewModel {
   continuar: () => void;
 }
 
+/** Una fila que se está guardando conserva el valor que la clienta ya ve. */
+function conservarOcupados(
+  lista: ItemCarrito[],
+  previos: ItemCarrito[],
+  ocupados: ReadonlySet<number>,
+): ItemCarrito[] {
+  return lista.map((item) => {
+    if (!ocupados.has(item.id)) {
+      return item;
+    }
+    return previos.find((previo) => previo.id === item.id) ?? item;
+  });
+}
+
 /**
  * Carrito de la clienta (GP-06.4): se lee al enfocar la pantalla (la primera vez con skeleton, las
  * demás en silencio), cambia cantidades con respuesta inmediata y regresa al valor anterior si el
@@ -130,15 +144,7 @@ export function useCarritoViewModel(): CarritoViewModel {
         if (actual !== solicitud.current) {
           return;
         }
-        // Una fila que se está guardando conserva el valor que la clienta ya ve.
-        setItems((previos) =>
-          lista.map((item) => {
-            if (!ocupadosRef.current.has(item.id)) {
-              return item;
-            }
-            return previos.find((previo) => previo.id === item.id) ?? item;
-          }),
-        );
+        setItems((previos) => conservarOcupados(lista, previos, ocupadosRef.current));
         yaCargo.current = true;
         setEstado('listo');
         // El número de la pestaña Carrito toma lo que ya se leyó, sin otra lectura.
