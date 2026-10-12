@@ -105,7 +105,7 @@ function Resplandor({
     >
       {/* react-native-svg ignora el alfa del color en stopColor: la opacidad va en stopOpacity. */}
       <Stop offset={0} stopColor={color} stopOpacity={opacidad} />
-      {/* El mismo color con opacidad 0: se apaga sin virar a gris como pasaría con "transparent". */}
+      {/* El mismo color con opacidad 0: se apaga sin virar a gris como pasaría con un color transparente. */}
       <Stop offset={fondoHero.apagado} stopColor={color} stopOpacity={0} />
     </RadialGradient>
   );

@@ -1,4 +1,4 @@
-import { Geist_400Regular, Geist_500Medium, Geist_600SemiBold } from '@expo-google-fonts/geist';
+import { Geist_400Regular, Geist_500Medium, Geist_600SemiBold, Geist_700Bold } from '@expo-google-fonts/geist';
 import { GreatVibes_400Regular } from '@expo-google-fonts/great-vibes';
 import {
   PlayfairDisplay_600SemiBold,
@@ -31,6 +31,7 @@ export default function RootLayout() {
     Geist_400Regular,
     Geist_500Medium,
     Geist_600SemiBold,
+    Geist_700Bold,
     GreatVibes_400Regular,
   });
   // Con error de carga la app sigue con la fuente del sistema en lugar de quedarse en el splash.

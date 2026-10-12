@@ -1,67 +1,34 @@
 import type { ReactNode } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { View } from 'react-native';
 
-import { cabecera, espacio, fuente, pantalla, tipo, tracking } from './tokens';
-import { useTheme } from './useTheme';
+import { CabeceraCompacta, TituloPagina } from './CabeceraCompacta';
 
 interface ScreenHeaderProps {
   titulo: string;
+  /** Línea opcional bajo el título, como el subtítulo de PageHeader en la web. */
+  subtitulo?: string;
   /**
-   * Acción secundaria alineada a la derecha del título. Va sobre el cromo carbón: su texto o ícono
-   * debe usar colores.textoSobrePanel y su presionado colores.presionadoCromo.
+   * Acción secundaria a la derecha de la cabecera. Va sobre el cromo carbón: su texto o ícono debe
+   * usar colores.textoSobrePanel y su presionado colores.presionadoCromo (por ejemplo, BotonCromo).
    */
   accion?: ReactNode;
+  /**
+   * La vista pinta el título dentro de su lista (TituloPagina) para que se desplace con el contenido;
+   * aquí solo va la cabecera. Útil cuando la pantalla tiene además un pie fijo (Carrito).
+   */
+  tituloEnContenido?: boolean;
 }
 
 /**
- * Encabezado de pantalla: banda de cromo carbón desde arriba (como la cabecera de la web) con el
- * título en Playfair marfil y una acción opcional. Mide lo mismo que la cabecera fija de Inicio,
- * así el título no salta al cambiar de pestaña.
+ * Encabezado de las pantallas de pestaña: la cabecera compacta carbón con el logotipo (la misma de
+ * Inicio y de la pila, así nada salta al cambiar de pantalla) y, debajo, en el lienzo, el título
+ * en Playfair con su subtítulo opcional. Un solo View para que el gap del contenedor cuente una vez.
  */
-export function ScreenHeader({ titulo, accion }: ScreenHeaderProps) {
-  const { colores } = useTheme();
-  const { top } = useSafeAreaInsets();
+export function ScreenHeader({ titulo, subtitulo, accion, tituloEnContenido = false }: ScreenHeaderProps) {
   return (
-    <View
-      style={[
-        styles.encabezado,
-        {
-          paddingTop: top + cabecera.relleno,
-          // El alto mínimo cuenta el relleno: el área segura más el alto de la cabecera de Inicio.
-          minHeight: top + cabecera.alto,
-          backgroundColor: colores.panel,
-        },
-      ]}
-    >
-      <Text accessibilityRole="header" style={[styles.titulo, { color: colores.textoSobrePanel }]}>
-        {titulo}
-      </Text>
-      {accion ?? null}
+    <View>
+      <CabeceraCompacta derecha={accion} />
+      {tituloEnContenido ? null : <TituloPagina titulo={titulo} subtitulo={subtitulo} />}
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  encabezado: {
-    flexDirection: 'row',
-    // Si la acción no cabe junto al título, baja a la siguiente línea en lugar de cortarse.
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    // Con el alto mínimo, la línea del título queda centrada en la banda y no pegada arriba.
-    alignContent: 'center',
-    justifyContent: 'space-between',
-    gap: espacio.m,
-    paddingHorizontal: pantalla.margen,
-    paddingBottom: cabecera.relleno,
-    // La distancia de antes entre el encabezado y el contenido, ahora fuera de la banda (en lino).
-    marginBottom: espacio.l,
-  },
-  titulo: {
-    flexShrink: 1,
-    fontFamily: fuente.titulo,
-    fontSize: tipo.titulo.tamano,
-    lineHeight: tipo.titulo.linea,
-    letterSpacing: tracking.tituloPagina,
-  },
-});

@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
   type LayoutChangeEvent,
 } from 'react-native';
 import Animated, { useAnimatedRef, useScrollOffset } from 'react-native-reanimated';
@@ -16,12 +17,13 @@ import { Enlace } from '@/features/auth/components/AuthContainer';
 import { useAuth } from '@/features/auth/viewmodels/useAuth';
 import { useRequiereSesion } from '@/features/auth/viewmodels/useRequiereSesion';
 import { Button } from '@/shared/ui/Button';
+import { CabeceraCompacta } from '@/shared/ui/CabeceraCompacta';
 import { EmptyState } from '@/shared/ui/EmptyState';
 import { usePresion } from '@/shared/ui/movimiento';
 import { SearchBar } from '@/shared/ui/SearchBar';
 import {
   borde,
-  cabecera,
+  cabeceraCompacta,
   espacio,
   fuente,
   icono,
@@ -62,7 +64,9 @@ export default function InicioView() {
   const refScroll = useAnimatedRef<Animated.ScrollView>();
   const desplazamiento = useScrollOffset(refScroll);
   const [altoVisible, setAltoVisible] = useState(0);
-  const altoCabecera = top + cabecera.alto;
+  // Cromo compacto (56) más la fila del buscador: el escenario del hero queda justo debajo.
+  const altoCabecera = top + cabeceraCompacta.alto + cabeceraCompacta.filaBuscador;
+  const { width: anchoPantalla } = useWindowDimensions();
 
   const medir = (e: LayoutChangeEvent) => setAltoVisible(e.nativeEvent.layout.height);
 
@@ -115,53 +119,60 @@ export default function InicioView() {
         </View>
       </Animated.ScrollView>
 
-      {/* Cabecera fija con fondo propio: el contenido pasa por debajo sin chocar con la barra de estado. */}
-      <View
-        style={[
-          styles.cabecera,
-          {
-            paddingTop: top + cabecera.relleno,
-            backgroundColor: colores.panel,
-            shadowColor: colores.sombraTarjeta,
-          },
-        ]}
-      >
-        {conSesion ? (
-          <BotonIcono icono={UserRound} etiqueta="Abrir perfil" onPress={abrirPerfil} sobrePanel />
-        ) : (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Iniciar sesión"
-            onPress={() => push('/login')}
-            onPressIn={presionAcceso.hundir}
-            onPressOut={presionAcceso.soltar}
-          >
-            {/* Como el botón de la cabecera web: fondo --hover y texto claro (4.9:1 y 5.5:1). */}
-            <Animated.View
-              style={[
-                styles.botonTexto,
-                { backgroundColor: colores.accionPresionado },
-                presionAcceso.estilo,
-              ]}
-            >
-              <Text style={[styles.textoBoton, { color: colores.textoSobrePanel }]}>
-                Iniciar sesión
-              </Text>
-            </Animated.View>
-          </Pressable>
-        )}
-        <SearchBar
-          texto="Buscar productos y servicios"
-          accessibilityHint="Abre la tienda"
-          onPress={buscar}
-        />
-        <BotonIcono
-          icono={Bell}
-          etiqueta="Abrir notificaciones"
-          onPress={abrirNotificaciones}
-          sobrePanel
-        />
-      </View>
+      {/* Cabecera fija con fondo propio: el contenido pasa por debajo sin chocar con la barra de estado.
+          La misma cabecera compacta de las demás pantallas, con el buscador en una segunda fila del
+          cromo: dentro del scroll movería el escenario fijo del hero. */}
+      <CabeceraCompacta
+        style={[styles.cabecera, { shadowColor: colores.sombraTarjeta }]}
+        // Sin sesión, "Iniciar sesión" ocupa el ancho del monograma: bajo 384dp se quita, como en la web.
+        conMonograma={conSesion || anchoPantalla >= cabeceraCompacta.anchoConMonograma}
+        derecha={
+          <>
+            <BotonIcono
+              icono={Bell}
+              etiqueta="Abrir notificaciones"
+              onPress={abrirNotificaciones}
+              sobrePanel
+            />
+            {conSesion ? (
+              <BotonIcono icono={UserRound} etiqueta="Abrir perfil" onPress={abrirPerfil} sobrePanel />
+            ) : (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Iniciar sesión"
+                onPress={() => push('/login')}
+                onPressIn={presionAcceso.hundir}
+                onPressOut={presionAcceso.soltar}
+              >
+                {/* Como el botón de la cabecera web: fondo --hover y texto claro (4.9:1 y 5.5:1). */}
+                <Animated.View
+                  style={[
+                    styles.botonTexto,
+                    { backgroundColor: colores.accionPresionado },
+                    presionAcceso.estilo,
+                  ]}
+                >
+                  <Text
+                    maxFontSizeMultiplier={cabeceraCompacta.escalaMaximaLogotipo}
+                    style={[styles.textoBoton, { color: colores.textoSobrePanel }]}
+                  >
+                    Iniciar sesión
+                  </Text>
+                </Animated.View>
+              </Pressable>
+            )}
+          </>
+        }
+        debajo={
+          <View style={styles.filaBuscador}>
+            <SearchBar
+              texto="Buscar productos y servicios"
+              accessibilityHint="Abre la tienda"
+              onPress={buscar}
+            />
+          </View>
+        }
+      />
 
       {sesionVencida ? (
         <View
@@ -279,16 +290,16 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: espacio.xs,
-    paddingHorizontal: pantalla.margen - espacio.s,
-    paddingBottom: cabecera.relleno,
     // Sin filete: como la cabecera web, se separa del contenido con sombra.
     shadowOpacity: sombra.tarjeta.opacidad,
     shadowRadius: sombra.tarjeta.radio,
     shadowOffset: { width: 0, height: sombra.tarjeta.desplazamientoY },
     elevation: sombra.tarjeta.elevacion,
+  },
+  filaBuscador: {
+    flexDirection: 'row',
+    paddingHorizontal: pantalla.margen,
+    paddingBottom: cabeceraCompacta.filaBuscador - toqueMinimo,
   },
   botonIcono: {
     width: toqueMinimo,

@@ -1,3 +1,4 @@
+import { ArrowRight } from 'lucide-react-native';
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
@@ -9,8 +10,10 @@ import {
   esqueleto,
   espacio,
   fuente,
+  icono,
   radio,
   sombra,
+  tarjetas,
   tienda,
   tipo,
   tracking,
@@ -27,6 +30,7 @@ import {
 import { FotoProducto } from './FotoProducto';
 
 const SIN_PRECIO = 'Consulta el precio en el salón';
+const ACCION = 'Ver detalles';
 
 interface TarjetaProductoProps {
   producto: ProductoCatalogo;
@@ -37,8 +41,10 @@ interface TarjetaProductoProps {
 }
 
 /**
- * Producto de la cuadrícula de la Tienda: foto cuadrada arriba, nombre, marca y precio. Se hunde a
- * 0.99 al tocarla. Las tarjetas de una fila se estiran al mismo alto y el precio queda abajo en ambas.
+ * Producto de la cuadrícula de la Tienda con la estructura de TarjetaCatalogo de la web: foto
+ * cuadrada arriba y cuerpo con categoría y marca en mayúsculas, nombre, descripción, precio (con el
+ * original tachado si hay rebaja) y "Ver detalles". Toda la tarjeta es el área táctil y se hunde a
+ * 0.99. Las tarjetas de una fila se estiran al mismo alto y el pie queda abajo en ambas.
  */
 export const TarjetaProducto = memo(function TarjetaProducto({
   producto,
@@ -53,13 +59,24 @@ export const TarjetaProducto = memo(function TarjetaProducto({
   const centavos = precioDesdeCentavos(producto);
   const precio = centavos > 0 ? formatoPrecio(centavos) : null;
   const desde = precio !== null && tienePreciosDistintos(producto);
-  const secundario = producto.marca || producto.categoria;
+  // Precio antes de la rebaja: solo con un precio único (con "Desde" no se sabe de qué tamaño es).
+  const centavosOriginal =
+    precio !== null && !desde
+      ? producto.presentaciones.find(
+          (p) => p.precioCentavos === centavos && p.precioOriginalCentavos !== null,
+        )?.precioOriginalCentavos ?? null
+      : null;
+  const original = centavosOriginal !== null ? formatoPrecio(centavosOriginal) : null;
+  // "SHAMPOO · AVYNA", como la web: la categoría o "Producto", y la marca si viene.
+  const categoria = [producto.categoria || 'Producto', producto.marca].filter(Boolean).join(' · ');
 
   const etiqueta = [
     producto.nombre,
-    secundario,
+    categoria,
     precio ? (desde ? `desde ${precio}` : precio) : SIN_PRECIO,
+    original ? `antes ${original}` : '',
     agotado ? 'agotado' : '',
+    ACCION,
   ]
     .filter(Boolean)
     .join(', ');
@@ -68,7 +85,6 @@ export const TarjetaProducto = memo(function TarjetaProducto({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={etiqueta}
-      accessibilityHint="Abre el detalle del producto"
       onPress={() => onAbrir(producto.id)}
       onPressIn={hundir}
       onPressOut={soltar}
@@ -91,25 +107,39 @@ export const TarjetaProducto = memo(function TarjetaProducto({
           ) : null}
         </View>
 
-        <View style={styles.datos}>
+        <View style={styles.cuerpo}>
+          {/* Categoría y título en el secundario y el principal (4.8:1 y 4.7:1 sobre terracota). */}
+          <Text numberOfLines={2} style={[styles.categoria, { color: colores.textoSuave }]}>
+            {categoria}
+          </Text>
           <Text numberOfLines={2} style={[styles.nombre, { color: colores.texto }]}>
             {producto.nombre}
           </Text>
-          {secundario ? (
-            // Marca o categoría en el secundario, como TarjetaCatalogo de la web (4.8:1 sobre terracota).
-            <Text numberOfLines={1} style={[styles.secundario, { color: colores.textoSuave }]}>
-              {secundario}
+          {producto.descripcion ? (
+            <Text numberOfLines={2} style={[styles.descripcion, { color: colores.textoSuave }]}>
+              {producto.descripcion}
             </Text>
           ) : null}
+
+          {/* Precio y acción en una fila; si no caben a lo ancho, la acción baja a su propia línea. */}
           <View style={styles.pie}>
-            {precio ? (
-              <Text style={[styles.precio, { color: colores.texto }]}>
-                {desde ? <Text style={styles.desde}>Desde </Text> : null}
-                {precio}
-              </Text>
-            ) : (
-              <Text style={[styles.sinPrecio, { color: colores.texto }]}>{SIN_PRECIO}</Text>
-            )}
+            <View style={styles.precios}>
+              {original ? (
+                <Text style={[styles.tachado, { color: colores.textoSuave }]}>{original}</Text>
+              ) : null}
+              {precio ? (
+                <Text style={[styles.precio, { color: colores.texto }]}>
+                  {desde ? <Text style={styles.desde}>Desde </Text> : null}
+                  {precio}
+                </Text>
+              ) : (
+                <Text style={[styles.sinPrecio, { color: colores.texto }]}>{SIN_PRECIO}</Text>
+              )}
+            </View>
+            <View style={styles.accion}>
+              <Text style={[styles.textoAccion, { color: colores.texto }]}>{ACCION}</Text>
+              <ArrowRight color={colores.texto} size={tarjetas.iconoAccion} strokeWidth={icono.trazo} />
+            </View>
           </View>
         </View>
       </Animated.View>
@@ -128,11 +158,12 @@ export function TarjetaProductoEsqueleto({ ancho }: { ancho: number }) {
       ]}
     >
       <Skeleton estilo={styles.foto} />
-      <View style={styles.datos}>
-        <Skeleton estilo={[styles.lineaEsqueleto, { width: esqueleto.anchoMedio }]} />
+      <View style={[styles.cuerpo, styles.cuerpoEsqueleto]}>
         <Skeleton estilo={[styles.lineaEsqueleto, { width: esqueleto.anchoCorto }]} />
+        <Skeleton estilo={[styles.lineaGrandeEsqueleto, { width: esqueleto.anchoMedio }]} />
+        <Skeleton estilo={[styles.lineaEsqueleto, { width: esqueleto.anchoMedio }]} />
         <View style={styles.pie}>
-          <Skeleton estilo={[styles.precioEsqueleto, { width: esqueleto.anchoCorto }]} />
+          <Skeleton estilo={[styles.lineaGrandeEsqueleto, { width: esqueleto.anchoCorto }]} />
         </View>
       </View>
     </View>
@@ -170,31 +201,57 @@ const styles = StyleSheet.create({
     fontSize: tipo.etiqueta.tamano,
     lineHeight: tipo.etiqueta.linea,
   },
-  datos: {
+  cuerpo: {
     flex: 1,
-    gap: espacio.xs,
-    padding: espacio.m,
+    padding: tarjetas.rellenoCuerpo,
+  },
+  cuerpoEsqueleto: {
+    gap: espacio.s,
+  },
+  categoria: {
+    fontFamily: fuente.textoFuerte,
+    fontSize: tipo.categoria.tamano,
+    lineHeight: tipo.categoria.linea,
+    letterSpacing: tracking.categoria,
+    textTransform: 'uppercase',
   },
   nombre: {
-    fontFamily: fuente.titulo,
-    fontSize: tipo.cuerpo.tamano,
-    lineHeight: tipo.cuerpo.linea,
-    letterSpacing: tracking.tituloTarjeta,
+    marginTop: tarjetas.separacionTitulo,
+    fontFamily: fuente.textoFuerte,
+    fontSize: tipo.tituloTarjeta.tamano,
+    lineHeight: tipo.tituloTarjeta.linea,
   },
-  secundario: {
+  descripcion: {
+    marginTop: tarjetas.separacionDescripcion,
     fontFamily: fuente.texto,
-    fontSize: tipo.etiqueta.tamano,
-    lineHeight: tipo.etiqueta.linea,
+    fontSize: tipo.descripcion.tamano,
+    lineHeight: tipo.descripcion.linea,
   },
-  // Empuja el precio al fondo: en una fila, los precios de las dos tarjetas quedan alineados.
+  // Empuja el pie al fondo: en una fila, los precios de las dos tarjetas quedan alineados.
   pie: {
     marginTop: 'auto',
-    paddingTop: espacio.s,
+    paddingTop: tarjetas.separacionPie,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    columnGap: espacio.m,
+    rowGap: espacio.s,
+  },
+  precios: {
+    flexShrink: 1,
+  },
+  tachado: {
+    fontFamily: fuente.texto,
+    fontSize: tarjetas.tipoTachado.tamano,
+    lineHeight: tarjetas.tipoTachado.linea,
+    textDecorationLine: 'line-through',
+    fontVariant: ['tabular-nums'],
   },
   precio: {
-    fontFamily: fuente.textoFuerte,
-    fontSize: tipo.cuerpo.tamano,
-    lineHeight: tipo.cuerpo.linea,
+    fontFamily: fuente.textoNegrita,
+    fontSize: tipo.precio.tamano,
+    lineHeight: tipo.precio.linea,
     fontVariant: ['tabular-nums'],
   },
   desde: {
@@ -203,13 +260,24 @@ const styles = StyleSheet.create({
   },
   sinPrecio: {
     fontFamily: fuente.textoMedio,
-    fontSize: tipo.etiqueta.tamano,
-    lineHeight: tipo.etiqueta.linea,
+    fontSize: tipo.pequeno.tamano,
+    lineHeight: tipo.pequeno.linea,
+  },
+  accion: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: tarjetas.separacionIcono,
+  },
+  textoAccion: {
+    flexShrink: 1,
+    fontFamily: fuente.textoFuerte,
+    fontSize: tarjetas.tipoAccion.tamano,
+    lineHeight: tarjetas.tipoAccion.linea,
   },
   lineaEsqueleto: {
     height: esqueleto.linea,
   },
-  precioEsqueleto: {
+  lineaGrandeEsqueleto: {
     height: esqueleto.lineaGrande,
   },
 });

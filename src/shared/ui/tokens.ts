@@ -1,307 +1,10 @@
-/**
- * Tokens del sistema "Atelier cálido" (DESIGN.md). Es el único lugar del código donde se escriben
- * colores y medidas: las pantallas y componentes solo leen de aquí.
- */
+import { coloresFondoHero, coloresInsignia } from './colores';
 
 /**
- * Paleta: cada valor sale de una variable del sitio web (.referencia-web/src/app/styles), que es la
- * fuente de verdad. Entre paréntesis, la variable de origen.
+ * Tokens del sistema "Atelier cálido" (DESIGN.md): medidas, tipografía y movimiento. Los colores
+ * viven solo en colores.ts y aquí se vuelven a exportar para que ningún import se rompa.
  */
-export const paleta = {
-  lino: '#DCC8B6', // --fondo-general (claro)
-  terracota: '#B38E6F', // --tarjetas-paneles (claro), --texto-secundario (oscuro)
-  arena: '#d0b29c', // --fondos-suaves (claro)
-  vino: '#710014', // --botones-principales, --mf-foco (claro)
-  vinoProfundo: '#600011', // --menu-texto-principal, --danger-texto (claro)
-  oro: '#9f6d1f', // --logo-branding
-  oroGrande: '#865a17', // --oro-grande (claro): oro para texto grande (3.7:1 sobre lino)
-  hover: '#A64B63', // --hover: vino claro del botón presionado (crema encima 4.9:1)
-  salvia: '#758764', // --boton-acento-bg: botón de acento (carbón encima 4.7:1)
-  giganteOscuro: '#c9a585', // --mf-gigante (oscuro), cliente.css: texto gigante del hero (7.9:1)
-  papel: '#f6efe6', // papel y tinta de los stickers del hero (StickersSalon de la web)
-  oroCalidoHero: '#a36b1f', // rgba(163, 107, 31) del radial de abajo de .hero-bg-gradient (claro)
-  iconografia: '#BFA181', // --iconografia: solo decorativo (1.5:1 sobre lino)
-  cafeSombra: '#3A1C0A', // rgba(58, 28, 10) de --mf-sombra-1 (claro): sombra tintada de café
-  oroFoco: '#c4954d', // --mf-foco, --oro-sobre-carbon, --nav-activo-icono (oscuro)
-  oroSobreCarbon: '#b07a28', // --oro-sobre-carbon (claro)
-  carbon: '#161616', // --header-footer, --fondo-general (oscuro)
-  carbonMedio: '#1f1f1f', // --fondos-suaves, --input-bg, --mf-banda (oscuro)
-  carbonClaro: '#2a2a2a', // --texto-cuerpo, --encabezados-alterno (claro), --tarjetas-paneles (oscuro)
-  crema: '#F2F1ED', // --input-bg, --texto-fondo-oscuro (claro), --btn-secundario-texto (oscuro)
-  blanco: '#ffffff', // --menu-texto-principal, --texto-fondo-oscuro (oscuro)
-  textoSecundario: '#4a4541', // --texto-secundario (claro)
-  bordeCampoClaro: '#7a6658', // --campo-borde (claro): 4.8:1 contra el fondo del campo
-  bordeCampoOscuro: '#787878', // --campo-borde (oscuro): 3.25:1 sobre la tarjeta #2a2a2a
-  placeholderClaro: '#6f6a66', // --campo-placeholder-texto (claro), el de .mf-campo: 4.7:1
-  placeholderOscuro: '#8c8885', // --campo-placeholder-texto (oscuro), el de .mf-campo: 4.7:1
-  esqueletoOscuro: '#787878', // --skeleton-bg (oscuro)
-  infoClaro: '#1f4466', // --info-texto (claro)
-  infoOscuro: '#8fb6d9', // --info-texto (oscuro)
-  peligroOscuro: '#e0748f', // --danger-texto (oscuro)
-  exitoClaro: '#242d1b', // --success-texto (claro)
-  exitoOscuro: '#82a163', // --success-texto (oscuro)
-  avisoClaro: '#37280b', // --warning-texto = --oro-texto (claro)
-  avisoOscuro: '#D98E04', // --warning-texto = --warning (oscuro)
-} as const;
-
-/** Resplandor detrás de cada frasco del hero (solo para eso). Valores de fluidosHero.ts de la web. */
-export const colorFluido = {
-  goji: '#7a1a1f',
-  argan: '#d99a4e',
-  platino: '#5b3fd6',
-  hialuronico: '#d9728f',
-} as const;
-
-/** Colores con transparencia, también tomados de la web. */
-const transparencias = {
-  cremaCuerpo: 'rgba(242, 241, 237, 0.88)', // --texto-cuerpo (oscuro)
-  cremaSobreCarbon: 'rgba(242, 241, 237, 0.8)', // --texto-fondo-oscuro-80 (claro)
-  blancoSobreCarbon: 'rgba(255, 255, 255, 0.8)', // --texto-fondo-oscuro-80 (oscuro)
-  lineaClaro: 'rgba(113, 0, 20, 0.14)', // --mf-linea (claro)
-  lineaOscuro: 'rgba(255, 255, 255, 0.08)', // --mf-linea (oscuro)
-  presionadoClaro: 'rgba(113, 0, 20, 0.05)', // --nav-hover-bg (claro)
-  presionadoOscuro: 'rgba(255, 255, 255, 0.04)', // --nav-hover-bg (oscuro)
-  lineaFuerteClaro: 'rgba(42, 42, 42, 0.22)', // --mf-linea-fuerte (claro)
-  lineaFuerteOscuro: 'rgba(255, 255, 255, 0.16)', // --mf-linea-fuerte (oscuro)
-  focoHaloClaro: 'rgba(113, 0, 20, 0.22)', // halo del foco del campo: --mf-foco al 22 % (claro)
-  focoHaloOscuro: 'rgba(196, 149, 77, 0.22)', // halo del foco del campo: --mf-foco al 22 % (oscuro)
-  activoClaro: 'rgba(113, 0, 20, 0.1)', // --nav-activo-bg (claro)
-  activoOscuro: 'rgba(255, 255, 255, 0.08)', // --nav-activo-bg (oscuro)
-  marfil70: 'rgba(242, 241, 237, 0.7)', // --texto-fondo-oscuro-70 (claro) = --marfil-70
-  blanco70: 'rgba(255, 255, 255, 0.7)', // --texto-fondo-oscuro-70 (oscuro)
-  blanco07: 'rgba(255, 255, 255, 0.07)', // --blanco-07: filete sobre el cromo carbón
-  lemaHeroOscuro: 'rgba(242, 241, 237, 0.85)', // --hero-tagline-color (oscuro)
-  velo: 'rgba(22, 22, 22, 0.55)', // .mf-velo: detrás de hojas y diálogos
-  veloVisor: 'rgba(22, 22, 22, 0.92)', // --carbon-92: visor de fotos y botones sobre foto
-  // --segmentado-borde (claro) y fondos que no se pintan (pressable en reposo, botón con borde).
-  transparente: 'transparent',
-} as const;
-
-export interface Colores {
-  /** Lienzo de pantalla. */
-  fondo: string;
-  /** Superficie de tarjeta. */
-  superficie: string;
-  /** Superficies secundarias, marcos de imagen y skeletons. */
-  superficieSecundaria: string;
-  /** Texto principal: el color del body de la web (--menu-texto-principal). */
-  texto: string;
-  /** Texto secundario (--encabezados-alterno): también sobre terracota (4.8:1). */
-  textoSuave: string;
-  /** Texto de cuerpo neutro (--texto-cuerpo): hojas, diálogos y chips del hero. */
-  textoCuerpo: string;
-  /** Único acento de acción. */
-  accion: string;
-  /** Fondo del botón primario mientras se presiona (--hover). */
-  accionPresionado: string;
-  /** Botón de acento (--boton-acento-bg) y su texto (--texto-sobre-acento). */
-  acento: string;
-  textoSobreAcento: string;
-  textoSobreAccion: string;
-  /** Botón secundario. */
-  secundario: string;
-  textoSobreSecundario: string;
-  foco: string;
-  hairline: string;
-  campoFondo: string;
-  campoBorde: string;
-  campoTexto: string;
-  campoPlaceholder: string;
-  /** Cromo (cabecera y barra inferior): --header-footer, carbón en los dos temas. */
-  barraFondo: string;
-  /** Ícono activo de la barra: oro sobre carbón (--oro-sobre-carbon). */
-  iconoActivo: string;
-  /** Ícono y etiqueta inactivos de la barra: marfil al 70 % (--texto-fondo-oscuro-70). */
-  iconoInactivo: string;
-  /** Filete superior de la barra inferior sobre el cromo (--blanco-07). */
-  hairlineCromo: string;
-  /** Fondo de un botón presionado sobre el cromo (--nav-hover-bg oscuro: blanco al 4 %). */
-  presionadoCromo: string;
-  /** Panel de marca, placeholders de imagen y visor. */
-  panel: string;
-  textoSobrePanel: string;
-  textoSuaveSobrePanel: string;
-  oro: string;
-  oroTextoPequeno: string;
-  /** --oro-texto: oro para texto de cualquier tamaño (8.8:1 sobre lino; 6.7:1 sobre carbón). */
-  oroTexto: string;
-  /** --oro-grande: "MIRÚ" y "Franco" de la marca; solo texto grande, nunca sobre terracota. */
-  oroGrande: string;
-  /** --iconografia: íconos y filetes decorativos (no lleva significado: 1.5:1 sobre lino). */
-  iconografia: string;
-  /** Sombra tintada del botón primario (vino en claro). */
-  sombra: string;
-  /** Sombra de tarjetas: café rgba(58, 28, 10) en claro (--mf-sombra-1); carbón en oscuro. */
-  sombraTarjeta: string;
-  /** Velo detrás de hojas y diálogos (.mf-velo, 55 %). */
-  velo: string;
-  /** Velo del visor de fotos y de los botones sobre una foto (--carbon-92). */
-  veloVisor: string;
-  /** --superficie-elevada: tarjeta interna sobre una tarjeta o un panel. */
-  superficieElevada: string;
-  /** --superficie-modal: fondo de hojas y diálogos. */
-  superficieModal: string;
-  /** --skeleton-bg. */
-  esqueleto: string;
-  /** --mf-linea-fuerte: borde de tarjetas con borde y encabezado de hojas. */
-  hairlineFuerte: string;
-  /** Halo del foco de un campo (--mf-foco al 22 %). */
-  focoHalo: string;
-  /** --info-texto. */
-  info: string;
-  /** Texto gigante del hero (--mf-gigante). */
-  gigante: string;
-  /** Lema y párrafo del hero (--hero-tagline-color). */
-  lemaHero: string;
-  /** --nav-activo-texto: etiqueta de la pestaña activa. */
-  textoActivo: string;
-  /** --nav-activo-bg: fondo de la opción de navegación activa. */
-  fondoActivo: string;
-  /** --segmentado-borde: borde del control segmentado (sin borde en claro). */
-  segmentadoBorde: string;
-  /** Fondo que no se pinta (pressable en reposo, botón con borde). */
-  transparente: string;
-  /** Errores de formulario y acciones destructivas. */
-  peligro: string;
-  /** Fondo de una fila mientras se presiona. */
-  presionado: string;
-  /** Confirmación de un estado (por ejemplo, "Correo disponible"). */
-  exito: string;
-  /** Estado en espera o que pide atención sin ser error. */
-  aviso: string;
-  /** Enlaces de texto. */
-  enlace: string;
-  /** Borde y texto del botón con borde (--menu-texto-principal de la web): 8.6:1 en claro y 18:1 en oscuro. */
-  contorno: string;
-  /**
-   * Relleno del día y del horario elegidos. Claro: vino (4.1:1 sobre terracota, 7.6:1 sobre lino).
-   * Oscuro: el vino casi desaparece sobre carbón (1.2:1), así que se usa el oro de foco oscuro
-   * (5.3:1 sobre la tarjeta #2a2a2a y 6.7:1 sobre el fondo #161616).
-   */
-  seleccion: string;
-  /** Número sobre el relleno de selección: crema sobre vino (10.9:1) y carbón sobre oro (6.7:1). */
-  textoSobreSeleccion: string;
-}
-
-export const temaClaro: Colores = {
-  fondo: paleta.lino,
-  superficie: paleta.terracota,
-  superficieSecundaria: paleta.arena,
-  texto: paleta.vinoProfundo,
-  textoSuave: paleta.carbonClaro,
-  textoCuerpo: paleta.carbonClaro,
-  accion: paleta.vino,
-  accionPresionado: paleta.hover,
-  acento: paleta.salvia,
-  textoSobreAcento: paleta.carbon,
-  textoSobreAccion: paleta.crema,
-  secundario: paleta.terracota,
-  textoSobreSecundario: paleta.carbonClaro,
-  foco: paleta.vino,
-  hairline: transparencias.lineaClaro,
-  campoFondo: paleta.crema,
-  campoBorde: paleta.bordeCampoClaro,
-  campoTexto: paleta.vinoProfundo,
-  campoPlaceholder: paleta.placeholderClaro,
-  barraFondo: paleta.carbon,
-  iconoActivo: paleta.oroSobreCarbon,
-  iconoInactivo: transparencias.marfil70,
-  hairlineCromo: transparencias.blanco07,
-  presionadoCromo: transparencias.presionadoOscuro,
-  panel: paleta.carbon,
-  textoSobrePanel: paleta.crema,
-  textoSuaveSobrePanel: transparencias.cremaSobreCarbon,
-  oro: paleta.oro,
-  oroTextoPequeno: paleta.oroSobreCarbon,
-  oroTexto: paleta.avisoClaro,
-  oroGrande: paleta.oroGrande,
-  iconografia: paleta.iconografia,
-  // Sombra tintada de vino del botón primario (precedente en la web: indicador de pestañas, cliente.css).
-  sombra: paleta.vino,
-  sombraTarjeta: paleta.cafeSombra,
-  velo: transparencias.velo,
-  veloVisor: transparencias.veloVisor,
-  superficieElevada: paleta.blanco,
-  superficieModal: paleta.lino,
-  esqueleto: paleta.arena,
-  hairlineFuerte: transparencias.lineaFuerteClaro,
-  focoHalo: transparencias.focoHaloClaro,
-  info: paleta.infoClaro,
-  gigante: paleta.vinoProfundo,
-  lemaHero: paleta.carbonClaro,
-  textoActivo: paleta.oroSobreCarbon,
-  fondoActivo: transparencias.activoClaro,
-  segmentadoBorde: transparencias.transparente,
-  transparente: transparencias.transparente,
-  peligro: paleta.vinoProfundo,
-  presionado: transparencias.presionadoClaro,
-  exito: paleta.exitoClaro,
-  aviso: paleta.avisoClaro,
-  enlace: paleta.vinoProfundo,
-  contorno: paleta.vinoProfundo,
-  seleccion: paleta.vino,
-  textoSobreSeleccion: paleta.crema,
-};
-
-export const temaOscuro: Colores = {
-  fondo: paleta.carbon,
-  superficie: paleta.carbonClaro,
-  superficieSecundaria: paleta.carbonMedio,
-  texto: paleta.blanco,
-  textoSuave: paleta.terracota,
-  textoCuerpo: transparencias.cremaCuerpo,
-  accion: paleta.vino,
-  accionPresionado: paleta.hover,
-  acento: paleta.salvia,
-  textoSobreAcento: paleta.carbon,
-  textoSobreAccion: paleta.blanco,
-  secundario: paleta.carbonClaro,
-  textoSobreSecundario: paleta.crema,
-  foco: paleta.oroFoco,
-  hairline: transparencias.lineaOscuro,
-  campoFondo: paleta.carbonMedio,
-  campoBorde: paleta.bordeCampoOscuro,
-  campoTexto: paleta.blanco,
-  campoPlaceholder: paleta.placeholderOscuro,
-  barraFondo: paleta.carbon,
-  iconoActivo: paleta.oroFoco,
-  iconoInactivo: transparencias.blanco70,
-  hairlineCromo: transparencias.blanco07,
-  presionadoCromo: transparencias.presionadoOscuro,
-  panel: paleta.carbon,
-  textoSobrePanel: paleta.blanco,
-  textoSuaveSobrePanel: transparencias.blancoSobreCarbon,
-  oro: paleta.oro,
-  oroTextoPequeno: paleta.oroFoco,
-  oroTexto: paleta.oroFoco,
-  oroGrande: paleta.oroFoco,
-  iconografia: paleta.iconografia,
-  // La web usa negro puro en sombras oscuras; DESIGN.md lo prohíbe, así que se conserva carbón.
-  sombra: paleta.carbon,
-  sombraTarjeta: paleta.carbon,
-  velo: transparencias.velo,
-  veloVisor: transparencias.veloVisor,
-  superficieElevada: paleta.carbonClaro,
-  superficieModal: paleta.carbonClaro,
-  esqueleto: paleta.esqueletoOscuro,
-  hairlineFuerte: transparencias.lineaFuerteOscuro,
-  focoHalo: transparencias.focoHaloOscuro,
-  info: paleta.infoOscuro,
-  gigante: paleta.giganteOscuro,
-  lemaHero: transparencias.lemaHeroOscuro,
-  textoActivo: paleta.oroFoco,
-  fondoActivo: transparencias.activoOscuro,
-  segmentadoBorde: paleta.esqueletoOscuro,
-  transparente: transparencias.transparente,
-  peligro: paleta.peligroOscuro,
-  presionado: transparencias.presionadoOscuro,
-  exito: paleta.exitoOscuro,
-  aviso: paleta.avisoOscuro,
-  enlace: paleta.blanco,
-  contorno: paleta.blanco,
-  seleccion: paleta.oroFoco,
-  textoSobreSeleccion: paleta.carbon,
-};
+export * from './colores';
 
 /** Ritmo de 4px. */
 export const espacio = {
@@ -356,6 +59,8 @@ export const fuente = {
   texto: 'Geist_400Regular',
   textoMedio: 'Geist_500Medium',
   textoFuerte: 'Geist_600SemiBold',
+  /** Precios, totales y contadores (Geist 700 de la web). */
+  textoNegrita: 'Geist_700Bold',
   manuscrita: 'GreatVibes_400Regular',
 } as const;
 
@@ -377,6 +82,20 @@ export const tipo = {
   gigante: { tamano: 52, linea: 54 },
   /** 10sp: "Notificaciones" mide 69 dp en Geist y cada pestaña tiene 72 dp a 360 dp de ancho. */
   pestana: { tamano: 10, linea: 13 },
+  /** Categoría en mayúsculas sobre el título de una tarjeta ("SHAMPOO · AVYNA"). */
+  categoria: { tamano: 12, linea: 16 },
+  /** Título de tarjeta en Geist 600 (TarjetaCatalogo de la web: 18 con interlineado 1.375). */
+  tituloTarjeta: { tamano: 18, linea: 25 },
+  /** Descripción corta de una tarjeta (14 con interlineado 1.625). */
+  descripcion: { tamano: 14, linea: 23 },
+  /** Precio de una tarjeta en Geist 700. */
+  precio: { tamano: 20, linea: 28 },
+  /** Número de los contadores (Geist 700 12/16). */
+  contador: { tamano: 12, linea: 16 },
+  /** Logotipo de la cabecera: "Mirú" en Playfair 700, "Franco" en Great Vibes y "BEAUTY SALÓN". */
+  logotipo: { tamano: 16, linea: 18 },
+  logotipoFranco: { tamano: 20, linea: 24 },
+  logotipoSalon: { tamano: 10, linea: 12 },
 } as const;
 
 /**
@@ -384,6 +103,10 @@ export const tipo = {
  * `titulo`, `gigante` y `lema` los usa también el hero de fluidos, que no se toca: se conservan.
  */
 export const tracking = {
+  /** Categoría en mayúsculas de las tarjetas (0.05em de 12). */
+  categoria: 0.6,
+  /** "BEAUTY SALÓN" del logotipo (0.18em de 10). */
+  logotipoSalon: 1.8,
   titulo: -0.4,
   /** Título de pantalla (tipo.titulo, 30): -0.02em. */
   tituloPagina: -0.6,
@@ -628,37 +351,14 @@ export const stickers = {
   trazoInterior: 3.2,
 } as const;
 
-export const colorSticker = {
-  tijeras: { fondo: paleta.vino, tinta: paleta.papel },
-  destello: { fondo: paleta.oro, tinta: paleta.papel },
-  gota: { fondo: colorFluido.hialuronico, tinta: paleta.vino },
-  peine: { fondo: paleta.lino, tinta: paleta.vino },
-  papel: paleta.papel,
-} as const;
+
 
 /**
- * Fondo del hero de Inicio (.hero-bg-gradient de globals.css): un degradado vertical con dos
- * resplandores elípticos. Posiciones en fracción del ancho y alto del escenario.
+ * Fondo del hero de Inicio (.hero-bg-gradient de globals.css): colores de colores.ts más la
+ * geometría de los dos resplandores, en fracción del ancho y alto del escenario.
  */
 export const fondoHero = {
-  claro: {
-    lineal: [
-      { posicion: 0, color: paleta.lino },
-      { posicion: 0.55, color: paleta.arena },
-      { posicion: 1, color: paleta.lino },
-    ],
-    base: paleta.lino,
-    // rgba(191, 161, 129, 0.25) y rgba(163, 107, 31, 0.12): color opaco y su opacidad aparte.
-    radialArriba: { color: paleta.iconografia, opacidad: 0.25 },
-    radialAbajo: { color: paleta.oroCalidoHero, opacidad: 0.12 },
-  },
-  oscuro: {
-    lineal: null,
-    base: paleta.carbon,
-    // rgba(113, 0, 20, 0.2) y rgba(113, 0, 20, 0.15).
-    radialArriba: { color: paleta.vino, opacidad: 0.2 },
-    radialAbajo: { color: paleta.vino, opacidad: 0.15 },
-  },
+  ...coloresFondoHero,
   /** ellipse 80% 50% at 50% 0% y ellipse 60% 35% at 50% 70%; el color se apaga al 60 %. */
   arriba: { cx: 0.5, cy: 0, rx: 0.8, ry: 0.5 },
   abajo: { cx: 0.5, cy: 0.7, rx: 0.6, ry: 0.35 },
@@ -667,10 +367,12 @@ export const fondoHero = {
 
 /** Tienda (GP-06.4): catálogo, carrito y pedidos. */
 export const tienda = {
-  /** Columnas de la cuadrícula de productos. */
-  columnas: 2,
-  /** Tarjetas que dibuja el skeleton mientras carga el catálogo. */
-  tarjetasEsqueleto: 6,
+  /** Columnas de la cuadrícula de productos: una, como TarjetaCatalogo de la web en móvil. */
+  columnas: 1,
+  /** Separación entre tarjetas del catálogo en una columna (gap-6 de la web). */
+  separacionTarjetas: espacio.xxl,
+  /** Tarjetas que dibuja el skeleton mientras carga el catálogo (en una columna, las que llenan la pantalla). */
+  tarjetasEsqueleto: 2,
   /** Lado de la foto cuadrada de una fila del carrito o de un pedido. */
   miniatura: 72,
   /** Ancho / alto de la foto de la tarjeta y de la galería del detalle (cuadradas). */
@@ -726,45 +428,10 @@ export const reserva = {
   largoNotas: 300,
 } as const;
 
-/**
- * Insignias de estado (DESIGN.md: base clara teñida del color del estado con texto oscuro de su
- * familia). Igual que `.mf-badge` de la web (sistema.css): el color del estado al 16 % sobre la
- * base de insignia (crema en claro, carbón medio en oscuro), ya mezclado porque React Native no
- * tiene color-mix. Contraste del texto: 7:1 o más en claro y 4.7:1 o más en oscuro.
- */
+
+/** Insignias de estado: colores de colores.ts (coloresInsignia) más sus rellenos. */
 export const insignia = {
-  claro: {
-    /** --warning #D98E04 al 16 % sobre crema; texto --warning-texto. */
-    aviso: { fondo: '#EEE1C8', texto: paleta.avisoClaro },
-    /** --success #6E7D57 al 16 % sobre crema; texto --success-texto. */
-    exito: { fondo: '#DDDED5', texto: paleta.exitoClaro },
-    /** --logo-branding #9f6d1f al 16 % sobre crema; texto --oro-texto (10.5:1). */
-    neutro: { fondo: '#E5DCCC', texto: paleta.avisoClaro },
-    /** --danger #710014 al 16 % sobre crema; texto --danger-texto (8.9:1). */
-    peligro: { fondo: '#DDCACA', texto: paleta.vinoProfundo },
-    /** --enlaces-textos-interactivos #4A7BA7 al 16 % sobre crema; texto --info-texto (7.4:1). */
-    info: { fondo: '#D7DEE2', texto: paleta.infoClaro },
-  },
-  oscuro: {
-    /** --warning al 16 % sobre #1f1f1f; texto --warning-texto oscuro (4.7:1). */
-    aviso: { fondo: '#3D311B', texto: paleta.avisoOscuro },
-    /** --success al 16 % sobre #1f1f1f; texto --success-texto oscuro (4.7:1). */
-    exito: { fondo: '#2C2E28', texto: paleta.exitoOscuro },
-    /** --logo-branding al 16 % sobre #1f1f1f; texto oro sobre carbón (5.1:1). */
-    neutro: { fondo: '#332B1F', texto: paleta.oroFoco },
-    /** --danger al 16 % sobre #1f1f1f; texto --danger-texto oscuro (5.6:1). */
-    peligro: { fondo: '#2C1A1D', texto: paleta.peligroOscuro },
-    /** #4a7ba7 al 16 % sobre #1f1f1f; texto --info-texto oscuro (6.5:1). */
-    info: { fondo: '#262E35', texto: paleta.infoOscuro },
-  },
-  /** Filete interior de 1px: el color del estado al 30 % (.mf-badge), igual en claro y oscuro. */
-  borde: {
-    aviso: 'rgba(217, 142, 4, 0.3)',
-    exito: 'rgba(110, 125, 87, 0.3)',
-    neutro: 'rgba(159, 109, 31, 0.3)',
-    peligro: 'rgba(113, 0, 20, 0.3)',
-    info: 'rgba(74, 123, 167, 0.3)',
-  },
+  ...coloresInsignia,
   rellenoHorizontal: espacio.m,
   rellenoVertical: espacio.xs,
 } as const;
@@ -799,4 +466,127 @@ export const tiendaCompra = {
   radioOpcion: 22,
   /** Diámetro del punto que marca la opción de pago elegida. */
   puntoOpcion: 10,
+} as const;
+
+/** Controles compartidos: pastillas de filtro, buscadores y contador de cantidad (sin colores). */
+export const controles = {
+  /** Alto visual de la pastilla de filtro (Button sm de la web: min-h-9); el área táctil sigue en 48. */
+  pastillaAlto: 36,
+  /** Relleno vertical de la pastilla (py-1.5 de la web); el horizontal es espacio.m. */
+  pastillaRellenoVertical: 6,
+  /** Texto de la pastilla: Geist 600 14/20 (text-sm de la web). */
+  textoPastilla: { tamano: 14, linea: 20 },
+  /** Halo del foco de un campo (.mf-campo:focus: 0 0 0 3px). */
+  halo: 3,
+  /** Ancho de la caja de la cifra del contador de cantidad (w-16 del carrito de la web). */
+  cajaCantidad: 64,
+  /** Separación entre los botones del contador y la caja de la cifra. */
+  separacionCantidad: 6,
+  /** Ícono de menos y más del contador (16 como el carrito de la web). */
+  iconoCantidad: 16,
+} as const;
+
+/**
+ * Cabecera compacta de todas las pantallas (Header.tsx de la web en móvil): cromo carbón con el
+ * logotipo a la izquierda y las acciones a la derecha; el título de la pantalla baja al lienzo.
+ */
+export const cabeceraCompacta = {
+  /** Alto del contenido bajo la barra de estado (sin el área segura). */
+  alto: 56,
+  /** Relleno derecho: un botón de 48 deja su ícono a 20 del borde, igual que pantalla.margen. */
+  rellenoDerecho: espacio.s,
+  /** Relleno izquierdo cuando la fila empieza con el botón Volver (mismo cálculo). */
+  rellenoVolver: espacio.s,
+  /** Separación entre el monograma y el texto del logotipo, y entre botones. */
+  separacion: espacio.s,
+  separacionAcciones: espacio.xs,
+  /** Fila del buscador de Inicio, dentro del cromo: el campo de 48 más su relleno inferior. */
+  filaBuscador: toqueMinimo + espacio.s,
+  /**
+   * Bajo este ancho la web quita el monograma para que el logotipo quepa junto a las acciones
+   * (Header.tsx: min-[384px]). En Inicio sin sesión, con "Iniciar sesión" y la campana, se aplica igual.
+   */
+  anchoConMonograma: 384,
+  /** El logotipo crece con la fuente del sistema solo hasta este factor: la barra mide 56. */
+  escalaMaximaLogotipo: 1.2,
+  /** "BEAUTY SALÓN": 11 en lugar de 10 para que se lea en el teléfono (0.18em de espaciado). */
+  salon: { tamano: 11, linea: 13 },
+  trackingSalon: 2,
+  /** Bloque del título de la pantalla en el lienzo (PageHeader de la web). */
+  tituloArriba: espacio.xxl,
+  /**
+   * El título de 30 crece con la fuente del sistema hasta este factor (45): en las pantallas de la
+   * pila queda fijo sobre el scroll y a más tamaño se comería la mitad de la pantalla.
+   */
+  escalaMaximaTitulo: 1.5,
+  /** Título a subtítulo: mt-2 de la web. */
+  separacionSubtitulo: espacio.s,
+  /**
+   * Debajo del bloque: la web deja 32 (mb-8); aquí 16, porque cada vista ya suma su propio relleno
+   * superior (16 a 24) y así el contenido no cambia de lugar respecto a antes.
+   */
+  tituloAbajo: espacio.l,
+} as const;
+
+/**
+ * Tarjetas de producto, servicio, carrito, pedidos y citas (TarjetaCatalogo y TarjetaServicio de
+ * la web). Solo medidas: los colores salen de colores.ts por useTheme().
+ */
+export const tarjetas = {
+  /** Relleno del cuerpo de las tarjetas de producto y servicio (p-5 de la web). */
+  rellenoCuerpo: espacio.xl,
+  /** De la categoría al título (mt-1.5 de la web). */
+  separacionTitulo: 6,
+  /** Del título a la descripción (mt-2 de la web). */
+  separacionDescripcion: espacio.s,
+  /** Espacio sobre el pie con precio y acción (pt-5 de la web). */
+  separacionPie: espacio.xl,
+  /** Entre el texto y su ícono en la acción y la duración (gap-1.5 de la web). */
+  separacionIcono: 6,
+  /** Entre la duración y el precio de un servicio (mt-1 de la web). */
+  separacionPrecio: espacio.xs,
+  /** Flecha de "Ver detalles" y "Ver y agendar" (ArrowRight 16 de la web). */
+  iconoAccion: 16,
+  /** Reloj de la duración del servicio (Clock3 14 de la web). */
+  iconoDato: 14,
+  /** Acción de la tarjeta: Geist 600 14/20 (text-sm de la web). */
+  tipoAccion: { tamano: 14, linea: 20 },
+  /** Precio original tachado: 14/20 (text-sm de la web). */
+  tipoTachado: { tamano: 14, linea: 20 },
+  /** Total de una línea del carrito y de un pedido: Geist 700 18 (text-lg de la web). */
+  tipoTotal: { tamano: 18, linea: 26 },
+} as const;
+
+/**
+ * Barra inferior como la franja vino de la web (PestanaFranja.tsx) y contador de piezas y avisos
+ * (Contador.tsx).
+ */
+export const franja = {
+  /** Alto de la barra sin el área segura de abajo: pastilla 32 + 4 + etiqueta 13 con aire. */
+  altoBarra: 64,
+  /** Pastilla de la pestaña activa: envuelve al ícono de 24 y cabe en los 72 dp de cada pestaña. */
+  pastillaAncho: 56,
+  pastillaAlto: 32,
+  /** De la pastilla a la etiqueta. */
+  separacionEtiqueta: espacio.xs,
+  /** Tope de crecimiento de la etiqueta con la fuente del sistema: la barra tiene alto fijo. */
+  escalaMaximaEtiqueta: 1.5,
+  /** Diámetro mínimo del contador (min-w-[18px] h-[18px] de la web). */
+  contadorMinimo: 18,
+  /** Contador sobre el ícono: desde el borde de arriba de la pastilla y a la derecha del centro. */
+  contadorArriba: 0,
+  contadorDesfase: espacio.xs,
+} as const;
+
+/** Perfil: tarjeta de filas como .mf-perfil-fila y títulos de sección del portal de clientas. */
+export const perfil = {
+  /** Alto mínimo de una fila (min-height 4.25rem de la web). */
+  altoFila: 68,
+  /** Relleno vertical de la fila (0.85rem); el horizontal es espacio.xl (1.25rem). */
+  rellenoFila: 14,
+  /** Cuadrito del ícono (2.75rem) y el ícono dentro de él. */
+  cuadrito: 44,
+  icono: 20,
+  /** Título de sección: Geist 600 14/20. */
+  tituloSeccion: { tamano: 14, linea: 20 },
 } as const;

@@ -15,7 +15,7 @@ import { EmptyState } from '@/shared/ui/EmptyState';
 import { useEntradaContenido } from '@/shared/ui/movimiento';
 import { ScreenHeader } from '@/shared/ui/ScreenHeader';
 import { Skeleton } from '@/shared/ui/Skeleton';
-import { espacio, fuente, pantalla, radio, tienda, tipo, toqueMinimo } from '@/shared/ui/tokens';
+import { controles, espacio, fuente, pantalla, radio, tienda, tipo, toqueMinimo } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
 import { BuscadorProductos } from '../components/BuscadorProductos';
@@ -23,6 +23,9 @@ import { FiltroCategorias } from '../components/FiltroCategorias';
 import { TarjetaProducto, TarjetaProductoEsqueleto } from '../components/TarjetaProducto';
 import type { ProductoCatalogo } from '../models/productoModel';
 import { useCatalogoViewModel } from '../viewmodels/useCatalogoViewModel';
+
+/** Con una sola columna no se usa columnWrapperStyle (FlatList lo rechaza con numColumns 1). */
+const VARIAS_COLUMNAS = tienda.columnas > 1;
 
 /** Filas del skeleton: tarjetasEsqueleto repartidas en las columnas de la cuadrícula. */
 const FILAS_ESQUELETO = Array.from(
@@ -34,7 +37,7 @@ function claveProducto(producto: ProductoCatalogo): string {
   return String(producto.id);
 }
 
-/** Pestaña Tienda (GP-06.4): catálogo público en dos columnas con búsqueda y categorías. */
+/** Pestaña Tienda (GP-06.4): catálogo público (una columna, como la web) con búsqueda y categorías. */
 export default function TiendaView() {
   const { colores } = useTheme();
   const { width } = useWindowDimensions();
@@ -47,12 +50,25 @@ export default function TiendaView() {
 
   const { abrirProducto } = vm;
   const renderProducto = useCallback<ListRenderItem<ProductoCatalogo>>(
-    ({ item }) => <TarjetaProducto producto={item} ancho={anchoTarjeta} onAbrir={abrirProducto} />,
+    ({ item }) =>
+      VARIAS_COLUMNAS ? (
+        <TarjetaProducto producto={item} ancho={anchoTarjeta} onAbrir={abrirProducto} />
+      ) : (
+        // En una columna el margen lateral va en cada celda: columnWrapperStyle solo existe con varias.
+        <View style={styles.celda}>
+          <TarjetaProducto producto={item} ancho={anchoTarjeta} onAbrir={abrirProducto} />
+        </View>
+      ),
     [anchoTarjeta, abrirProducto],
   );
 
   // El carrito tiene su propia pestaña: la cabecera de la Tienda solo lleva el título.
-  const encabezadoPantalla = <ScreenHeader titulo="Tienda" />;
+  const encabezadoPantalla = (
+    <ScreenHeader
+      titulo="Tienda"
+      subtitulo="Explora nuestro catálogo de productos profesionales"
+    />
+  );
 
   const refresco = (
     <RefreshControl
@@ -159,7 +175,7 @@ export default function TiendaView() {
         keyExtractor={claveProducto}
         renderItem={renderProducto}
         numColumns={tienda.columnas}
-        columnWrapperStyle={styles.filaProductos}
+        columnWrapperStyle={VARIAS_COLUMNAS ? styles.filaProductos : undefined}
         ItemSeparatorComponent={SeparadorFilas}
         ListHeaderComponent={encabezadoLista}
         ListEmptyComponent={sinResultados}
@@ -176,7 +192,7 @@ export default function TiendaView() {
 }
 
 function SeparadorFilas() {
-  return <View style={styles.separador} />;
+  return <View style={VARIAS_COLUMNAS ? styles.separador : styles.separadorUnaColumna} />;
 }
 
 const styles = StyleSheet.create({
@@ -205,16 +221,22 @@ const styles = StyleSheet.create({
   separador: {
     height: espacio.m,
   },
+  separadorUnaColumna: {
+    height: tienda.separacionTarjetas,
+  },
+  celda: {
+    paddingHorizontal: pantalla.margen,
+  },
   estado: {
     paddingHorizontal: pantalla.margen,
   },
   esqueleto: {
     paddingHorizontal: pantalla.margen,
-    gap: espacio.m,
+    gap: tienda.separacionTarjetas,
   },
   buscadorEsqueleto: {
     height: toqueMinimo,
-    borderRadius: radio.pastilla,
+    borderRadius: radio.campo,
   },
   chipsEsqueleto: {
     flexDirection: 'row',
@@ -224,8 +246,8 @@ const styles = StyleSheet.create({
   },
   chipEsqueleto: {
     width: toqueMinimo * 2,
-    height: toqueMinimo,
-    borderRadius: radio.pastilla,
+    height: controles.pastillaAlto,
+    borderRadius: radio.campo,
   },
   filaEsqueleto: {
     flexDirection: 'row',

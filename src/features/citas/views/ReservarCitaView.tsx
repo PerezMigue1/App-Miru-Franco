@@ -101,7 +101,11 @@ export default function ReservarCitaView() {
 
   return (
     <KeyboardAvoidingView behavior="padding" style={[styles.raiz, { backgroundColor: colores.fondo }]}>
-      <EncabezadoVolver titulo={vm.servicio?.nombre || 'Reservar cita'} onVolver={vm.atras} />
+      <EncabezadoVolver
+        titulo={vm.servicio?.nombre || 'Reservar cita'}
+        subtitulo="Selecciona especialista, día y hora para tu cita"
+        onVolver={vm.atras}
+      />
 
       {vm.estado === 'cargando' ? (
         <View

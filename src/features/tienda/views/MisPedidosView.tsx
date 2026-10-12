@@ -49,7 +49,11 @@ export default function MisPedidosView() {
 
   return (
     <View style={[styles.raiz, { backgroundColor: colores.fondo }]}>
-      <EncabezadoVolver titulo="Mis pedidos" onVolver={regresar} />
+      <EncabezadoVolver
+        titulo="Mis pedidos"
+        subtitulo="Consulta el estado de todos tus pedidos"
+        onVolver={regresar}
+      />
       {conSesion ? (
         <Contenido vm={vm} />
       ) : (

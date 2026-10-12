@@ -1,10 +1,10 @@
 import { useRouter, type Href } from 'expo-router';
 import { CalendarDays } from 'lucide-react-native';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { ListRow } from '@/shared/ui/ListRow';
 import { ScreenHeader } from '@/shared/ui/ScreenHeader';
-import { espacio, fuente, pantalla, tipo } from '@/shared/ui/tokens';
+import { espacio, pantalla } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
 import { ListaServicios } from '../components/ListaServicios';
@@ -22,10 +22,7 @@ export default function CitasView() {
       contentContainerStyle={styles.contenido}
       keyboardShouldPersistTaps="handled"
     >
-      <ScreenHeader titulo="Servicios" />
-      <Text style={[styles.subtitulo, { color: colores.textoSuave }]}>
-        Elige tu servicio y conoce su precio, duración y anticipo.
-      </Text>
+      <ScreenHeader titulo="Servicios" subtitulo="Explora nuestros servicios y agenda tu cita" />
       <View style={styles.misCitas}>
         <ListRow
           icono={CalendarDays}
@@ -46,12 +43,6 @@ const styles = StyleSheet.create({
   contenido: {
     flexGrow: 1,
     paddingBottom: espacio.x3,
-  },
-  subtitulo: {
-    paddingHorizontal: pantalla.margen,
-    fontFamily: fuente.texto,
-    fontSize: tipo.cuerpo.tamano,
-    lineHeight: tipo.cuerpo.linea,
   },
   misCitas: {
     paddingTop: espacio.l,

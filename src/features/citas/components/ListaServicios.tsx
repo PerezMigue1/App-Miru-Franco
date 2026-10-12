@@ -1,22 +1,19 @@
 import { useRouter, type Href } from 'expo-router';
 import { Search, X } from 'lucide-react-native';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
 import { EmptyState } from '@/shared/ui/EmptyState';
-import {
-  transicionBorde,
-  transicionSeleccion,
-  useEntradaContenido,
-  usePresion,
-} from '@/shared/ui/movimiento';
+import { FilaPastillas } from '@/shared/ui/FilaPastillas';
+import { PastillaFiltro } from '@/shared/ui/PastillaFiltro';
+import { transicionBorde, useEntradaContenido, usePresion } from '@/shared/ui/movimiento';
 import {
   borde,
+  controles,
   espacio,
   fuente,
   icono,
-  pantalla,
   radio,
   tipo,
   toqueMinimo,
@@ -78,18 +75,23 @@ export function ListaServicios({ catalogo }: { catalogo: CatalogoServiciosViewMo
     contenido = (
       <Animated.View entering={entrada} style={styles.seccion}>
         <Buscador valor={busqueda} onCambiar={setBusqueda} />
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          style={styles.filtros}
-          contentContainerStyle={styles.filas}
-        >
-          <Chip texto="Todas" activo={categoria === null} onPress={() => setCategoria(null)} />
+        <FilaPastillas>
+          <PastillaFiltro
+            texto="Todas"
+            activo={categoria === null}
+            onPress={() => setCategoria(null)}
+            accessibilityLabel="Categoría Todas"
+          />
           {categorias.map((c) => (
-            <Chip key={c} texto={c} activo={categoria === c} onPress={() => setCategoria(c)} />
+            <PastillaFiltro
+              key={c}
+              texto={c}
+              activo={categoria === c}
+              onPress={() => setCategoria(c)}
+              accessibilityLabel={`Categoría ${c}`}
+            />
           ))}
-        </ScrollView>
+        </FilaPastillas>
         {serviciosVisibles.length === 0 ? (
           <EmptyState
             titulo="Sin resultados"
@@ -118,9 +120,13 @@ export function ListaServicios({ catalogo }: { catalogo: CatalogoServiciosViewMo
   );
 }
 
-/** Campo de búsqueda con el aspecto de SearchBar, pero que sí escribe. */
+/**
+ * Campo de búsqueda con el aspecto de .mf-campo de la web (el mismo que el buscador de la tienda):
+ * rectángulo de radio 10, borde de 1px, y al enfocar el borde toma el color de foco con su halo de 3px.
+ */
 function Buscador({ valor, onCambiar }: { valor: string; onCambiar: (texto: string) => void }) {
   const { colores } = useTheme();
+  // Solo apariencia del campo: el texto buscado vive en el viewmodel.
   const [enfocado, setEnfocado] = useState(false);
 
   return (
@@ -132,6 +138,8 @@ function Buscador({ valor, onCambiar }: { valor: string; onCambiar: (texto: stri
           backgroundColor: colores.campoFondo,
           borderColor: enfocado ? colores.foco : colores.campoBorde,
         },
+        // Halo del foco como .mf-campo:focus (3px de --mf-foco al 22 %).
+        enfocado ? { boxShadow: `0 0 0 ${controles.halo}px ${colores.focoHalo}` } : null,
       ]}
     >
       <View accessible={false} importantForAccessibility="no-hide-descendants">
@@ -140,7 +148,7 @@ function Buscador({ valor, onCambiar }: { valor: string; onCambiar: (texto: stri
       <TextInput
         value={valor}
         onChangeText={onCambiar}
-        placeholder="Buscar un servicio"
+        placeholder="Buscar servicio por nombre"
         placeholderTextColor={colores.campoPlaceholder}
         accessibilityLabel="Buscar un servicio por nombre"
         returnKeyType="search"
@@ -149,48 +157,27 @@ function Buscador({ valor, onCambiar }: { valor: string; onCambiar: (texto: stri
         onBlur={() => setEnfocado(false)}
         selectionColor={colores.foco}
         cursorColor={colores.foco}
-        style={[styles.entrada, { color: colores.campoTexto }]}
+        style={[styles.entrada, { color: colores.campoTexto }, valor ? null : styles.entradaSinBorrar]}
       />
-      {valor ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Borrar búsqueda"
-          onPress={() => onCambiar('')}
-          style={styles.borrar}
-        >
-          <X color={colores.campoPlaceholder} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
-        </Pressable>
-      ) : null}
+      {valor ? <BotonBorrar onPress={() => onCambiar('')} /> : null}
     </Animated.View>
   );
 }
 
-/** Filtro de categoría: se hunde al tocarlo y el relleno de selección se funde en 140 ms. */
-function Chip({ texto, activo, onPress }: { texto: string; activo: boolean; onPress: () => void }) {
+/** Borra la búsqueda (48dp): se hunde a 0.97 al tocarlo como cualquier botón. */
+function BotonBorrar({ onPress }: { onPress: () => void }) {
   const { colores } = useTheme();
   const { estilo, hundir, soltar } = usePresion();
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityState={{ selected: activo }}
+      accessibilityLabel="Borrar búsqueda"
       onPress={onPress}
       onPressIn={hundir}
       onPressOut={soltar}
     >
-      {/* Color de selección y no de acción: en oscuro el vino casi desaparece sobre carbón. */}
-      <Animated.View
-        style={[
-          styles.chip,
-          transicionSeleccion,
-          { backgroundColor: activo ? colores.seleccion : colores.superficieSecundaria },
-          estilo,
-        ]}
-      >
-        <Text
-          style={[styles.textoChip, { color: activo ? colores.textoSobreSeleccion : colores.texto }]}
-        >
-          {texto}
-        </Text>
+      <Animated.View style={[styles.borrar, estilo]}>
+        <X color={colores.campoTexto} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
       </Animated.View>
     </Pressable>
   );
@@ -206,40 +193,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: espacio.s,
     paddingLeft: espacio.l,
-    borderRadius: radio.pastilla,
-    borderWidth: borde.hairline,
+    borderRadius: radio.campo,
+    borderWidth: borde.entrada,
   },
   entrada: {
     flex: 1,
     minHeight: toqueMinimo,
-    paddingRight: espacio.l,
     fontFamily: fuente.texto,
-    fontSize: tipo.pequeno.tamano,
+    fontSize: tipo.cuerpo.tamano,
+  },
+  entradaSinBorrar: {
+    paddingRight: espacio.l,
   },
   borrar: {
     width: toqueMinimo,
     height: toqueMinimo,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  // Los chips llegan hasta el borde de la pantalla al desplazarse; el relleno conserva el margen.
-  filtros: {
-    marginHorizontal: -pantalla.margen,
-  },
-  filas: {
-    gap: espacio.s,
-    paddingHorizontal: pantalla.margen,
-  },
-  chip: {
-    minHeight: toqueMinimo,
-    justifyContent: 'center',
-    paddingHorizontal: espacio.l,
-    borderRadius: radio.pastilla,
-  },
-  textoChip: {
-    fontFamily: fuente.textoMedio,
-    fontSize: tipo.pequeno.tamano,
-    lineHeight: tipo.pequeno.linea,
   },
   lista: {
     gap: espacio.m,

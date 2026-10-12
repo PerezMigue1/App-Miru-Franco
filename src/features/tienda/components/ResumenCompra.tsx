@@ -106,7 +106,7 @@ const styles = StyleSheet.create({
     gap: espacio.xxs,
   },
   nombre: {
-    fontFamily: fuente.textoMedio,
+    fontFamily: fuente.textoFuerte,
     fontSize: tipo.cuerpo.tamano,
     lineHeight: tipo.cuerpo.linea,
   },
@@ -116,7 +116,7 @@ const styles = StyleSheet.create({
     lineHeight: tipo.pequeno.linea,
   },
   subtotal: {
-    fontFamily: fuente.textoFuerte,
+    fontFamily: fuente.textoNegrita,
     fontSize: tipo.cuerpo.tamano,
     lineHeight: tipo.cuerpo.linea,
   },
@@ -137,9 +137,9 @@ const styles = StyleSheet.create({
     lineHeight: tipo.cuerpo.linea,
   },
   cifraTotal: {
-    fontFamily: fuente.textoFuerte,
-    fontSize: tipo.subtitulo.tamano,
-    lineHeight: tipo.subtitulo.linea,
+    fontFamily: fuente.textoNegrita,
+    fontSize: tipo.precio.tamano,
+    lineHeight: tipo.precio.linea,
     fontVariant: ['tabular-nums'],
   },
   dato: {

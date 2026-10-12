@@ -293,7 +293,12 @@ export function HeroFluidos({
             style={[styles.destino, { top: caja.y, height: caja.height }, estiloDestino]}
           >
             {/* Texto PROVISIONAL (DESIGN.md). */}
-            <Text style={[styles.gigante, { color: colores.gigante }]}>{'Brillo\nque se\nnota'}</Text>
+            {/* Como .mf-fluidos__gigante: "que se" en Great Vibes y --oro-grande, en su propia línea. */}
+            <View style={styles.gigante}>
+              <Text style={[styles.giganteSerif, { color: colores.gigante }]}>Brillo</Text>
+              <Text style={[styles.giganteManuscrita, { color: colores.oroGrande }]}>que se</Text>
+              <Text style={[styles.giganteSerif, { color: colores.gigante }]}>nota</Text>
+            </View>
             <View
               onLayout={medirAncla}
               style={{ width: altoAncla * hero.proporcionGiro, height: altoAncla }}
@@ -581,6 +586,11 @@ const Leyenda = memo(function Leyenda({
   );
 });
 
+/** Alto de la línea "que se": el tamaño gigante con la proporción de tipo.marcaManuscrita (68). */
+const ALTO_MANUSCRITA = Math.round(
+  (tipo.gigante.tamano * tipo.marcaManuscrita.linea) / tipo.marcaManuscrita.tamano,
+);
+
 const styles = StyleSheet.create({
   escenario: {
     position: 'absolute',
@@ -673,10 +683,22 @@ const styles = StyleSheet.create({
   },
   gigante: {
     flexShrink: 1,
-    fontFamily: fuente.tituloFuerte,
+  },
+  giganteSerif: {
+    fontFamily: fuente.titulo,
     fontSize: tipo.gigante.tamano,
     lineHeight: tipo.gigante.linea,
     letterSpacing: tracking.gigante,
+  },
+  // Great Vibes mide 1.25 em de alto natural: con el interlineado de 54 se cortaría la "q". Su línea
+  // usa la proporción de la marca manuscrita (1.3) y los márgenes negativos devuelven la diferencia,
+  // así el bloque sigue midiendo tres líneas de 54 y no se mueve.
+  giganteManuscrita: {
+    fontFamily: fuente.manuscrita,
+    fontSize: tipo.gigante.tamano,
+    lineHeight: ALTO_MANUSCRITA,
+    marginVertical: (tipo.gigante.linea - ALTO_MANUSCRITA) / 2,
+    includeFontPadding: false,
   },
   viaje: {
     position: 'absolute',

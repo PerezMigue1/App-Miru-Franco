@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
 import { transicionBorde, usePresion } from '@/shared/ui/movimiento';
-import { borde, espacio, fuente, icono, radio, tipo, toqueMinimo } from '@/shared/ui/tokens';
+import { borde, controles, espacio, fuente, icono, radio, tipo, toqueMinimo } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
 interface BuscadorProductosProps {
@@ -32,7 +32,7 @@ export function BuscadorProductos({ valor, onCambiar }: BuscadorProductosProps) 
           borderColor: enfocado ? colores.foco : colores.campoBorde,
         },
         // Halo del foco como .mf-campo:focus (3px de --mf-foco al 22 %).
-        enfocado ? { boxShadow: `0 0 0 3px ${colores.focoHalo}` } : null,
+        enfocado ? { boxShadow: `0 0 0 ${controles.halo}px ${colores.focoHalo}` } : null,
       ]}
     >
       <View accessible={false} importantForAccessibility="no-hide-descendants">
@@ -41,7 +41,7 @@ export function BuscadorProductos({ valor, onCambiar }: BuscadorProductosProps) 
       <TextInput
         value={valor}
         onChangeText={onCambiar}
-        placeholder="Buscar productos"
+        placeholder="Buscar producto..."
         placeholderTextColor={colores.campoPlaceholder}
         accessibilityLabel="Buscar productos por nombre, marca o categoría"
         returnKeyType="search"

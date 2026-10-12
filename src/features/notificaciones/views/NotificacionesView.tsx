@@ -39,7 +39,11 @@ export default function NotificacionesView() {
 
   return (
     <View style={[styles.raiz, { backgroundColor: colores.fondo }]}>
-      <EncabezadoVolver titulo="Notificaciones" onVolver={regresar} />
+      <EncabezadoVolver
+        titulo="Notificaciones"
+        subtitulo="Avisos del sistema sobre pedidos y tu cuenta"
+        onVolver={regresar}
+      />
       <ScrollView
         style={{ backgroundColor: colores.fondo }}
         contentContainerStyle={[styles.contenido, { paddingBottom: bottom + espacio.x3 }]}

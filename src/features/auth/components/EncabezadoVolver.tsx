@@ -1,91 +1,30 @@
 import { ArrowLeft } from 'lucide-react-native';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { View } from 'react-native';
 
-import { usePresion } from '@/shared/ui/movimiento';
-import {
-  cabecera,
-  espacio,
-  fuente,
-  icono,
-  pantalla,
-  radio,
-  tipo,
-  toqueMinimo,
-  tracking,
-} from '@/shared/ui/tokens';
-import { useTheme } from '@/shared/ui/useTheme';
+import { BotonCromo, CabeceraCompacta, TituloPagina } from '@/shared/ui/CabeceraCompacta';
+import { useTecladoVisible } from '@/shared/ui/useTecladoVisible';
+
+interface EncabezadoVolverProps {
+  titulo: string;
+  onVolver: () => void;
+  /** Línea opcional bajo el título, como el subtítulo de PageHeader en la web. */
+  subtitulo?: string;
+}
 
 /**
- * Encabezado de las pantallas de la pila: banda de cromo carbón desde arriba (como la cabecera de la
- * web) con el botón para volver y el título en Playfair marfil. Mide lo mismo que la cabecera fija
- * de Inicio.
+ * Encabezado de las pantallas de la pila: la cabecera compacta carbón con el botón Volver a la
+ * izquierda del logotipo (mide lo mismo que la de Inicio y la de las pestañas) y, debajo, en el
+ * lienzo, el título en Playfair con su subtítulo opcional. Mientras el teclado está abierto el título
+ * se guarda: así el formulario no queda tapado en un teléfono chico.
  */
-export function EncabezadoVolver({ titulo, onVolver }: { titulo: string; onVolver: () => void }) {
-  const { colores } = useTheme();
-  const { top } = useSafeAreaInsets();
-  const { estilo: estiloPresion, hundir, soltar } = usePresion();
+export function EncabezadoVolver({ titulo, onVolver, subtitulo }: EncabezadoVolverProps) {
+  const teclado = useTecladoVisible();
   return (
-    <View
-      style={[
-        styles.encabezado,
-        { paddingTop: top + cabecera.relleno, backgroundColor: colores.panel },
-      ]}
-    >
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Volver"
-        onPress={onVolver}
-        onPressIn={hundir}
-        onPressOut={soltar}
-      >
-        {/* El círculo se tiñe (blanco al 4 % sobre el carbón) y se hunde en 140 ms. */}
-        {({ pressed }) => (
-          <Animated.View
-            style={[
-              styles.volver,
-              { backgroundColor: pressed ? colores.presionadoCromo : colores.transparente },
-              estiloPresion,
-            ]}
-          >
-            <ArrowLeft
-              color={colores.textoSobrePanel}
-              size={icono.tamano}
-              strokeWidth={icono.trazo}
-            />
-          </Animated.View>
-        )}
-      </Pressable>
-      <Text accessibilityRole="header" style={[styles.titulo, { color: colores.textoSobrePanel }]}>
-        {titulo}
-      </Text>
+    <View>
+      <CabeceraCompacta
+        izquierda={<BotonCromo icono={ArrowLeft} etiqueta="Volver" onPress={onVolver} />}
+      />
+      {teclado ? null : <TituloPagina titulo={titulo} subtitulo={subtitulo} />}
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  encabezado: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: espacio.xs,
-    paddingHorizontal: pantalla.margen - espacio.m,
-    paddingBottom: cabecera.relleno,
-    // La distancia de antes entre el encabezado y el contenido, ahora fuera de la banda (en lino).
-    marginBottom: espacio.l,
-  },
-  volver: {
-    width: toqueMinimo,
-    height: toqueMinimo,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radio.pastilla,
-  },
-  titulo: {
-    flexShrink: 1,
-    fontFamily: fuente.titulo,
-    fontSize: tipo.titulo.tamano,
-    lineHeight: tipo.titulo.linea,
-    letterSpacing: tracking.tituloPagina,
-  },
-});

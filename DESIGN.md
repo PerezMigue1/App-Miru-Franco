@@ -1,6 +1,6 @@
 # Design System: Mirú Franco App Móvil, "Atelier cálido"
 
-Alcance: la app Android de la clienta. Hereda la identidad del sitio web (mismo sistema "Atelier cálido") y adapta a pantalla táctil también sus piezas de marca. Los tokens viven en un solo lugar del código (`src/shared/ui/tokens.ts`) y ningún color ni medida se escribe suelto en las pantallas.
+Alcance: la app Android de la clienta. Hereda la identidad del sitio web (mismo sistema "Atelier cálido") y adapta a pantalla táctil también sus piezas de marca. Los colores viven SOLO en `src/shared/ui/colores.ts` (paleta, transparencias y los temas claro y oscuro) y las medidas, la tipografía y el movimiento en `src/shared/ui/tokens.ts`. Ningún componente ni vista escribe un color (ni hex, ni rgb/rgba, ni nombres como transparent): los toma por nombre con `useTheme()`. Un color nuevo se agrega primero en `colores.ts`, con su valor en claro y en oscuro, y debe existir en las hojas de estilo de la web.
 
 ## 1. Atmósfera
 Un salón de autor, no un SaaS: superficies de terracota y lino, vino profundo como voz, oro solo como detalle de joyería. La app prioriza claridad y rapidez donde se opera (reserva, pago, compra) y se permite expresión de marca donde se persuade (intro, inicio, galería, acceso). Estructura estable en reserva, pago y compra.
@@ -18,21 +18,29 @@ Un salón de autor, no un SaaS: superficies de terracota y lino, vino profundo c
 - **Superficies de capa:** hojas y diálogos en `--superficie-modal` (lino / `#2a2a2a`) sobre un velo carbón al 55 %; el visor de fotos y los botones sobre foto usan carbón al 92 %. Sombra de tarjeta tintada de café `rgba(58, 28, 10)` en claro y carbón en oscuro.
 - **Foco y selección:** vino `#710014` en claro y oro `#c4954d` en oscuro.
 - **Oro sobre carbón** para texto pequeño: `#b07a28` en claro (4.9:1) y `#c4954d` en oscuro. El oro de marca queda para ornamento, íconos y texto grande.
-- **Texto, líneas y estados** (variables del sitio web, claro / oscuro): texto `#2a2a2a` / crema al 88 %, texto secundario `#4a4541` / `#b38e6f`, líneas vino al 14 % / blanco al 8 %, error `#600011` / `#e0748f`, éxito `#242d1b` / `#82a163`, aviso `#37280b` / `#D98E04` y enlaces `#600011` / `#ffffff`.
+- **Texto, líneas y estados** (variables del sitio web, claro / oscuro): texto principal `#600011` / `#ffffff` (`--menu-texto-principal`, también en títulos), texto secundario `#2A2A2A` / `#b38e6f` (`--encabezados-alterno`, también sobre terracota), texto de diálogo `#2a2a2a` / crema al 88 %, líneas vino al 14 % / blanco al 8 %, error `#600011` / `#e0748f`, éxito `#242d1b` / `#82a163`, aviso `#37280b` / `#D98E04` y enlaces `#600011` / `#ffffff`.
 - **Colores de los fluidos del hero** (solo para el resplandor detrás de cada frasco): Goji `#7a1a1f`, Argán `#d99a4e`, Platino `#5b3fd6`, Hialurónico `#d9728f`.
 
 ## 3. Tipografía
 - **Títulos:** Playfair Display, con espaciado de letra ligeramente cerrado.
 - **Texto y datos:** Geist, interlineado 1.5 a 1.6.
 - **Cifras:** alineadas tabulares en precios, anticipos y totales.
-- **Acento manuscrito:** Great Vibes solo para "Franco" en la marca.
-- Sin eyebrows ni etiquetas pequeñas sobre los títulos.
+- **Acento manuscrito:** Great Vibes solo para "Franco" en la marca y para "que se" en la frase del hero ("Brillo" y "nota" en Playfair 700).
+- **Títulos de pantalla:** en el contenido, no en la cabecera: Playfair 700, -0.02em, interlineado 1.15, vino en claro y blanco en oscuro, con subtítulo opcional en el texto secundario.
+- **Tarjetas:** título en Geist 600 (no Playfair), categoría arriba en mayúsculas pequeñas con tracking ("SHAMPOO · AVYNA") y precios en Geist 700.
+- Sin eyebrows ni etiquetas pequeñas sobre los títulos de pantalla. La única excepción es la categoría en mayúsculas pequeñas de las tarjetas, como en la web.
 - Íconos: `lucide-react-native`, nunca emojis.
 
 ## 4. Componentes
 - **Card:** radio 14px, sombra tintada, nunca borde y sombra a la vez. Las tarjetas tocables se hunden ligeramente al presionarlas.
+- **Tarjeta de producto y de servicio:** como la web: foto arriba (cuadrada en producto, 4:3 en servicio), categoría en mayúsculas pequeñas con tracking en el texto secundario, título en Geist 600 en el texto principal, descripción en el texto secundario, precio en Geist 700 con cifras tabulares, precio original tachado cuando exista y la acción "Ver detalles" o "Ver y agendar" con flecha. Toda la tarjeta es el área táctil. Las filas del carrito, de Mis pedidos y de Mis citas siguen las mismas reglas de texto.
+- **Pastillas de filtro** (tienda y servicios): rectángulo de radio 10, no píldora. La activa va rellena del rosa de selección (`--hover`) con texto blanco en los dos temas; las inactivas solo llevan contorno de 1px, vino con texto vino en claro y marfil con texto marfil en oscuro. Área táctil de 48dp.
+- **Contador de cantidad:** dos botones cuadrados de radio 10 con contorno y la cantidad en una caja aparte, como el carrito de la web.
+- **Contador de piezas y avisos:** círculo vino con número claro y contorno marfil fino, para que se vea sobre la franja vino y sobre el carbón.
+- **Filas del perfil:** dentro de una tarjeta con divisores; cada fila con el ícono en un cuadrito de radio 10, título en el texto principal, una línea de descripción y chevron. Títulos de sección en Geist 600 en el texto secundario.
+- **Cabecera:** carbón y compacta (56dp de contenido) con el monograma y el logotipo "Mirú Franco" en oro sobre carbón, y a la derecha las acciones que existan (campana, perfil, Volver a la izquierda en las pantallas de la pila).
 - **Button:** colores por token, altura mínima de 48dp, retroalimentación al presionar de unos 140 ms. El secundario lleva texto oscuro sobre terracota.
-- **Input:** etiqueta siempre visible, borde con contraste mínimo 3:1, foco con borde vino u oro, error en texto de peligro con mensaje legible por lector de pantalla.
+- **Input y buscador:** rectángulo de radio 10 como `.mf-campo` de la web (sin pastilla), etiqueta siempre visible, borde con contraste mínimo 3:1, foco con borde vino u oro y halo, error en texto de peligro con mensaje legible por lector de pantalla.
 - **Badge de estado** (cita pendiente de pago, confirmada, cancelada, pago aprobado): base clara teñida del color del estado con texto oscuro de su familia.
 - **Estados vacíos y de carga:** monograma más una acción, y skeleton en lugar de spinners.
 - **Estado sin conexión:** mensaje claro y botón Reintentar.
@@ -51,7 +59,7 @@ Se reconstruyen con las herramientas de React Native (Reanimated, Gesture Handle
 
 ## 6. Layout
 - Una sola columna, ritmo de 4px, márgenes laterales consistentes.
-- Navegación principal por pestañas inferiores del cliente: Inicio, Citas, Carrito (al centro, con el número de piezas), Tienda y Perfil. Notificaciones se abre con la campana de Inicio como pantalla propia con Atrás.
+- Navegación principal por pestañas inferiores del cliente: Inicio, Citas, Carrito (al centro, con el número de piezas), Tienda y Perfil. La barra toma el papel de la franja vino de navegación de la web: fondo vino en los dos temas, íconos y etiquetas en marfil, y la pestaña activa dentro de una pastilla translúcida (marfil al 16 % con anillo marfil sólido de 1px, para llegar a 3:1) y con la etiqueta en un peso mayor. Notificaciones se abre con la campana de Inicio como pantalla propia con Atrás.
 - Respetar las áreas seguras del dispositivo (barra de estado y barra de navegación).
 - Objetivos táctiles de al menos 48dp. Sin scroll horizontal de pantalla.
 
@@ -63,4 +71,4 @@ Se reconstruyen con las herramientas de React Native (Reanimated, Gesture Handle
 - Si el sistema pide reducir movimiento, se conservan opacidad y color, se elimina el desplazamiento y las piezas de marca quedan en su composición estática.
 
 ## 8. Prohibido
-Emojis o glifos Unicode como íconos, eyebrows, texto con gradiente, brillos de neón, negro puro, bordes laterales de color de más de 1px en tarjetas o avisos, filas de tres tarjetas iguales como estructura de marketing, imágenes de relleno, animar desde escala 0, colores o medidas escritos fuera de los tokens, y datos inventados en pantallas de producción.
+Emojis o glifos Unicode como íconos, eyebrows sobre títulos de pantalla, texto con gradiente, brillos de neón, negro puro, bordes laterales de color de más de 1px en tarjetas o avisos, filas de tres tarjetas iguales como estructura de marketing, imágenes de relleno, animar desde escala 0, colores escritos fuera de `colores.ts` o medidas fuera de `tokens.ts`, y datos inventados en pantallas de producción.

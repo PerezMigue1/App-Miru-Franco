@@ -17,7 +17,6 @@ import {
   sombra,
   tipo,
   toqueMinimo,
-  tracking,
 } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
@@ -209,11 +208,11 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: espacio.s,
   },
+  // Título en Geist 600 como las tarjetas de la web (no Playfair).
   servicio: {
-    fontFamily: fuente.titulo,
-    fontSize: tipo.subtitulo.tamano,
-    lineHeight: tipo.subtitulo.linea,
-    letterSpacing: tracking.subtitulo,
+    fontFamily: fuente.textoFuerte,
+    fontSize: tipo.tituloTarjeta.tamano,
+    lineHeight: tipo.tituloTarjeta.linea,
   },
   dato: {
     flexDirection: 'row',

@@ -64,7 +64,11 @@ export default function CheckoutView() {
 
   return (
     <View style={[styles.raiz, { backgroundColor: colores.fondo }]}>
-      <EncabezadoVolver titulo="Finalizar compra" onVolver={vm.atras} />
+      <EncabezadoVolver
+        titulo="Finalizar compra"
+        subtitulo="Sigue los pasos para completar tu compra"
+        onVolver={vm.atras}
+      />
 
       {vm.estado === 'cargando' ? (
         <View

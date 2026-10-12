@@ -14,9 +14,9 @@ import {
   insignia,
   radio,
   sombra,
+  tarjetas,
   tipo,
   toqueMinimo,
-  tracking,
 } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
@@ -164,18 +164,18 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: espacio.m,
   },
+  // Título en Geist 600 como las tarjetas de la web (no Playfair).
   numero: {
     flexShrink: 1,
-    fontFamily: fuente.titulo,
-    fontSize: tipo.subtitulo.tamano,
-    lineHeight: tipo.subtitulo.linea,
-    letterSpacing: tracking.subtitulo,
+    fontFamily: fuente.textoFuerte,
+    fontSize: tipo.tituloTarjeta.tamano,
+    lineHeight: tipo.tituloTarjeta.linea,
     fontVariant: ['tabular-nums'],
   },
   total: {
-    fontFamily: fuente.textoFuerte,
-    fontSize: tipo.cuerpo.tamano,
-    lineHeight: tipo.cuerpo.linea,
+    fontFamily: fuente.textoNegrita,
+    fontSize: tarjetas.tipoTotal.tamano,
+    lineHeight: tarjetas.tipoTotal.linea,
     fontVariant: ['tabular-nums'],
   },
   dato: {

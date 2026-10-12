@@ -7,6 +7,7 @@ import { Button } from '@/shared/ui/Button';
 import { EmptyState } from '@/shared/ui/EmptyState';
 import { Hoja } from '@/shared/ui/Hoja';
 import { useEntradaContenido } from '@/shared/ui/movimiento';
+import { TituloPagina } from '@/shared/ui/CabeceraCompacta';
 import { ScreenHeader } from '@/shared/ui/ScreenHeader';
 import { borde, espacio, fuente, pantalla, tipo } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
@@ -17,6 +18,8 @@ import { formatoPrecio } from '../models/productoModel';
 import { useCarritoViewModel } from '../viewmodels/useCarritoViewModel';
 
 const ESQUELETOS = [0, 1, 2];
+const TITULO = 'Carrito';
+const SUBTITULO = 'Revisa tus productos antes de finalizar la compra';
 
 /**
  * Pestaña Carrito: productos con su cantidad, total y el paso a finalizar la compra. Como pestaña
@@ -44,6 +47,8 @@ export default function CarritoView() {
 
   const porQuitar = vm.porQuitar;
   const conItems = vm.estado === 'listo' && vm.items.length > 0;
+  // Con la lista a la vista, el título va dentro de ella y se desplaza (el pie del total es fijo).
+  const conLista = vm.conSesion && conItems;
 
   let cuerpo: ReactNode;
   if (vm.sesionCargando || (vm.conSesion && vm.estado === 'cargando')) {
@@ -97,6 +102,11 @@ export default function CarritoView() {
           renderItem={renderItem}
           contentContainerStyle={styles.lista}
           keyboardShouldPersistTaps="handled"
+          ListHeaderComponent={
+            <View style={styles.tituloEnLista}>
+              <TituloPagina titulo={TITULO} subtitulo={SUBTITULO} />
+            </View>
+          }
         />
       </Animated.View>
     );
@@ -104,7 +114,7 @@ export default function CarritoView() {
 
   return (
     <View style={[styles.raiz, { backgroundColor: colores.fondo }]}>
-      <ScreenHeader titulo="Carrito" />
+      <ScreenHeader titulo={TITULO} subtitulo={SUBTITULO} tituloEnContenido={conLista} />
       <View style={styles.flex}>{cuerpo}</View>
 
       {vm.conSesion && conItems ? (
@@ -168,6 +178,10 @@ const styles = StyleSheet.create({
     gap: espacio.m,
     paddingHorizontal: pantalla.margen,
     paddingBottom: espacio.xxl,
+  },
+  // TituloPagina ya trae el margen lateral de la pantalla: dentro de la lista se compensa.
+  tituloEnLista: {
+    marginHorizontal: -pantalla.margen,
   },
   estado: {
     flexGrow: 1,

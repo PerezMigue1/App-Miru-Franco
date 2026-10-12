@@ -69,7 +69,11 @@ export default function MisCitasView() {
 
   return (
     <View style={[styles.raiz, { backgroundColor: colores.fondo }]}>
-      <EncabezadoVolver titulo="Mis citas" onVolver={regresar} />
+      <EncabezadoVolver
+        titulo="Mis citas"
+        subtitulo="Gestiona todas tus citas agendadas"
+        onVolver={regresar}
+      />
       <ScrollView
         style={{ backgroundColor: colores.fondo }}
         contentContainerStyle={{ paddingBottom: bottom + espacio.x3 }}

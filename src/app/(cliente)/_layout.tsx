@@ -7,52 +7,29 @@ import {
   UserRound,
   type LucideIcon,
 } from 'lucide-react-native';
-import { Easing, Text, type ColorValue } from 'react-native';
+import { Easing, Text } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { usePiezasCarrito } from '@/features/tienda/viewmodels/usePiezasCarrito';
-import {
-  borde,
-  curva,
-  duracion,
-  fuente,
-  icono,
-  pestanas,
-  tiendaCatalogo,
-  tipo,
-} from '@/shared/ui/tokens';
+import { BotonPestana, IconoPestana, estiloIconoPestana } from '@/shared/ui/PestanaFranja';
+import { curva, duracion, franja, fuente, pestanas, tipo } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
 function iconoDe(Icono: LucideIcon) {
-  return function IconoPestana({ color }: { color: ColorValue }) {
-    return (
-      <Icono
-        color={typeof color === 'string' ? color : undefined}
-        size={icono.tamano}
-        strokeWidth={icono.trazo}
-      />
-    );
+  return function IconoDePestana({ focused }: { focused: boolean }) {
+    return <IconoPestana Icono={Icono} activo={focused} />;
   };
 }
 
 const iconoInicio = iconoDe(House);
 const iconoCitas = iconoDe(CalendarDays);
 // Carrito con el carrito de súper y Tienda con el escaparate: siluetas distintas que no se confunden.
-const iconoCarrito = iconoDe(ShoppingCart);
 const iconoTienda = iconoDe(Store);
 const iconoPerfil = iconoDe(UserRound);
 
-/** Cifra del número del Carrito: sin número con 0 piezas o sin sesión; "99+" arriba de 99. */
-function cifraPiezas(piezas: number): string | undefined {
-  if (piezas <= 0) {
-    return undefined;
-  }
-  return piezas > tiendaCatalogo.maximoPiezasVisibles
-    ? `${tiendaCatalogo.maximoPiezasVisibles}+`
-    : String(piezas);
-}
-
 export default function ClienteLayout() {
   const { colores } = useTheme();
+  const insets = useSafeAreaInsets();
   // 0 sin sesión: la pestaña queda sin número.
   const piezas = usePiezasCarrito();
 
@@ -68,27 +45,29 @@ export default function ClienteLayout() {
           config: { duration: duracion.pestana, easing: Easing.bezier(...curva.salida) },
         },
         sceneStyle: { backgroundColor: colores.fondo },
-        // Cromo como el footer de la web: carbón con oro en la pestaña activa (4.88:1 en claro y
-        // 6.68:1 en oscuro) y marfil o blanco al 70 % en las demás (8.25:1 y 9.22:1).
+        // Franja vino de la web en los dos temas, con íconos y etiquetas en marfil (10.85:1).
         tabBarActiveTintColor: colores.iconoActivo,
         tabBarInactiveTintColor: colores.iconoInactivo,
         tabBarStyle: {
           backgroundColor: colores.barraFondo,
-          // Filete blanco al 7 % (--blanco-07): separa la barra sin pesar sobre el carbón.
-          borderTopColor: colores.hairlineCromo,
-          borderTopWidth: borde.hairline,
+          // Sin filete arriba: el vino ya separa la barra del contenido en claro y en oscuro.
+          borderTopWidth: 0,
+          height: franja.altoBarra + insets.bottom,
         },
-        tabBarItemStyle: { minHeight: pestanas.altoItem, paddingVertical: pestanas.relleno },
+        tabBarItemStyle: { minHeight: pestanas.altoItem },
+        tabBarIconStyle: estiloIconoPestana,
+        // Pastilla translúcida en la activa y marfil al 12 % al presionar, sin onda de Android.
+        tabBarButton: BotonPestana,
         // Una sola línea: si el sistema agranda la fuente, la etiqueta se encoge en lugar de cortarse.
         tabBarLabel: ({ focused, children }) => (
           <Text
             numberOfLines={1}
             adjustsFontSizeToFit
             minimumFontScale={pestanas.escalaMinimaEtiqueta}
+            maxFontSizeMultiplier={franja.escalaMaximaEtiqueta}
             style={{
-              // Etiqueta activa en oro sobre carbón, como el ícono; inactiva en marfil al 70 %.
               color: focused ? colores.textoActivo : colores.iconoInactivo,
-              // La pestaña activa no depende solo del color: también sube de peso.
+              // La pastilla contra el vino da 1.38:1: la activa también se distingue por el peso.
               fontFamily: focused ? fuente.textoFuerte : fuente.textoMedio,
               fontSize: tipo.pestana.tamano,
               lineHeight: tipo.pestana.linea,
@@ -105,19 +84,11 @@ export default function ClienteLayout() {
         name="carrito"
         options={{
           title: 'Carrito',
-          tabBarIcon: iconoCarrito,
-          tabBarBadge: cifraPiezas(piezas),
-          // Cifra carbón sobre círculo oro: 4.88:1 en claro y 6.68:1 en oscuro.
-          tabBarBadgeStyle: {
-            backgroundColor: colores.iconoActivo,
-            color: colores.barraFondo,
-            fontFamily: fuente.textoFuerte,
-            fontSize: tiendaCatalogo.cifraPastilla.tamano,
-            fontVariant: ['tabular-nums'],
-          },
-          // El número vive en un círculo de alto fijo: no crece con la fuente del sistema para no
-          // cortarse. TalkBack lo lee completo en la etiqueta de la pestaña.
-          tabBarAllowFontScaling: false,
+          // Contador vino con contorno marfil sobre el ícono; sin número con 0 piezas o sin sesión.
+          tabBarIcon: ({ focused }) => (
+            <IconoPestana Icono={ShoppingCart} activo={focused} contador={piezas} />
+          ),
+          // TalkBack lee el número completo en la etiqueta de la pestaña, no en el contador.
           tabBarAccessibilityLabel:
             piezas > 0 ? `Carrito, ${piezas === 1 ? '1 pieza' : `${piezas} piezas`}` : 'Carrito',
         }}

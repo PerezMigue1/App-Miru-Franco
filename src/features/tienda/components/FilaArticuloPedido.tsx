@@ -59,7 +59,7 @@ const styles = StyleSheet.create({
     gap: espacio.xxs,
   },
   nombre: {
-    fontFamily: fuente.textoMedio,
+    fontFamily: fuente.textoFuerte,
     fontSize: tipo.cuerpo.tamano,
     lineHeight: tipo.cuerpo.linea,
   },
@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   subtotal: {
-    fontFamily: fuente.textoFuerte,
+    fontFamily: fuente.textoNegrita,
     fontSize: tipo.cuerpo.tamano,
     lineHeight: tipo.cuerpo.linea,
     fontVariant: ['tabular-nums'],

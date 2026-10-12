@@ -3,7 +3,16 @@ import { Pressable, StyleSheet, Text, View, type AccessibilityActionEvent } from
 import Animated from 'react-native-reanimated';
 
 import { usePresion } from '@/shared/ui/movimiento';
-import { borde, espacio, fuente, icono, opacidad, radio, tipo, toqueMinimo } from '@/shared/ui/tokens';
+import {
+  borde,
+  controles,
+  fuente,
+  icono,
+  opacidad,
+  radio,
+  tipo,
+  toqueMinimo,
+} from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
 interface SelectorCantidadProps {
@@ -18,8 +27,9 @@ interface SelectorCantidadProps {
 }
 
 /**
- * Cantidad con botones de menos y más de 48dp, en el mismo lenguaje que los campos (fondo y borde de
- * campo). Para el lector de pantalla es un control ajustable: se sube y se baja deslizando.
+ * Cantidad como el carrito de la web: dos botones cuadrados con contorno ("Quitar uno" y "Agregar
+ * uno") y la cifra en una caja aparte con el aspecto de .mf-campo, separados 6. Para el lector de
+ * pantalla es un solo control ajustable: se sube y se baja deslizando.
  */
 export function SelectorCantidad({
   valor,
@@ -61,19 +71,23 @@ export function SelectorCantidad({
       accessibilityState={{ disabled: deshabilitado }}
       accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
       onAccessibilityAction={alAccion}
-      style={[
-        styles.selector,
-        { backgroundColor: colores.campoFondo, borderColor: colores.campoBorde },
-        deshabilitado ? styles.deshabilitado : null,
-      ]}
+      style={[styles.selector, deshabilitado ? styles.deshabilitado : null]}
     >
       <BotonPaso Icono={Minus} activo={puedeBajar} onPress={() => cambiar(-1)} />
-      <Text style={[styles.valor, { color: colores.campoTexto }]}>{valor}</Text>
+      <View
+        style={[
+          styles.caja,
+          { backgroundColor: colores.campoFondo, borderColor: colores.campoBorde },
+        ]}
+      >
+        <Text style={[styles.valor, { color: colores.campoTexto }]}>{valor}</Text>
+      </View>
       <BotonPaso Icono={Plus} activo={puedeSubir} onPress={() => cambiar(1)} />
     </View>
   );
 }
 
+/** Botón cuadrado con contorno (Button outline de la web): se hunde a 0.97 al tocarlo. */
 function BotonPaso({ Icono, activo, onPress }: { Icono: LucideIcon; activo: boolean; onPress: () => void }) {
   const { colores } = useTheme();
   const { estilo, hundir, soltar } = usePresion();
@@ -88,8 +102,14 @@ function BotonPaso({ Icono, activo, onPress }: { Icono: LucideIcon; activo: bool
       onPressOut={soltar}
       style={activo ? null : styles.pasoInactivo}
     >
-      <Animated.View style={[styles.paso, estilo]}>
-        <Icono color={colores.campoTexto} size={icono.tamanoPequeno} strokeWidth={icono.trazoMarca} />
+      <Animated.View
+        style={[
+          styles.paso,
+          { borderColor: colores.contorno, backgroundColor: colores.transparente },
+          estilo,
+        ]}
+      >
+        <Icono color={colores.contorno} size={controles.iconoCantidad} strokeWidth={icono.trazo} />
       </Animated.View>
     </Pressable>
   );
@@ -100,8 +120,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: borde.entrada,
-    borderRadius: radio.pastilla,
+    gap: controles.separacionCantidad,
   },
   // Mismo lenguaje que un campo deshabilitado (.mf-campo:disabled 0.55).
   deshabilitado: {
@@ -112,14 +131,24 @@ const styles = StyleSheet.create({
     height: toqueMinimo,
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: radio.campo,
+    borderWidth: borde.campo,
   },
+  // Tope alcanzado: como el Button deshabilitado de la web (opacidad 0.5).
   pasoInactivo: {
     opacity: opacidad.deshabilitado,
   },
+  caja: {
+    width: controles.cajaCantidad,
+    height: toqueMinimo,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radio.campo,
+    borderWidth: borde.entrada,
+  },
   valor: {
-    minWidth: espacio.x3,
     textAlign: 'center',
-    fontFamily: fuente.textoFuerte,
+    fontFamily: fuente.textoNegrita,
     fontSize: tipo.cuerpo.tamano,
     lineHeight: tipo.cuerpo.linea,
     fontVariant: ['tabular-nums'],

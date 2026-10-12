@@ -13,9 +13,11 @@ import {
   opacidad,
   radio,
   sombra,
+  tarjetas,
   tienda,
   tipo,
   toqueMinimo,
+  tracking,
 } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
@@ -84,6 +86,7 @@ export const FilaCarrito = memo(function FilaCarrito({
           accessible
           accessibilityLabel={[
             nombre,
+            item.marca,
             item.tamanio,
             `${unitario} cada uno`,
             `${item.cantidad} ${item.cantidad === 1 ? 'pieza' : 'piezas'}`,
@@ -93,6 +96,12 @@ export const FilaCarrito = memo(function FilaCarrito({
             .filter(Boolean)
             .join(', ')}
         >
+          {item.marca ? (
+            // Marca en mayúsculas sobre el nombre, como la categoría de las tarjetas (4.8:1 sobre terracota).
+            <Text numberOfLines={1} style={[styles.marca, { color: colores.textoSuave }]}>
+              {item.marca}
+            </Text>
+          ) : null}
           <Text numberOfLines={2} style={[styles.nombre, { color: colores.texto }]}>
             {nombre}
           </Text>
@@ -217,6 +226,13 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: espacio.xxs,
   },
+  marca: {
+    fontFamily: fuente.textoFuerte,
+    fontSize: tipo.categoria.tamano,
+    lineHeight: tipo.categoria.linea,
+    letterSpacing: tracking.categoria,
+    textTransform: 'uppercase',
+  },
   nombre: {
     fontFamily: fuente.textoFuerte,
     fontSize: tipo.cuerpo.tamano,
@@ -259,10 +275,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: espacio.m,
   },
+  // Total de la línea en Geist 700 18, como el carrito de la web.
   total: {
-    fontFamily: fuente.textoFuerte,
-    fontSize: tipo.subtitulo.tamano,
-    lineHeight: tipo.subtitulo.linea,
+    fontFamily: fuente.textoNegrita,
+    fontSize: tarjetas.tipoTotal.tamano,
+    lineHeight: tarjetas.tipoTotal.linea,
     fontVariant: ['tabular-nums'],
   },
   error: {

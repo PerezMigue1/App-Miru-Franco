@@ -67,7 +67,11 @@ export default function ReprogramarCitaView() {
 
   return (
     <View style={[styles.raiz, { backgroundColor: colores.fondo }]}>
-      <EncabezadoVolver titulo="Reprogramar cita" onVolver={vm.regresar} />
+      <EncabezadoVolver
+        titulo="Reprogramar cita"
+        subtitulo="Selecciona una nueva fecha y hora para tu cita"
+        onVolver={vm.regresar}
+      />
 
       {vm.estado === 'cargando' ? (
         <View
