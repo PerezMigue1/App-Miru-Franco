@@ -9,7 +9,6 @@ import {
 
 import { fotosDeServicios, type FotoGaleria } from '../models/FotoModel';
 import { seleccionarFluidos, type FluidoHero } from '../models/FluidoModel';
-import { obtenerProductos } from '../models/inicioService';
 
 export type EstadoInicio = 'cargando' | 'listo' | 'error';
 
@@ -20,7 +19,10 @@ export interface InicioViewModel {
   estado: EstadoInicio;
   fluidos: FluidoHero[];
   fotos: FotoGaleria[];
-  /** Estado del carrusel de productos: va aparte para que un fallo del catálogo no tumbe el inicio. */
+  /**
+   * Estado del catálogo (hero y carrusel de productos): va aparte para que un fallo del catálogo no
+   * tumbe la galería ni los servicios; sin catálogo, el hero queda sin nombre ni precio.
+   */
   estadoProductos: EstadoInicio;
   /** Hasta 6 productos con existencias, al azar en cada carga. */
   productosDestacados: ProductoCatalogo[];
@@ -43,8 +45,9 @@ function elegirAlAzar<T>(lista: T[], cantidad: number): T[] {
 }
 
 /**
- * Lecturas públicas del inicio: nombre y precio de los fluidos del hero, fotos de la galería y los
- * carruseles de productos y servicios.
+ * Lecturas públicas del inicio: el catálogo de productos (una sola vez: de ahí salen el nombre y el
+ * precio de los fluidos del hero y el carrusel de productos) y los servicios (fotos de la galería y
+ * carrusel de servicios).
  */
 export function useInicioViewModel(): InicioViewModel {
   const [estado, setEstado] = useState<EstadoInicio>('cargando');
@@ -62,12 +65,11 @@ export function useInicioViewModel(): InicioViewModel {
     const id = solicitud.current;
     setEstado('cargando');
     setEstadoProductos('cargando');
-    Promise.all([obtenerProductos(), obtenerServicios()])
-      .then(([productos, servicios]) => {
+    obtenerServicios()
+      .then((servicios) => {
         if (id !== solicitud.current) {
           return;
         }
-        setFluidos(seleccionarFluidos(productos));
         setFotos(fotosDeServicios(servicios));
         setServiciosDestacados(
           elegirAlAzar(
@@ -82,13 +84,14 @@ export function useInicioViewModel(): InicioViewModel {
           setEstado('error');
         }
       });
-    // El catálogo de la tienda trae las presentaciones (existencias, precio original y marca) que
-    // necesita la tarjeta de producto; la lectura del hero no las trae.
+    // Una sola lectura de /api/productos: el catálogo trae lo que piden el hero (nombre y precio de
+    // los fluidos) y la tarjeta de producto (presentaciones, existencias y marca).
     obtenerCatalogo()
       .then((catalogo) => {
         if (id !== solicitud.current) {
           return;
         }
+        setFluidos(seleccionarFluidos(catalogo));
         setProductosDestacados(
           elegirAlAzar(
             catalogo.filter((producto) => !estaAgotado(producto)),

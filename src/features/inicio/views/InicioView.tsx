@@ -97,7 +97,8 @@ export default function InicioView() {
         {altoVisible > 0 ? (
           <HeroFluidos
             fluidos={fluidos}
-            cargando={estado === 'cargando'}
+            // Nombre y precio de los fluidos salen del catálogo: su esqueleto sigue al catálogo.
+            cargando={estadoProductos === 'cargando'}
             desplazamiento={desplazamiento}
             altoVisible={altoVisible}
             altoCabecera={altoCabecera}

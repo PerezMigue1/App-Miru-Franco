@@ -65,10 +65,10 @@ export default function TiendaView() {
     [anchoTarjeta, abrirProducto],
   );
 
-  // El carrito tiene su propia pestaña: la cabecera de la Tienda solo lleva el título.
+  // El carrito tiene su propia pestaña: la cabecera de Productos solo lleva el título.
   const encabezadoPantalla = (
     <ScreenHeader
-      titulo="Tienda"
+      titulo="Productos"
       subtitulo="Explora nuestro catálogo de productos profesionales"
     />
   );
