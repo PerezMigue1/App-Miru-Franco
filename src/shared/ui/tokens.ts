@@ -297,6 +297,15 @@ export const duracion = {
   cuentaRegresiva: 1000,
   /** Sesión móvil: el acceso se renueva antes de salir si le falta menos que esto para vencer. */
   margenRenovacion: 60000,
+  /** Confirmación del pedido: cada cuánto se consulta el estado del pago mientras está pendiente. */
+  consultaPago: 3000,
+  /** Confirmación del pedido: tiempo máximo de consultas seguidas del estado del pago. */
+  limiteConsultaPago: 45000,
+  /**
+   * Tras volver de Mercado Pago, cuánto se sigue consultando un pago que todavía no aparece
+   * (sin_pago): tres consultas. Un pago aprobado aparece casi siempre en la primera.
+   */
+  limiteConsultaSinPago: 9000,
 } as const;
 
 /** Intervalo de lectura del giroscopio. */
@@ -477,9 +486,18 @@ export const colorSticker = {
   papel: paleta.crema,
 } as const;
 
-/** Tienda: columnas de la cuadrícula de productos. */
+/** Tienda (GP-06.4): catálogo, carrito y pedidos. */
 export const tienda = {
+  /** Columnas de la cuadrícula de productos. */
   columnas: 2,
+  /** Tarjetas que dibuja el skeleton mientras carga el catálogo. */
+  tarjetasEsqueleto: 6,
+  /** Lado de la foto cuadrada de una fila del carrito o de un pedido. */
+  miniatura: 72,
+  /** Ancho / alto de la foto de la tarjeta y de la galería del detalle (cuadradas). */
+  proporcionFoto: 1,
+  /** Diámetro del punto que marca la foto actual de la galería. */
+  puntoGaleria: 8,
 } as const;
 
 /** Galería: mosaico de 4 columnas por 3 filas por cada 7 fotos. */
@@ -566,4 +584,26 @@ export const confirmacion = {
 export const cancelacion = {
   /** Caracteres máximos del motivo escrito con la opción "Otro". */
   largoMotivo: 200,
+} as const;
+
+/** Catálogo y detalle de productos de la tienda (GP-06.4). */
+export const tiendaCatalogo = {
+  /** Lado mínimo de la pastilla con las piezas del carrito sobre el ícono de la Tienda. */
+  pastillaCarrito: 20,
+  /** Ancho del punto de la foto actual de la galería: pastilla más larga que los demás puntos. */
+  puntoActivo: 20,
+  /** Diámetro de la viñeta de las características del producto. */
+  vineta: 6,
+  /** Cifra más alta que muestra la pastilla del carrito; arriba de ella se lee "99+". */
+  maximoPiezasVisibles: 99,
+  /** Cifra dentro de la pastilla del carrito: cabe en los 20dp de alto. */
+  cifraPastilla: { tamano: 11, linea: 14 },
+} as const;
+
+/** Carrito, checkout y confirmación del pedido (GP-06.4). */
+export const tiendaCompra = {
+  /** Diámetro del círculo de la opción de pago tipo radio. */
+  radioOpcion: 22,
+  /** Diámetro del punto que marca la opción de pago elegida. */
+  puntoOpcion: 10,
 } as const;

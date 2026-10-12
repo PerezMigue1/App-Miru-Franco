@@ -76,6 +76,7 @@ export interface PerfilViewModel {
   // Navegación
   editarPerfil: () => void;
   abrirMisCitas: () => void;
+  abrirMisPedidos: () => void;
   cambiarContrasena: () => void;
   abrirAviso: () => void;
   cerrarSesion: () => void;
@@ -366,6 +367,7 @@ export function usePerfilViewModel(): PerfilViewModel {
     },
     editarPerfil: () => push('/editar-perfil'),
     abrirMisCitas: () => push('/mis-citas' as Href),
+    abrirMisPedidos: () => push('/mis-pedidos' as Href),
     cambiarContrasena: () => push('/cambiar-contrasena'),
     abrirAviso,
     // Mientras una foto se sube o se quita, no se cierra la sesión; si no, se confirma antes.

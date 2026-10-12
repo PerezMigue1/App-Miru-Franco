@@ -187,8 +187,7 @@ function ContenidoConSesion({ perfil }: { perfil: PerfilViewModel }) {
 
       <Grupo titulo="Tu actividad">
         <ListRow icono={CalendarDays} titulo="Mis citas" onPress={perfil.abrirMisCitas} />
-        {/* TODO(GP-06.3): abrir el historial de pedidos de la tienda. */}
-        <ListRow icono={Package} titulo="Mis pedidos" detalle="Disponible pronto" deshabilitada />
+        <ListRow icono={Package} titulo="Mis pedidos" onPress={perfil.abrirMisPedidos} />
       </Grupo>
     </>
   );
