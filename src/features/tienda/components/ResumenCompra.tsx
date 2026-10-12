@@ -26,8 +26,8 @@ interface ResumenCompraProps {
 
 /**
  * Tarjeta con los artículos de una compra (nombre, tamaño por cantidad y subtotal) y el total. La
- * usan el último paso del checkout y la confirmación del pedido. Texto principal sobre la tarjeta:
- * el suave no llega a 4.5:1 sobre terracota.
+ * usan el último paso del checkout y la confirmación del pedido. Nombre, subtotal y total en el
+ * principal; tamaño, cantidad y etiquetas en el secundario (4.8:1 sobre terracota).
  */
 export function ResumenCompra({ lineas, totalCentavos, encabezado, children }: ResumenCompraProps) {
   const { colores } = useTheme();
@@ -51,7 +51,7 @@ export function ResumenCompra({ lineas, totalCentavos, encabezado, children }: R
             >
               <View style={styles.textos}>
                 <Text style={[styles.nombre, { color: colores.texto }]}>{linea.nombre || 'Producto'}</Text>
-                <Text style={[styles.detalle, styles.cifra, { color: colores.texto }]}>{detalle}</Text>
+                <Text style={[styles.detalle, styles.cifra, { color: colores.textoSuave }]}>{detalle}</Text>
               </View>
               <Text style={[styles.subtotal, styles.cifra, { color: colores.texto }]}>{subtotal}</Text>
             </View>
@@ -76,7 +76,7 @@ export function DatoCompra({ etiqueta, valor }: { etiqueta: string; valor: strin
   const { colores } = useTheme();
   return (
     <View style={styles.dato} accessible accessibilityLabel={`${etiqueta}: ${valor}`}>
-      <Text style={[styles.etiquetaDato, { color: colores.texto }]}>{etiqueta}</Text>
+      <Text style={[styles.etiquetaDato, { color: colores.textoSuave }]}>{etiqueta}</Text>
       <Text style={[styles.valorDato, { color: colores.texto }]}>{valor}</Text>
     </View>
   );

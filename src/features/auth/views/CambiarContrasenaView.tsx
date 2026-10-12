@@ -145,7 +145,7 @@ export default function CambiarContrasenaView() {
               </>
             ) : (
               <>
-                <Text style={[styles.texto, { color: colores.texto }]}>{instrucciones}</Text>
+                <Text style={[styles.parrafo, { color: colores.texto }]}>{instrucciones}</Text>
                 <OtpInput
                   ref={ref('codigo')}
                   etiqueta="Código de verificación"
@@ -156,7 +156,7 @@ export default function CambiarContrasenaView() {
                 />
                 <Aviso tipo="exito" texto={vm.avisoExito} />
                 <Aviso tipo="error" texto={vm.aviso} />
-                <Text style={[styles.nota, { color: colores.textoSuave }]}>
+                <Text style={[styles.parrafo, { color: colores.textoSuave }]}>
                   Al cambiarla se cerrará tu sesión en todos tus dispositivos; entra de nuevo con tu
                   contraseña nueva.
                 </Text>
@@ -212,10 +212,11 @@ const styles = StyleSheet.create({
   paso: {
     gap: espacio.xl,
   },
-  texto: {
+  // Instrucciones y aviso de varias líneas: interlineado de párrafo (1.625).
+  parrafo: {
     fontFamily: fuente.texto,
-    fontSize: tipo.cuerpo.tamano,
-    lineHeight: tipo.cuerpo.linea,
+    fontSize: tipo.parrafo.tamano,
+    lineHeight: tipo.parrafo.linea,
   },
   nota: {
     fontFamily: fuente.texto,

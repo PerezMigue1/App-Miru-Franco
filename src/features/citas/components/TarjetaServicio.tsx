@@ -75,16 +75,16 @@ export function TarjetaServicio({ servicio, onPress }: TarjetaServicioProps) {
             {servicio.nombre}
           </Text>
           {servicio.categoria ? (
-            // Texto principal y no el suave: el suave sobre terracota no llega a 4.5:1.
-            <Text numberOfLines={1} style={[styles.categoria, { color: colores.texto }]}>
+            // Categoría en el secundario, como la tienda de la web (4.8:1 sobre terracota).
+            <Text numberOfLines={1} style={[styles.categoria, { color: colores.textoSuave }]}>
               {servicio.categoria}
             </Text>
           ) : null}
           <View style={styles.linea}>
             {servicio.duracion ? (
               <View style={styles.duracion}>
-                <Clock color={colores.texto} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
-                <Text style={[styles.dato, styles.cifra, { color: colores.texto }]}>
+                <Clock color={colores.textoSuave} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
+                <Text style={[styles.dato, styles.cifra, { color: colores.textoSuave }]}>
                   {servicio.duracion}
                 </Text>
               </View>

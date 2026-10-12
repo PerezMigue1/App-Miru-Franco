@@ -96,8 +96,8 @@ export const TarjetaProducto = memo(function TarjetaProducto({
             {producto.nombre}
           </Text>
           {secundario ? (
-            // Texto principal y no el suave: el suave sobre terracota no llega a 4.5:1.
-            <Text numberOfLines={1} style={[styles.secundario, { color: colores.texto }]}>
+            // Marca o categoría en el secundario, como TarjetaCatalogo de la web (4.8:1 sobre terracota).
+            <Text numberOfLines={1} style={[styles.secundario, { color: colores.textoSuave }]}>
               {secundario}
             </Text>
           ) : null}

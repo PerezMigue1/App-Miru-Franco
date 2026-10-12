@@ -199,7 +199,7 @@ function PasoFormaPago({ vm }: { vm: CheckoutViewModel }) {
         />
       </View>
       <View collapsable={false} accessibilityLiveRegion="polite">
-        <Text style={[styles.cuerpo, styles.cifra, { color: colores.texto }]}>{nota}</Text>
+        <Text style={[styles.parrafo, styles.cifra, { color: colores.texto }]}>{nota}</Text>
       </View>
     </>
   );
@@ -267,6 +267,12 @@ const styles = StyleSheet.create({
     fontFamily: fuente.texto,
     fontSize: tipo.cuerpo.tamano,
     lineHeight: tipo.cuerpo.linea,
+  },
+  // Aviso extenso de la forma de pago: interlineado de párrafo largo.
+  parrafo: {
+    fontFamily: fuente.texto,
+    fontSize: tipo.parrafo.tamano,
+    lineHeight: tipo.parrafo.linea,
   },
   cifra: {
     fontVariant: ['tabular-nums'],

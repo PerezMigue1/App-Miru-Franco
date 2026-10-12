@@ -74,8 +74,8 @@ export function TarjetaEspecialista({ especialista, seleccionada, onPress }: Tar
             {especialista.nombre}
           </Text>
           {especialista.puesto ? (
-            // Texto principal y no el suave: el suave sobre terracota no llega a 4.5:1.
-            <Text numberOfLines={2} style={[styles.puesto, { color: colores.texto }]}>
+            // Puesto en el secundario (4.8:1 sobre terracota en claro y en oscuro).
+            <Text numberOfLines={2} style={[styles.puesto, { color: colores.textoSuave }]}>
               {especialista.puesto}
             </Text>
           ) : null}

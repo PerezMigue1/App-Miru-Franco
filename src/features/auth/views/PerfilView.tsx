@@ -195,7 +195,7 @@ function ContenidoConSesion({ perfil }: { perfil: PerfilViewModel }) {
 
 /** Avatar con la foto o el monograma; mientras se sube o se quita, muestra la carga encima. */
 function Avatar({ foto, ocupada, onPress }: { foto: string | null; ocupada: boolean; onPress: () => void }) {
-  const { colores, oscuro } = useTheme();
+  const { colores } = useTheme();
   const { estilo: estiloPresion, hundir, soltar } = usePresion();
   return (
     <Pressable
@@ -229,7 +229,8 @@ function Avatar({ foto, ocupada, onPress }: { foto: string | null; ocupada: bool
           <View
             style={[
               styles.insignia,
-              { backgroundColor: colores.accion, borderColor: oscuro ? colores.oro : colores.fondo },
+              // Anillo --oro-grande: 3.7:1 sobre lino y 6.7:1 sobre carbón; separa el vino del fondo.
+              { backgroundColor: colores.accion, borderColor: colores.oroGrande },
             ]}
           >
             <Camera color={colores.textoSobreAccion} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
@@ -342,8 +343,8 @@ const styles = StyleSheet.create({
   },
   textoPermiso: {
     fontFamily: fuente.texto,
-    fontSize: tipo.pequeno.tamano,
-    lineHeight: tipo.pequeno.linea,
+    fontSize: tipo.parrafo.tamano,
+    lineHeight: tipo.parrafo.linea,
   },
   grupo: {
     gap: espacio.s,

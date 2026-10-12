@@ -268,7 +268,7 @@ function ExplicacionAnticipo({
             <Text style={[styles.textoFuerte, { color: colores.texto }]}>{limite}</Text>
           </View>
         ) : null}
-        {/* Texto principal y no el suave: el suave sobre terracota no llega a 4.5:1. */}
+        {/* Aviso que explica una consecuencia: va en el principal, no en el secundario. */}
         <Text style={[styles.cuerpo, { color: colores.texto }]}>
           Si el anticipo no se paga a tiempo, la cita se cancela sola.
         </Text>
@@ -379,10 +379,11 @@ const styles = StyleSheet.create({
     lineHeight: tipo.cuerpo.linea,
     fontVariant: ['tabular-nums'],
   },
+  // Notas, motivo y explicaciones del anticipo: párrafos con interlineado 1.625.
   cuerpo: {
     fontFamily: fuente.texto,
-    fontSize: tipo.cuerpo.tamano,
-    lineHeight: tipo.cuerpo.linea,
+    fontSize: tipo.parrafo.tamano,
+    lineHeight: tipo.parrafo.linea,
   },
   seccion: {
     gap: espacio.s,

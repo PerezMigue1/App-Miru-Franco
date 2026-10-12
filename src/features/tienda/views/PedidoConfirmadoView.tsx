@@ -229,7 +229,7 @@ function Contenido({ vm, pedido }: { vm: PedidoConfirmadoViewModel; pedido: Pedi
               <Text style={[styles.numeroPedido, { color: colores.texto }]}>Pedido #{pedido.id}</Text>
               <BadgePedido pedido={pedido} />
             </View>
-            {fecha ? <Text style={[styles.fecha, { color: colores.texto }]}>{fecha}</Text> : null}
+            {fecha ? <Text style={[styles.fecha, { color: colores.textoSuave }]}>{fecha}</Text> : null}
           </View>
         }
       >

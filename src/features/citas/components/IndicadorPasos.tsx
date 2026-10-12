@@ -78,7 +78,9 @@ export function IndicadorPasos({ pasos, actual, ref }: IndicadorPasosProps) {
               <Text
                 style={[
                   styles.etiqueta,
-                  { color: marcado ? colores.texto : colores.textoSuave },
+                  // Como PasosFlujo de la web: solo el paso actual en el color de texto principal (y
+                  // en 600); los hechos y los pendientes en el secundario (8.9:1 en claro, 6:1 en oscuro).
+                  { color: esActual ? colores.texto : colores.textoSuave },
                   esActual ? styles.etiquetaActual : null,
                 ]}
               >
@@ -128,6 +130,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   etiquetaActual: {
-    fontFamily: fuente.textoMedio,
+    fontFamily: fuente.textoFuerte,
   },
 });

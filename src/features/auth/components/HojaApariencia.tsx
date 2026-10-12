@@ -41,7 +41,7 @@ export function HojaApariencia({ visible, preferencia, onElegir, onCerrar }: Hoj
             >
               <View style={styles.textos}>
                 <Text style={[styles.etiqueta, { color: colores.texto }]}>{opcion.etiqueta}</Text>
-                <Text style={[styles.detalle, { color: colores.textoSuave }]}>{opcion.detalle}</Text>
+                <Text style={[styles.detalle, { color: colores.textoCuerpo }]}>{opcion.detalle}</Text>
               </View>
               {elegida ? (
                 <Check color={colores.foco} size={icono.tamanoPequeno} strokeWidth={icono.trazoMarca} />

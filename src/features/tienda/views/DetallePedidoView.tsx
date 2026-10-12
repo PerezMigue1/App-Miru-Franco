@@ -145,9 +145,10 @@ function Contenido({
         {fecha ? (
           <View style={styles.filaIcono} accessible accessibilityLabel={`Pedido hecho el ${fecha}`}>
             <View style={styles.iconoLinea}>
-              <CalendarDays color={colores.texto} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
+              <CalendarDays color={colores.textoSuave} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
             </View>
-            <Text style={[styles.cuerpo, { color: colores.texto }]}>Hecho el {fecha}</Text>
+            {/* Fecha en el secundario: 8.9:1 sobre lino (6:1 sobre carbón en oscuro). */}
+            <Text style={[styles.cuerpo, { color: colores.textoSuave }]}>Hecho el {fecha}</Text>
           </View>
         ) : null}
       </View>
@@ -157,7 +158,7 @@ function Contenido({
           <Text accessibilityRole="header" style={[styles.tituloTarjeta, { color: colores.texto }]}>
             Qué sigue
           </Text>
-          <Text style={[styles.cuerpo, { color: colores.texto }]}>{queSigue}</Text>
+          <Text style={[styles.parrafo, { color: colores.texto }]}>{queSigue}</Text>
           {pagar ? (
             <>
               {limite ? (
@@ -195,7 +196,7 @@ function Contenido({
         >
           <View>
             <Text style={[styles.etiquetaMonto, { color: colores.texto }]}>Total</Text>
-            <Text style={[styles.detalle, { color: colores.texto }]}>{textoPiezas(pedido.piezas)}</Text>
+            <Text style={[styles.detalle, { color: colores.textoSuave }]}>{textoPiezas(pedido.piezas)}</Text>
           </View>
           <Text style={[styles.cifra, { color: colores.texto }]}>{total}</Text>
         </View>
@@ -388,6 +389,12 @@ const styles = StyleSheet.create({
     fontSize: tipo.cuerpo.tamano,
     lineHeight: tipo.cuerpo.linea,
     fontVariant: ['tabular-nums'],
+  },
+  // "Qué sigue": párrafo de dos o tres líneas con interlineado de párrafo largo.
+  parrafo: {
+    fontFamily: fuente.texto,
+    fontSize: tipo.parrafo.tamano,
+    lineHeight: tipo.parrafo.linea,
   },
   acciones: {
     marginTop: espacio.s,

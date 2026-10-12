@@ -130,7 +130,8 @@ export function Hoja({ visible, onCerrar, titulo, texto, children }: HojaProps) 
             <Text accessibilityRole="header" style={[styles.titulo, { color: colores.texto }]}>
               {titulo}
             </Text>
-            {texto ? <Text style={[styles.texto, { color: colores.textoSuave }]}>{texto}</Text> : null}
+            {/* Texto de cuerpo de la web (--texto-cuerpo, como .mf-dialogo): 8.9:1 en claro y 10.2:1 en oscuro. */}
+            {texto ? <Text style={[styles.texto, { color: colores.textoCuerpo }]}>{texto}</Text> : null}
           </View>
           <DentroDeHoja.Provider value>{children}</DentroDeHoja.Provider>
         </Animated.View>

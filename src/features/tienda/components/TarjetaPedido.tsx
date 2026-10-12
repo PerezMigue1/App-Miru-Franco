@@ -91,14 +91,14 @@ export const TarjetaPedido = memo(function TarjetaPedido({ pedido, onAbrir }: Ta
             {fecha ? (
               <View style={styles.dato}>
                 <View style={styles.iconoDato}>
-                  <CalendarDays color={colores.texto} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
+                  <CalendarDays color={colores.textoSuave} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
                 </View>
-                {/* Texto principal y no el suave: el suave sobre terracota no llega a 4.5:1. */}
-                <Text style={[styles.textoDato, { color: colores.texto }]}>{fecha}</Text>
+                {/* Fecha, piezas y pago en el secundario (4.8:1 sobre terracota en los dos temas). */}
+                <Text style={[styles.textoDato, { color: colores.textoSuave }]}>{fecha}</Text>
               </View>
             ) : null}
 
-            <Text style={[styles.textoDato, { color: colores.texto }]}>
+            <Text style={[styles.textoDato, { color: colores.textoSuave }]}>
               {piezas} · {pago}
             </Text>
 

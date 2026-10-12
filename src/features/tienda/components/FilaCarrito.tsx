@@ -97,9 +97,9 @@ export const FilaCarrito = memo(function FilaCarrito({
             {nombre}
           </Text>
           {item.tamanio ? (
-            <Text style={[styles.detalle, { color: colores.texto }]}>{item.tamanio}</Text>
+            <Text style={[styles.detalle, { color: colores.textoSuave }]}>{item.tamanio}</Text>
           ) : null}
-          <Text style={[styles.detalle, styles.cifra, { color: colores.texto }]}>{unitario} c/u</Text>
+          <Text style={[styles.detalle, styles.cifra, { color: colores.textoSuave }]}>{unitario} c/u</Text>
           {aviso ? (
             <View style={styles.aviso}>
               <CircleAlert

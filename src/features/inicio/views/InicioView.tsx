@@ -108,7 +108,7 @@ export default function InicioView() {
         )}
 
         <View style={styles.galeria}>
-          <Text accessibilityRole="header" style={[styles.titulo, { color: colores.texto }]}>
+          <Text accessibilityRole="header" style={[styles.titulo, { color: colores.textoSuave }]}>
             Nuestro trabajo
           </Text>
           <ContenidoGaleria estado={estado} fotos={fotos} onReintentar={recargar} />
@@ -121,13 +121,13 @@ export default function InicioView() {
           styles.cabecera,
           {
             paddingTop: top + cabecera.relleno,
-            backgroundColor: colores.fondo,
-            borderBottomColor: colores.hairline,
+            backgroundColor: colores.panel,
+            shadowColor: colores.sombraTarjeta,
           },
         ]}
       >
         {conSesion ? (
-          <BotonIcono icono={UserRound} etiqueta="Abrir perfil" onPress={abrirPerfil} />
+          <BotonIcono icono={UserRound} etiqueta="Abrir perfil" onPress={abrirPerfil} sobrePanel />
         ) : (
           <Pressable
             accessibilityRole="button"
@@ -136,17 +136,18 @@ export default function InicioView() {
             onPressIn={presionAcceso.hundir}
             onPressOut={presionAcceso.soltar}
           >
-            {({ pressed }) => (
-              <Animated.View
-                style={[
-                  styles.botonTexto,
-                  { backgroundColor: pressed ? colores.presionado : colores.transparente },
-                  presionAcceso.estilo,
-                ]}
-              >
-                <Text style={[styles.textoBoton, { color: colores.foco }]}>Iniciar sesión</Text>
-              </Animated.View>
-            )}
+            {/* Como el botón de la cabecera web: fondo --hover y texto claro (4.9:1 y 5.5:1). */}
+            <Animated.View
+              style={[
+                styles.botonTexto,
+                { backgroundColor: colores.accionPresionado },
+                presionAcceso.estilo,
+              ]}
+            >
+              <Text style={[styles.textoBoton, { color: colores.textoSobrePanel }]}>
+                Iniciar sesión
+              </Text>
+            </Animated.View>
           </Pressable>
         )}
         <SearchBar
@@ -154,7 +155,12 @@ export default function InicioView() {
           accessibilityHint="Abre la tienda"
           onPress={buscar}
         />
-        <BotonIcono icono={Bell} etiqueta="Abrir notificaciones" onPress={abrirNotificaciones} />
+        <BotonIcono
+          icono={Bell}
+          etiqueta="Abrir notificaciones"
+          onPress={abrirNotificaciones}
+          sobrePanel
+        />
       </View>
 
       {sesionVencida ? (
@@ -191,13 +197,16 @@ function BotonIcono({
   onPress,
   color,
   tamano = icono.tamano,
+  sobrePanel = false,
 }: {
   icono: LucideIcon;
   etiqueta: string;
   onPress: () => void;
-  /** Por omisión, el color del texto. */
+  /** Por omisión, el color del texto (o el del texto sobre el panel, en la cabecera). */
   color?: string;
   tamano?: number;
+  /** Va sobre el cromo carbón de la cabecera: ícono claro y presionado de cromo. */
+  sobrePanel?: boolean;
 }) {
   const { colores } = useTheme();
   const { estilo, hundir, soltar } = usePresion();
@@ -213,11 +222,21 @@ function BotonIcono({
         <Animated.View
           style={[
             styles.botonIcono,
-            { backgroundColor: pressed ? colores.presionado : colores.transparente },
+            {
+              backgroundColor: pressed
+                ? sobrePanel
+                  ? colores.presionadoCromo
+                  : colores.presionado
+                : colores.transparente,
+            },
             estilo,
           ]}
         >
-          <Icono color={color ?? colores.texto} size={tamano} strokeWidth={icono.trazo} />
+          <Icono
+            color={color ?? (sobrePanel ? colores.textoSobrePanel : colores.texto)}
+            size={tamano}
+            strokeWidth={icono.trazo}
+          />
         </Animated.View>
       )}
     </Pressable>
@@ -265,7 +284,11 @@ const styles = StyleSheet.create({
     gap: espacio.xs,
     paddingHorizontal: pantalla.margen - espacio.s,
     paddingBottom: cabecera.relleno,
-    borderBottomWidth: borde.hairline,
+    // Sin filete: como la cabecera web, se separa del contenido con sombra.
+    shadowOpacity: sombra.tarjeta.opacidad,
+    shadowRadius: sombra.tarjeta.radio,
+    shadowOffset: { width: 0, height: sombra.tarjeta.desplazamientoY },
+    elevation: sombra.tarjeta.elevacion,
   },
   botonIcono: {
     width: toqueMinimo,
@@ -302,7 +325,8 @@ const styles = StyleSheet.create({
   botonTexto: {
     minHeight: toqueMinimo,
     justifyContent: 'center',
-    paddingHorizontal: espacio.s,
+    // Con relleno de color, el texto necesita más aire a los lados que el botón de solo texto.
+    paddingHorizontal: espacio.m,
     borderRadius: radio.pastilla,
   },
   textoBoton: {

@@ -185,7 +185,7 @@ function Mitad({ lado, ancho, alto }: { lado: Lado; ancho: number; alto: number 
           y={cy}
           dy={intro.letra * intro.ajusteBase}
           textAnchor="middle"
-          fontFamily={fuente.titulo}
+          fontFamily={fuente.monograma}
           fontSize={intro.letra}
           letterSpacing={tracking.monograma}
           fill={paleta.oro}

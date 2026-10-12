@@ -50,10 +50,11 @@ const styles = StyleSheet.create({
     letterSpacing: tracking.subtitulo,
     textAlign: 'center',
   },
+  // Párrafo explicativo: interlineado 1.625 de la web para que respire al centrarse en varias líneas.
   mensaje: {
     fontFamily: fuente.texto,
-    fontSize: tipo.cuerpo.tamano,
-    lineHeight: tipo.cuerpo.linea,
+    fontSize: tipo.parrafo.tamano,
+    lineHeight: tipo.parrafo.linea,
     textAlign: 'center',
   },
   accion: {

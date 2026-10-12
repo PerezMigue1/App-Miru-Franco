@@ -181,7 +181,7 @@ function Contenido({ producto, vm }: { producto: ProductoCatalogo; vm: DetallePr
             <View accessible={false} importantForAccessibility="no-hide-descendants">
               <Rabbit color={colores.oro} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
             </View>
-            <Text style={[styles.dato, { color: colores.texto }]}>Cruelty free</Text>
+            <Text style={[styles.dato, { color: colores.textoSuave }]}>Cruelty free</Text>
           </View>
         ) : null}
       </View>
@@ -204,7 +204,7 @@ function Contenido({ producto, vm }: { producto: ProductoCatalogo; vm: DetallePr
       ) : null}
 
       <View style={styles.grupoCompacto}>
-        <Text style={[styles.dato, { color: colores.texto }]}>{vm.textoExistencias}</Text>
+        <Text style={[styles.dato, { color: colores.textoSuave }]}>{vm.textoExistencias}</Text>
       </View>
 
       {comprable && presentacion ? (
@@ -572,10 +572,11 @@ const styles = StyleSheet.create({
     lineHeight: tipo.subtitulo.linea,
     letterSpacing: tracking.subtitulo,
   },
+  // Descripción, modo de uso, ingredientes y resultado: párrafos largos con interlineado 1.625.
   cuerpo: {
     fontFamily: fuente.texto,
-    fontSize: tipo.cuerpo.tamano,
-    lineHeight: tipo.cuerpo.linea,
+    fontSize: tipo.parrafo.tamano,
+    lineHeight: tipo.parrafo.linea,
   },
   cuerpoFlexible: {
     flex: 1,

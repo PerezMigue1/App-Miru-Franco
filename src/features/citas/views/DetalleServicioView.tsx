@@ -456,10 +456,11 @@ const styles = StyleSheet.create({
     lineHeight: tipo.subtitulo.linea,
     letterSpacing: tracking.subtitulo,
   },
+  // Descripción del servicio: párrafo largo con interlineado 1.625.
   cuerpo: {
     fontFamily: fuente.texto,
-    fontSize: tipo.cuerpo.tamano,
-    lineHeight: tipo.cuerpo.linea,
+    fontSize: tipo.parrafo.tamano,
+    lineHeight: tipo.parrafo.linea,
   },
   lista: {
     gap: espacio.s,

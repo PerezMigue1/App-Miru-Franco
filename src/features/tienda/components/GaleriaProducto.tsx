@@ -134,8 +134,14 @@ function Puntos({ total, activo }: { total: number; activo: number }) {
           style={[
             styles.punto,
             transicionSeleccion,
+            // Activo en oroGrande: los puntos van bajo la foto, sobre el fondo de la pantalla
+            // (3.7:1 sobre lino; 6.7:1 sobre carbón en oscuro). El oro de marca solo da 2.8:1.
             i === activo
-              ? { width: tiendaCatalogo.puntoActivo, backgroundColor: colores.oro, borderColor: colores.oro }
+              ? {
+                  width: tiendaCatalogo.puntoActivo,
+                  backgroundColor: colores.oroGrande,
+                  borderColor: colores.oroGrande,
+                }
               : { backgroundColor: colores.fondo, borderColor: colores.textoSuave },
           ]}
         />

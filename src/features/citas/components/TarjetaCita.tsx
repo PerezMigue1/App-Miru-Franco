@@ -130,7 +130,8 @@ export const TarjetaCita = memo(function TarjetaCita({ cita, onPress, accion }: 
               ) : null}
             </View>
 
-            {limite ? <Dato Icono={Clock} texto={limite} /> : null}
+            {/* El plazo de pago pide acción: va en el principal y no en el secundario. */}
+            {limite ? <Dato Icono={Clock} texto={limite} principal /> : null}
           </View>
 
           <ChevronRight color={colores.texto} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
@@ -142,15 +143,24 @@ export const TarjetaCita = memo(function TarjetaCita({ cita, onPress, accion }: 
   );
 });
 
-function Dato({ Icono, texto }: { Icono: typeof Clock; texto: string }) {
+function Dato({
+  Icono,
+  texto,
+  principal = false,
+}: {
+  Icono: typeof Clock;
+  texto: string;
+  principal?: boolean;
+}) {
   const { colores } = useTheme();
+  // Especialista y fecha en el secundario (4.8:1 sobre terracota en claro y en oscuro).
+  const color = principal ? colores.texto : colores.textoSuave;
   return (
     <View style={styles.dato}>
       <View style={styles.iconoDato}>
-        <Icono color={colores.texto} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
+        <Icono color={color} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
       </View>
-      {/* Texto principal y no el suave: el suave sobre terracota no llega a 4.5:1. */}
-      <Text style={[styles.textoDato, { color: colores.texto }]}>{texto}</Text>
+      <Text style={[styles.textoDato, { color }]}>{texto}</Text>
     </View>
   );
 }

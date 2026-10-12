@@ -15,6 +15,11 @@ export const paleta = {
   vinoProfundo: '#600011', // --menu-texto-principal, --danger-texto (claro)
   oro: '#9f6d1f', // --logo-branding
   oroGrande: '#865a17', // --oro-grande (claro): oro para texto grande (3.7:1 sobre lino)
+  hover: '#A64B63', // --hover: vino claro del botón presionado (crema encima 4.9:1)
+  salvia: '#758764', // --boton-acento-bg: botón de acento (carbón encima 4.7:1)
+  giganteOscuro: '#c9a585', // --mf-gigante (oscuro), cliente.css: texto gigante del hero (7.9:1)
+  papel: '#f6efe6', // papel y tinta de los stickers del hero (StickersSalon de la web)
+  oroCalidoHero: '#a36b1f', // rgba(163, 107, 31) del radial de abajo de .hero-bg-gradient (claro)
   iconografia: '#BFA181', // --iconografia: solo decorativo (1.5:1 sobre lino)
   cafeSombra: '#3A1C0A', // rgba(58, 28, 10) de --mf-sombra-1 (claro): sombra tintada de café
   oroFoco: '#c4954d', // --mf-foco, --oro-sobre-carbon, --nav-activo-icono (oscuro)
@@ -62,6 +67,10 @@ const transparencias = {
   focoHaloOscuro: 'rgba(196, 149, 77, 0.22)', // halo del foco del campo: --mf-foco al 22 % (oscuro)
   activoClaro: 'rgba(113, 0, 20, 0.1)', // --nav-activo-bg (claro)
   activoOscuro: 'rgba(255, 255, 255, 0.08)', // --nav-activo-bg (oscuro)
+  marfil70: 'rgba(242, 241, 237, 0.7)', // --texto-fondo-oscuro-70 (claro) = --marfil-70
+  blanco70: 'rgba(255, 255, 255, 0.7)', // --texto-fondo-oscuro-70 (oscuro)
+  blanco07: 'rgba(255, 255, 255, 0.07)', // --blanco-07: filete sobre el cromo carbón
+  lemaHeroOscuro: 'rgba(242, 241, 237, 0.85)', // --hero-tagline-color (oscuro)
   velo: 'rgba(22, 22, 22, 0.55)', // .mf-velo: detrás de hojas y diálogos
   veloVisor: 'rgba(22, 22, 22, 0.92)', // --carbon-92: visor de fotos y botones sobre foto
   // --segmentado-borde (claro) y fondos que no se pintan (pressable en reposo, botón con borde).
@@ -75,10 +84,19 @@ export interface Colores {
   superficie: string;
   /** Superficies secundarias, marcos de imagen y skeletons. */
   superficieSecundaria: string;
+  /** Texto principal: el color del body de la web (--menu-texto-principal). */
   texto: string;
+  /** Texto secundario (--encabezados-alterno): también sobre terracota (4.8:1). */
   textoSuave: string;
+  /** Texto de cuerpo neutro (--texto-cuerpo): hojas, diálogos y chips del hero. */
+  textoCuerpo: string;
   /** Único acento de acción. */
   accion: string;
+  /** Fondo del botón primario mientras se presiona (--hover). */
+  accionPresionado: string;
+  /** Botón de acento (--boton-acento-bg) y su texto (--texto-sobre-acento). */
+  acento: string;
+  textoSobreAcento: string;
   textoSobreAccion: string;
   /** Botón secundario. */
   secundario: string;
@@ -89,9 +107,16 @@ export interface Colores {
   campoBorde: string;
   campoTexto: string;
   campoPlaceholder: string;
+  /** Cromo (cabecera y barra inferior): --header-footer, carbón en los dos temas. */
   barraFondo: string;
+  /** Ícono activo de la barra: oro sobre carbón (--oro-sobre-carbon). */
   iconoActivo: string;
+  /** Ícono y etiqueta inactivos de la barra: marfil al 70 % (--texto-fondo-oscuro-70). */
   iconoInactivo: string;
+  /** Filete superior de la barra inferior sobre el cromo (--blanco-07). */
+  hairlineCromo: string;
+  /** Fondo de un botón presionado sobre el cromo (--nav-hover-bg oscuro: blanco al 4 %). */
+  presionadoCromo: string;
   /** Panel de marca, placeholders de imagen y visor. */
   panel: string;
   textoSobrePanel: string;
@@ -124,6 +149,10 @@ export interface Colores {
   focoHalo: string;
   /** --info-texto. */
   info: string;
+  /** Texto gigante del hero (--mf-gigante). */
+  gigante: string;
+  /** Lema y párrafo del hero (--hero-tagline-color). */
+  lemaHero: string;
   /** --nav-activo-texto: etiqueta de la pestaña activa. */
   textoActivo: string;
   /** --nav-activo-bg: fondo de la opción de navegación activa. */
@@ -158,9 +187,13 @@ export const temaClaro: Colores = {
   fondo: paleta.lino,
   superficie: paleta.terracota,
   superficieSecundaria: paleta.arena,
-  texto: paleta.carbonClaro,
-  textoSuave: paleta.textoSecundario,
+  texto: paleta.vinoProfundo,
+  textoSuave: paleta.carbonClaro,
+  textoCuerpo: paleta.carbonClaro,
   accion: paleta.vino,
+  accionPresionado: paleta.hover,
+  acento: paleta.salvia,
+  textoSobreAcento: paleta.carbon,
   textoSobreAccion: paleta.crema,
   secundario: paleta.terracota,
   textoSobreSecundario: paleta.carbonClaro,
@@ -170,9 +203,11 @@ export const temaClaro: Colores = {
   campoBorde: paleta.bordeCampoClaro,
   campoTexto: paleta.vinoProfundo,
   campoPlaceholder: paleta.placeholderClaro,
-  barraFondo: paleta.lino,
-  iconoActivo: paleta.vino,
-  iconoInactivo: paleta.carbonClaro,
+  barraFondo: paleta.carbon,
+  iconoActivo: paleta.oroSobreCarbon,
+  iconoInactivo: transparencias.marfil70,
+  hairlineCromo: transparencias.blanco07,
+  presionadoCromo: transparencias.presionadoOscuro,
   panel: paleta.carbon,
   textoSobrePanel: paleta.crema,
   textoSuaveSobrePanel: transparencias.cremaSobreCarbon,
@@ -192,7 +227,9 @@ export const temaClaro: Colores = {
   hairlineFuerte: transparencias.lineaFuerteClaro,
   focoHalo: transparencias.focoHaloClaro,
   info: paleta.infoClaro,
-  textoActivo: paleta.vino,
+  gigante: paleta.vinoProfundo,
+  lemaHero: paleta.carbonClaro,
+  textoActivo: paleta.oroSobreCarbon,
   fondoActivo: transparencias.activoClaro,
   segmentadoBorde: transparencias.transparente,
   transparente: transparencias.transparente,
@@ -210,9 +247,13 @@ export const temaOscuro: Colores = {
   fondo: paleta.carbon,
   superficie: paleta.carbonClaro,
   superficieSecundaria: paleta.carbonMedio,
-  texto: transparencias.cremaCuerpo,
+  texto: paleta.blanco,
   textoSuave: paleta.terracota,
+  textoCuerpo: transparencias.cremaCuerpo,
   accion: paleta.vino,
+  accionPresionado: paleta.hover,
+  acento: paleta.salvia,
+  textoSobreAcento: paleta.carbon,
   textoSobreAccion: paleta.blanco,
   secundario: paleta.carbonClaro,
   textoSobreSecundario: paleta.crema,
@@ -222,9 +263,11 @@ export const temaOscuro: Colores = {
   campoBorde: paleta.bordeCampoOscuro,
   campoTexto: paleta.blanco,
   campoPlaceholder: paleta.placeholderOscuro,
-  barraFondo: paleta.carbonMedio,
+  barraFondo: paleta.carbon,
   iconoActivo: paleta.oroFoco,
-  iconoInactivo: paleta.terracota,
+  iconoInactivo: transparencias.blanco70,
+  hairlineCromo: transparencias.blanco07,
+  presionadoCromo: transparencias.presionadoOscuro,
   panel: paleta.carbon,
   textoSobrePanel: paleta.blanco,
   textoSuaveSobrePanel: transparencias.blancoSobreCarbon,
@@ -244,7 +287,9 @@ export const temaOscuro: Colores = {
   hairlineFuerte: transparencias.lineaFuerteOscuro,
   focoHalo: transparencias.focoHaloOscuro,
   info: paleta.infoOscuro,
-  textoActivo: paleta.blanco,
+  gigante: paleta.giganteOscuro,
+  lemaHero: transparencias.lemaHeroOscuro,
+  textoActivo: paleta.oroFoco,
   fondoActivo: transparencias.activoOscuro,
   segmentadoBorde: paleta.esqueletoOscuro,
   transparente: transparencias.transparente,
@@ -303,7 +348,10 @@ export const icono = {
 
 /** Familias cargadas en src/app/_layout.tsx con @expo-google-fonts. */
 export const fuente = {
-  titulo: 'PlayfairDisplay_600SemiBold',
+  /** Títulos: Playfair 700 como .mf-titulo-pagina de la web. */
+  titulo: 'PlayfairDisplay_700Bold',
+  /** Letras "MF" del monograma y de la intro de la grieta: se conservan en 600. */
+  monograma: 'PlayfairDisplay_600SemiBold',
   tituloFuerte: 'PlayfairDisplay_700Bold',
   texto: 'Geist_400Regular',
   textoMedio: 'Geist_500Medium',
@@ -316,8 +364,11 @@ export const tipo = {
   etiqueta: { tamano: 13, linea: 20 },
   /** Etiqueta de un campo de formulario (.mf-etiqueta: 15px, peso 500). */
   etiquetaCampo: { tamano: 15, linea: 22 },
-  pequeno: { tamano: 14, linea: 22 },
-  cuerpo: { tamano: 16, linea: 25 },
+  pequeno: { tamano: 14, linea: 21 },
+  /** Cuerpo: line-height 1.5 como el body de la web. */
+  cuerpo: { tamano: 16, linea: 24 },
+  /** Párrafos largos (descripciones, avisos extensos): line-height 1.625 de la web. */
+  parrafo: { tamano: 16, linea: 26 },
   subtitulo: { tamano: 20, linea: 28 },
   /** .mf-titulo-pagina: clamp(30px…) con interlineado 1.15; a 360dp mide 30. */
   titulo: { tamano: 30, linea: 35 },
@@ -578,11 +629,40 @@ export const stickers = {
 } as const;
 
 export const colorSticker = {
-  tijeras: { fondo: paleta.vino, tinta: paleta.crema },
-  destello: { fondo: paleta.oro, tinta: paleta.crema },
+  tijeras: { fondo: paleta.vino, tinta: paleta.papel },
+  destello: { fondo: paleta.oro, tinta: paleta.papel },
   gota: { fondo: colorFluido.hialuronico, tinta: paleta.vino },
   peine: { fondo: paleta.lino, tinta: paleta.vino },
-  papel: paleta.crema,
+  papel: paleta.papel,
+} as const;
+
+/**
+ * Fondo del hero de Inicio (.hero-bg-gradient de globals.css): un degradado vertical con dos
+ * resplandores elípticos. Posiciones en fracción del ancho y alto del escenario.
+ */
+export const fondoHero = {
+  claro: {
+    lineal: [
+      { posicion: 0, color: paleta.lino },
+      { posicion: 0.55, color: paleta.arena },
+      { posicion: 1, color: paleta.lino },
+    ],
+    base: paleta.lino,
+    // rgba(191, 161, 129, 0.25) y rgba(163, 107, 31, 0.12): color opaco y su opacidad aparte.
+    radialArriba: { color: paleta.iconografia, opacidad: 0.25 },
+    radialAbajo: { color: paleta.oroCalidoHero, opacidad: 0.12 },
+  },
+  oscuro: {
+    lineal: null,
+    base: paleta.carbon,
+    // rgba(113, 0, 20, 0.2) y rgba(113, 0, 20, 0.15).
+    radialArriba: { color: paleta.vino, opacidad: 0.2 },
+    radialAbajo: { color: paleta.vino, opacidad: 0.15 },
+  },
+  /** ellipse 80% 50% at 50% 0% y ellipse 60% 35% at 50% 70%; el color se apaga al 60 %. */
+  arriba: { cx: 0.5, cy: 0, rx: 0.8, ry: 0.5 },
+  abajo: { cx: 0.5, cy: 0.7, rx: 0.6, ry: 0.35 },
+  apagado: 0.6,
 } as const;
 
 /** Tienda (GP-06.4): catálogo, carrito y pedidos. */

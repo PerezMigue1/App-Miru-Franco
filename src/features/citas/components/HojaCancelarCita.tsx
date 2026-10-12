@@ -95,7 +95,7 @@ function Formulario({
         accessibilityLabel="Motivo de la cancelación"
         style={styles.motivos}
       >
-        <Text style={[styles.pregunta, { color: colores.texto }]}>¿Por qué cancelas?</Text>
+        <Text style={[styles.pregunta, { color: colores.textoCuerpo }]}>¿Por qué cancelas?</Text>
         {MOTIVOS.map((opcion) => {
           const elegida = opcion.clave === motivo;
           const Icono = elegida ? CircleDot : Circle;
@@ -117,7 +117,7 @@ function Formulario({
                 size={icono.tamano}
                 strokeWidth={icono.trazo}
               />
-              <Text style={[styles.etiqueta, { color: colores.texto }]}>{opcion.etiqueta}</Text>
+              <Text style={[styles.etiqueta, { color: colores.textoCuerpo }]}>{opcion.etiqueta}</Text>
             </Pressable>
           );
         })}

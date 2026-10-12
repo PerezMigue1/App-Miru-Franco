@@ -289,7 +289,8 @@ export function AuthContainer({
           <Animated.View
             style={[
               styles.indicador,
-              { width: anchoPestana, backgroundColor: colores.oro },
+              // --oro-grande: 3.7:1 sobre lino y 6.7:1 sobre carbón (indicador, mínimo 3:1).
+              { width: anchoPestana, backgroundColor: colores.oroGrande },
               estiloIndicador,
             ]}
           />
@@ -401,7 +402,7 @@ export function Encabezado({ titulo, texto }: { titulo: string; texto: string })
       <Text accessibilityRole="header" style={[styles.titulo, { color: colores.texto }]}>
         {titulo}
       </Text>
-      <Text style={[styles.texto, { color: colores.textoSuave }]}>{texto}</Text>
+      <Text style={[styles.parrafo, { color: colores.textoSuave }]}>{texto}</Text>
     </View>
   );
 }
@@ -1308,7 +1309,7 @@ export function Aviso({
           style={[styles.aviso, { borderColor: esError ? colores.peligro : colores.hairline }]}
         >
           <Icono color={esError ? colores.peligro : colores.foco} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
-          <Text style={[styles.texto, styles.textoAviso, { color }]}>{texto}</Text>
+          <Text style={[styles.parrafo, styles.textoAviso, { color }]}>{texto}</Text>
         </Animated.View>
       ) : null}
     </View>
@@ -1472,7 +1473,7 @@ function ContenidoSelector({
   }
   if (opciones.length === 0) {
     return (
-      <Text style={[styles.texto, { color: colores.textoSuave }]}>
+      <Text style={[styles.parrafo, { color: colores.textoCuerpo }]}>
         Todavía no hay preguntas de seguridad disponibles.
       </Text>
     );
@@ -1556,7 +1557,7 @@ export function Casilla({
             <Check color={colores.textoSobreAccion} size={icono.tamanoPequeno} strokeWidth={icono.trazoMarca} />
           ) : null}
         </Animated.View>
-        <Text style={[styles.texto, styles.textoCasilla, { color: colores.texto }]}>
+        <Text style={[styles.parrafo, styles.textoCasilla, { color: colores.texto }]}>
           {texto}
           {enlace ? (
             <>
@@ -1655,6 +1656,12 @@ const styles = StyleSheet.create({
     fontFamily: fuente.texto,
     fontSize: tipo.cuerpo.tamano,
     lineHeight: tipo.cuerpo.linea,
+  },
+  // Párrafos de varias líneas (apoyo del encabezado, avisos, consentimiento): interlineado 1.625.
+  parrafo: {
+    fontFamily: fuente.texto,
+    fontSize: tipo.parrafo.tamano,
+    lineHeight: tipo.parrafo.linea,
   },
   enlace: {
     minHeight: toqueMinimo,

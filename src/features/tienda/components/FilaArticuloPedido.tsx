@@ -10,8 +10,8 @@ import { textoPiezas } from '../models/productoModel';
 import { FotoProducto } from './FotoProducto';
 
 /**
- * Un artículo del pedido: miniatura, nombre, tamaño, "cantidad × precio" y subtotal. Todo el texto
- * en el color principal: va sobre la tarjeta terracota, donde el suave no llega a 4.5:1.
+ * Un artículo del pedido: miniatura, nombre, tamaño, "cantidad × precio" y subtotal. Nombre y
+ * subtotal en el principal; tamaño y cantidad en el secundario (4.8:1 sobre terracota).
  */
 export const FilaArticuloPedido = memo(function FilaArticuloPedido({ item }: { item: ItemPedido }) {
   const { colores } = useTheme();
@@ -32,9 +32,9 @@ export const FilaArticuloPedido = memo(function FilaArticuloPedido({ item }: { i
           {nombre}
         </Text>
         {item.tamanio ? (
-          <Text style={[styles.detalle, { color: colores.texto }]}>{item.tamanio}</Text>
+          <Text style={[styles.detalle, { color: colores.textoSuave }]}>{item.tamanio}</Text>
         ) : null}
-        <Text style={[styles.detalle, { color: colores.texto }]}>
+        <Text style={[styles.detalle, { color: colores.textoSuave }]}>
           {item.cantidad} × {precio}
         </Text>
       </View>

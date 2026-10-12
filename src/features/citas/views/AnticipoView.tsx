@@ -257,10 +257,11 @@ const styles = StyleSheet.create({
     lineHeight: tipo.subtitulo.linea,
     letterSpacing: tracking.subtitulo,
   },
+  // Introducción y avisos del pago: párrafos de dos o tres líneas con interlineado 1.625.
   intro: {
     fontFamily: fuente.texto,
-    fontSize: tipo.cuerpo.tamano,
-    lineHeight: tipo.cuerpo.linea,
+    fontSize: tipo.parrafo.tamano,
+    lineHeight: tipo.parrafo.linea,
   },
   monto: {
     flexDirection: 'row',
@@ -312,8 +313,8 @@ const styles = StyleSheet.create({
   },
   textoAviso: {
     fontFamily: fuente.texto,
-    fontSize: tipo.cuerpo.tamano,
-    lineHeight: tipo.cuerpo.linea,
+    fontSize: tipo.parrafo.tamano,
+    lineHeight: tipo.parrafo.linea,
   },
   filaAviso: {
     flexDirection: 'row',

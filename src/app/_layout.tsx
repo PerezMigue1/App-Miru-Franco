@@ -7,6 +7,7 @@ import {
 import { useFonts } from 'expo-font';
 import { Stack, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -15,6 +16,7 @@ import { HojaBienvenida } from '@/features/auth/components/HojaBienvenida';
 import { AuthProvider, useAuth } from '@/features/auth/viewmodels/useAuth';
 import { SesionRequeridaProvider } from '@/features/auth/viewmodels/useRequiereSesion';
 import { AparienciaProvider, useApariencia } from '@/shared/ui/apariencia';
+import { FondoBarraEstado } from '@/shared/ui/FondoBarraEstado';
 import { IntroGrieta } from '@/shared/ui/IntroGrieta';
 import { useTheme } from '@/shared/ui/useTheme';
 
@@ -76,6 +78,8 @@ function Navegacion({ fuentesListas }: { fuentesListas: boolean }) {
 
   return (
     <GestureHandlerRootView style={[styles.raiz, { backgroundColor: colores.fondo }]}>
+      {/* Íconos claros de la barra de estado en toda la app: siempre van sobre el cromo carbón. */}
+      <StatusBar style="light" />
       <SesionRequeridaProvider>
         <Stack
           screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colores.fondo } }}
@@ -120,6 +124,8 @@ function Navegacion({ fuentesListas }: { fuentesListas: boolean }) {
         </Stack>
         <HojaBienvenida introTerminada={introTerminada} />
       </SesionRequeridaProvider>
+      {/* Encima del Stack y debajo de la intro de la grieta (que ya es carbón). */}
+      <FondoBarraEstado />
       <IntroGrieta onTerminar={terminarIntro} />
     </GestureHandlerRootView>
   );

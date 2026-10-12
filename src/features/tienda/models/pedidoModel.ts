@@ -495,7 +495,7 @@ export function textoQueSigue(
 export function textoCancelarPedido(pedido: Pick<Pedido, 'estado' | 'metodoPago'>): string {
   const base = 'Se cancela tu pedido y los productos vuelven a la tienda. Esta acción no se puede deshacer.';
   return pedido.estado === 'pagado' && esPagoEnLinea(pedido)
-    ? `${base} Te devolvemos el pago completo a tu tarjeta con Mercado Pago. Puede tardar unos días en reflejarse, según tu banco.`
+    ? `${base} Te devolvemos el pago completo al mismo medio con que pagaste en Mercado Pago.`
     : base;
 }
 

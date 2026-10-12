@@ -15,7 +15,7 @@ interface DatosRecogerSalonProps {
 
 /**
  * Dónde y cuándo se recoge el pedido: nombre y ciudad del salón, horario y teléfono (mismos datos
- * que la web). Todo el texto va en el color principal: el suave no llega a 4.5:1 sobre terracota.
+ * que la web). Nombre, teléfono y aviso en el principal; dirección y horario en el secundario.
  */
 export function DatosRecogerSalon({ conAviso = false }: DatosRecogerSalonProps) {
   const { colores } = useTheme();
@@ -32,7 +32,8 @@ export function DatosRecogerSalon({ conAviso = false }: DatosRecogerSalonProps) 
         <MapPin color={colores.texto} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
         <View style={styles.textos}>
           <Text style={[styles.fuerte, { color: colores.texto }]}>{SALON_RECOGER.nombre}</Text>
-          <Text style={[styles.dato, { color: colores.texto }]}>{SALON_RECOGER.direccion}</Text>
+          {/* Dirección y horario en el secundario: 4.8:1 sobre terracota y 8.9:1 sobre lino. */}
+          <Text style={[styles.dato, { color: colores.textoSuave }]}>{SALON_RECOGER.direccion}</Text>
         </View>
       </View>
 
@@ -40,7 +41,7 @@ export function DatosRecogerSalon({ conAviso = false }: DatosRecogerSalonProps) 
         <Clock color={colores.texto} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
         <View style={styles.textos}>
           {SALON_RECOGER.horario.map((linea) => (
-            <Text key={linea} style={[styles.dato, { color: colores.texto }]}>
+            <Text key={linea} style={[styles.dato, { color: colores.textoSuave }]}>
               {linea}
             </Text>
           ))}

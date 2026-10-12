@@ -64,7 +64,7 @@ export function OpcionPago({
         </Animated.View>
         <View style={styles.textos}>
           <Text style={[styles.titulo, { color: colores.texto }]}>{titulo}</Text>
-          <Text style={[styles.descripcion, { color: colores.texto }]}>{descripcion}</Text>
+          <Text style={[styles.descripcion, { color: colores.textoSuave }]}>{descripcion}</Text>
         </View>
         <View accessible={false} importantForAccessibility="no-hide-descendants">
           <Icono color={colores.texto} size={icono.tamano} strokeWidth={icono.trazo} />

@@ -58,7 +58,7 @@ function avisoCancelado(reembolso: ReembolsoCancelacion | null): AvisoPedido {
       // Sin monto válido no se escribe "$0": se dice la devolución sin cifra.
       texto: `${MENSAJE_CANCELADO} Ya pedimos a Mercado Pago la devolución${
         reembolso.montoCentavos > 0 ? ` de ${formatoPrecio(reembolso.montoCentavos)}` : ''
-      } a tu tarjeta. Puede tardar unos días en reflejarse, según tu banco.`,
+      } al mismo medio con que pagaste. Puede tardar unos días en reflejarse, según tu banco.`,
     };
   }
   if (reembolso?.estado === 'en_revision') {

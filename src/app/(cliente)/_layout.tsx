@@ -1,5 +1,4 @@
 import { Tabs } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
 import {
   CalendarDays,
   House,
@@ -58,72 +57,73 @@ export default function ClienteLayout() {
   const piezas = usePiezasCarrito();
 
   return (
-    <>
-      <StatusBar style="auto" />
-      <Tabs
-        screenOptions={{
-          headerShown: false,
-          // Fundido corto, nunca deslizamiento: las pestañas son pares, no una jerarquía.
-          animation: 'fade',
-          transitionSpec: {
-            animation: 'timing',
-            config: { duration: duracion.pestana, easing: Easing.bezier(...curva.salida) },
+    // La barra de estado clara la fija el layout raíz para toda la app.
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        // Fundido corto, nunca deslizamiento: las pestañas son pares, no una jerarquía.
+        animation: 'fade',
+        transitionSpec: {
+          animation: 'timing',
+          config: { duration: duracion.pestana, easing: Easing.bezier(...curva.salida) },
+        },
+        sceneStyle: { backgroundColor: colores.fondo },
+        // Cromo como el footer de la web: carbón con oro en la pestaña activa (4.88:1 en claro y
+        // 6.68:1 en oscuro) y marfil o blanco al 70 % en las demás (8.25:1 y 9.22:1).
+        tabBarActiveTintColor: colores.iconoActivo,
+        tabBarInactiveTintColor: colores.iconoInactivo,
+        tabBarStyle: {
+          backgroundColor: colores.barraFondo,
+          // Filete blanco al 7 % (--blanco-07): separa la barra sin pesar sobre el carbón.
+          borderTopColor: colores.hairlineCromo,
+          borderTopWidth: borde.hairline,
+        },
+        tabBarItemStyle: { minHeight: pestanas.altoItem, paddingVertical: pestanas.relleno },
+        // Una sola línea: si el sistema agranda la fuente, la etiqueta se encoge en lugar de cortarse.
+        tabBarLabel: ({ focused, children }) => (
+          <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={pestanas.escalaMinimaEtiqueta}
+            style={{
+              // Etiqueta activa en oro sobre carbón, como el ícono; inactiva en marfil al 70 %.
+              color: focused ? colores.textoActivo : colores.iconoInactivo,
+              // La pestaña activa no depende solo del color: también sube de peso.
+              fontFamily: focused ? fuente.textoFuerte : fuente.textoMedio,
+              fontSize: tipo.pestana.tamano,
+              lineHeight: tipo.pestana.linea,
+            }}
+          >
+            {children}
+          </Text>
+        ),
+      }}
+    >
+      <Tabs.Screen name="inicio" options={{ title: 'Inicio', tabBarIcon: iconoInicio }} />
+      <Tabs.Screen name="citas" options={{ title: 'Citas', tabBarIcon: iconoCitas }} />
+      <Tabs.Screen
+        name="carrito"
+        options={{
+          title: 'Carrito',
+          tabBarIcon: iconoCarrito,
+          tabBarBadge: cifraPiezas(piezas),
+          // Cifra carbón sobre círculo oro: 4.88:1 en claro y 6.68:1 en oscuro.
+          tabBarBadgeStyle: {
+            backgroundColor: colores.iconoActivo,
+            color: colores.barraFondo,
+            fontFamily: fuente.textoFuerte,
+            fontSize: tiendaCatalogo.cifraPastilla.tamano,
+            fontVariant: ['tabular-nums'],
           },
-          sceneStyle: { backgroundColor: colores.fondo },
-          tabBarActiveTintColor: colores.iconoActivo,
-          tabBarInactiveTintColor: colores.iconoInactivo,
-          tabBarStyle: {
-            backgroundColor: colores.barraFondo,
-            borderTopColor: colores.hairline,
-            borderTopWidth: borde.hairline,
-          },
-          tabBarItemStyle: { minHeight: pestanas.altoItem, paddingVertical: pestanas.relleno },
-          // Una sola línea: si el sistema agranda la fuente, la etiqueta se encoge en lugar de cortarse.
-          tabBarLabel: ({ focused, children }) => (
-            <Text
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={pestanas.escalaMinimaEtiqueta}
-              style={{
-                // Etiqueta activa como --nav-activo-texto de la web (vino en claro, blanco en oscuro).
-                color: focused ? colores.textoActivo : colores.iconoInactivo,
-                // La pestaña activa no depende solo del color: también sube de peso.
-                fontFamily: focused ? fuente.textoFuerte : fuente.textoMedio,
-                fontSize: tipo.pestana.tamano,
-                lineHeight: tipo.pestana.linea,
-              }}
-            >
-              {children}
-            </Text>
-          ),
+          // El número vive en un círculo de alto fijo: no crece con la fuente del sistema para no
+          // cortarse. TalkBack lo lee completo en la etiqueta de la pestaña.
+          tabBarAllowFontScaling: false,
+          tabBarAccessibilityLabel:
+            piezas > 0 ? `Carrito, ${piezas === 1 ? '1 pieza' : `${piezas} piezas`}` : 'Carrito',
         }}
-      >
-        <Tabs.Screen name="inicio" options={{ title: 'Inicio', tabBarIcon: iconoInicio }} />
-        <Tabs.Screen name="citas" options={{ title: 'Citas', tabBarIcon: iconoCitas }} />
-        <Tabs.Screen
-          name="carrito"
-          options={{
-            title: 'Carrito',
-            tabBarIcon: iconoCarrito,
-            tabBarBadge: cifraPiezas(piezas),
-            // Colores de la barra: lino sobre vino (7.6:1) en claro y carbón medio sobre oro (6:1) en oscuro.
-            tabBarBadgeStyle: {
-              backgroundColor: colores.iconoActivo,
-              color: colores.barraFondo,
-              fontFamily: fuente.textoFuerte,
-              fontSize: tiendaCatalogo.cifraPastilla.tamano,
-              fontVariant: ['tabular-nums'],
-            },
-            // El número vive en un círculo de alto fijo: no crece con la fuente del sistema para no
-            // cortarse. TalkBack lo lee completo en la etiqueta de la pestaña.
-            tabBarAllowFontScaling: false,
-            tabBarAccessibilityLabel:
-              piezas > 0 ? `Carrito, ${piezas === 1 ? '1 pieza' : `${piezas} piezas`}` : 'Carrito',
-          }}
-        />
-        <Tabs.Screen name="tienda" options={{ title: 'Tienda', tabBarIcon: iconoTienda }} />
-        <Tabs.Screen name="perfil" options={{ title: 'Perfil', tabBarIcon: iconoPerfil }} />
-      </Tabs>
-    </>
+      />
+      <Tabs.Screen name="tienda" options={{ title: 'Tienda', tabBarIcon: iconoTienda }} />
+      <Tabs.Screen name="perfil" options={{ title: 'Perfil', tabBarIcon: iconoPerfil }} />
+    </Tabs>
   );
 }

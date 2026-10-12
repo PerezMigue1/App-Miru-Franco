@@ -288,13 +288,13 @@ function FilaCambio({
   const { colores } = useTheme();
   return (
     <View style={styles.filaCambio}>
-      {/* Texto principal y no el suave: el suave sobre terracota no llega a 4.5:1. */}
-      <Text style={[styles.etiquetaCambio, { color: colores.texto }]}>{etiqueta}:</Text>
+      {/* Etiqueta y horario anterior en el secundario (4.8:1 sobre terracota); el nuevo, en el principal. */}
+      <Text style={[styles.etiquetaCambio, { color: colores.textoSuave }]}>{etiqueta}:</Text>
       <Text
         style={[
           styles.valorCambio,
           destacada ? styles.valorDestacado : null,
-          { color: colores.texto },
+          { color: destacada ? colores.texto : colores.textoSuave },
         ]}
       >
         {valor}
