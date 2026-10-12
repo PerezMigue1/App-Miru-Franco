@@ -23,8 +23,6 @@ interface CabeceraCompactaProps {
   izquierda?: ReactNode;
   /** Acciones a la derecha: botones de 48 sobre el cromo (ver BotonCromo). */
   derecha?: ReactNode;
-  /** Muestra el monograma del logotipo (por omisión, sí). */
-  conMonograma?: boolean;
   /** Fila extra dentro del mismo cromo, bajo la principal (el buscador de Inicio). */
   debajo?: ReactNode;
   /** Estilo del contenedor (Inicio la fija arriba con sombra). */
@@ -40,7 +38,6 @@ interface CabeceraCompactaProps {
 export function CabeceraCompacta({
   izquierda,
   derecha,
-  conMonograma = true,
   debajo,
   style,
 }: CabeceraCompactaProps) {
@@ -59,7 +56,7 @@ export function CabeceraCompacta({
       >
         {izquierda ?? null}
         <View style={styles.marca}>
-          <Logotipo conMonograma={conMonograma} />
+          <Logotipo />
         </View>
         {derecha ? <View style={styles.acciones}>{derecha}</View> : null}
       </View>

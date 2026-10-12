@@ -1,13 +1,12 @@
-import { useIsFocused, useRouter } from 'expo-router';
-import { Bell, Info, UserRound, X, type LucideIcon } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
+import { useIsFocused, useRouter, type Href } from 'expo-router';
+import { Info, X, type LucideIcon } from 'lucide-react-native';
+import { useCallback, useEffect, useState } from 'react';
 import {
   AccessibilityInfo,
   Pressable,
   StyleSheet,
   Text,
   View,
-  useWindowDimensions,
   type LayoutChangeEvent,
 } from 'react-native';
 import Animated, { useAnimatedRef, useScrollOffset } from 'react-native-reanimated';
@@ -15,7 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Enlace } from '@/features/auth/components/AuthContainer';
 import { useAuth } from '@/features/auth/viewmodels/useAuth';
-import { useRequiereSesion } from '@/features/auth/viewmodels/useRequiereSesion';
+import { AccionesCabecera } from '@/shared/ui/AccionesCabecera';
 import { Button } from '@/shared/ui/Button';
 import { CabeceraCompacta } from '@/shared/ui/CabeceraCompacta';
 import { EmptyState } from '@/shared/ui/EmptyState';
@@ -39,20 +38,27 @@ import { useTheme } from '@/shared/ui/useTheme';
 
 import { GaleriaEsqueleto, GaleriaTrabajo } from '../components/GaleriaTrabajo';
 import { HeroFluidos } from '../components/HeroFluidos';
+import { CarruselProductos, CarruselServicios } from '../components/SeccionCarrusel';
 import type { FotoGaleria } from '../models/FotoModel';
 import { useInicioViewModel, type EstadoInicio } from '../viewmodels/useInicioViewModel';
 
 export default function InicioView() {
-  const { estado, fluidos, fotos, recargar } = useInicioViewModel();
+  const {
+    estado,
+    fluidos,
+    fotos,
+    estadoProductos,
+    productosDestacados,
+    serviciosDestacados,
+    recargar,
+  } = useInicioViewModel();
   const { colores } = useTheme();
   const { top } = useSafeAreaInsets();
   const reducido = useMovimientoReducido();
   const enfocada = useIsFocused();
   const { navigate, push } = useRouter();
   const { estado: estadoSesion, sesionVencida, descartarAvisoSesion } = useAuth();
-  const requiereSesion = useRequiereSesion();
   const conSesion = estadoSesion === 'autenticado';
-  const presionAcceso = usePresion();
 
   // El aviso de sesión vencida aparece de golpe junto con el cambio a Inicio: se anuncia aparte para
   // que TalkBack no lo pierda.
@@ -66,17 +72,22 @@ export default function InicioView() {
   const [altoVisible, setAltoVisible] = useState(0);
   // Cromo compacto (56) más la fila del buscador: el escenario del hero queda justo debajo.
   const altoCabecera = top + cabeceraCompacta.alto + cabeceraCompacta.filaBuscador;
-  const { width: anchoPantalla } = useWindowDimensions();
 
   const medir = (e: LayoutChangeEvent) => setAltoVisible(e.nativeEvent.layout.height);
 
   // TODO(GP-06): llevar al detalle del Fluido Di Goji en la tienda; por ahora abre la pestaña Tienda.
   const verGoji = () => navigate('/tienda');
+  // Estables: las filas memoizadas de los carruseles no se vuelven a pintar por ellas.
+  const abrirProducto = useCallback((id: number) => push(`/producto/${id}` as Href), [push]);
+  const abrirServicio = useCallback(
+    (id: string | number) => push(`/servicio/${encodeURIComponent(String(id))}` as Href),
+    [push],
+  );
+  const verTienda = useCallback(() => navigate('/tienda'), [navigate]);
+  // La pestaña se llama Servicios, pero su ruta es /citas.
+  const verServicios = useCallback(() => navigate('/citas'), [navigate]);
   // TODO(GP-06): abrir la búsqueda de productos y servicios; por ahora abre la pestaña Tienda.
   const buscar = () => navigate('/tienda');
-  const abrirPerfil = () => navigate('/perfil');
-  // Sin sesión, la campana abre la hoja de acceso.
-  const abrirNotificaciones = () => requiereSesion(() => navigate('/notificaciones'));
 
   return (
     <View style={[styles.raiz, { backgroundColor: colores.fondo }]}>
@@ -111,6 +122,19 @@ export default function InicioView() {
           </View>
         )}
 
+        <CarruselProductos
+          cargando={estadoProductos === 'cargando'}
+          productos={estadoProductos === 'listo' ? productosDestacados : []}
+          onAbrir={abrirProducto}
+          onVerTodos={verTienda}
+        />
+        <CarruselServicios
+          cargando={estado === 'cargando'}
+          servicios={estado === 'listo' ? serviciosDestacados : []}
+          onAbrir={abrirServicio}
+          onVerTodos={verServicios}
+        />
+
         <View style={styles.galeria}>
           <Text accessibilityRole="header" style={[styles.titulo, { color: colores.textoSuave }]}>
             Nuestro trabajo
@@ -124,45 +148,8 @@ export default function InicioView() {
           cromo: dentro del scroll movería el escenario fijo del hero. */}
       <CabeceraCompacta
         style={[styles.cabecera, { shadowColor: colores.sombraTarjeta }]}
-        // Sin sesión, "Iniciar sesión" ocupa el ancho del monograma: bajo 384dp se quita, como en la web.
-        conMonograma={conSesion || anchoPantalla >= cabeceraCompacta.anchoConMonograma}
-        derecha={
-          <>
-            <BotonIcono
-              icono={Bell}
-              etiqueta="Abrir notificaciones"
-              onPress={abrirNotificaciones}
-              sobrePanel
-            />
-            {conSesion ? (
-              <BotonIcono icono={UserRound} etiqueta="Abrir perfil" onPress={abrirPerfil} sobrePanel />
-            ) : (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Iniciar sesión"
-                onPress={() => push('/login')}
-                onPressIn={presionAcceso.hundir}
-                onPressOut={presionAcceso.soltar}
-              >
-                {/* Como el botón de la cabecera web: fondo --hover y texto claro (4.9:1 y 5.5:1). */}
-                <Animated.View
-                  style={[
-                    styles.botonTexto,
-                    { backgroundColor: colores.accionPresionado },
-                    presionAcceso.estilo,
-                  ]}
-                >
-                  <Text
-                    maxFontSizeMultiplier={cabeceraCompacta.escalaMaximaLogotipo}
-                    style={[styles.textoBoton, { color: colores.textoSobrePanel }]}
-                  >
-                    Iniciar sesión
-                  </Text>
-                </Animated.View>
-              </Pressable>
-            )}
-          </>
-        }
+        // Las mismas acciones de las demás pestañas: campana y foto (o "Iniciar sesión").
+        derecha={<AccionesCabecera />}
         debajo={
           <View style={styles.filaBuscador}>
             <SearchBar
@@ -332,18 +319,6 @@ const styles = StyleSheet.create({
     fontSize: tipo.subtitulo.tamano,
     lineHeight: tipo.subtitulo.linea,
     letterSpacing: tracking.subtitulo,
-  },
-  botonTexto: {
-    minHeight: toqueMinimo,
-    justifyContent: 'center',
-    // Con relleno de color, el texto necesita más aire a los lados que el botón de solo texto.
-    paddingHorizontal: espacio.m,
-    borderRadius: radio.pastilla,
-  },
-  textoBoton: {
-    fontFamily: fuente.textoFuerte,
-    fontSize: tipo.pequeno.tamano,
-    lineHeight: tipo.pequeno.linea,
   },
   avisoSesion: {
     position: 'absolute',

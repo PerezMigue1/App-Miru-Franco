@@ -9,10 +9,11 @@ import { useTheme } from './useTheme';
 
 /**
  * Pestañas de la barra inferior como la franja vino de navegación de la web (MenuHorizontal.tsx y
- * .mf-nav-pildora de cliente.css): la pestaña activa vive en una pastilla translúcida de marfil y
- * la presionada se aclara un poco. La pastilla envuelve solo al ícono, como el indicador de las
- * barras de Android: con cinco pestañas a 360 dp cada una mide 72 dp de ancho y una pastilla
- * horizontal con ícono y etiqueta (16 + 6 + "Carrito" en 14) pasaría de 90 dp.
+ * .mf-nav-pildora de cliente.css): la pestaña activa vive en una pastilla rosa (--hover, ícono
+ * marfil encima a 4.88:1) y la presionada se aclara un poco. La pastilla envuelve solo al ícono,
+ * como el indicador de las barras de Android: con cinco pestañas a 360 dp cada una mide 72 dp de
+ * ancho y una pastilla horizontal con ícono y etiqueta (16 + 6 + "Servicios" en 14) pasaría de
+ * 100 dp. La etiqueta queda debajo, marfil sobre el vino (10.85:1).
  */
 
 /** Si el botón de la pestaña está presionado: lo lee la pastilla, que vive dentro del botón. */

@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
 import { EmptyState } from '@/shared/ui/EmptyState';
+import { BotonFiltros } from '@/shared/ui/Filtros';
 import { FilaPastillas } from '@/shared/ui/FilaPastillas';
 import { PastillaFiltro } from '@/shared/ui/PastillaFiltro';
 import { transicionBorde, useEntradaContenido, usePresion } from '@/shared/ui/movimiento';
@@ -21,11 +22,15 @@ import {
 import { useTheme } from '@/shared/ui/useTheme';
 
 import type { CatalogoServiciosViewModel } from '../viewmodels/useCatalogoServiciosViewModel';
+import { HojaFiltrosServicios } from './HojaFiltrosServicios';
 import { TarjetaServicio, TarjetaServicioEsqueleto } from './TarjetaServicio';
 
 const ESQUELETOS = [0, 1, 2];
 
-/** Catálogo de servicios: buscador, filtro por categoría, estados de red y la lista de tarjetas. */
+/**
+ * Catálogo de servicios: buscador con el botón de filtros, categorías, estados de red y la lista
+ * de tarjetas en filas.
+ */
 export function ListaServicios({ catalogo }: { catalogo: CatalogoServiciosViewModel }) {
   const { push } = useRouter();
   const {
@@ -38,6 +43,15 @@ export function ListaServicios({ catalogo }: { catalogo: CatalogoServiciosViewMo
     categorias,
     serviciosVisibles,
     hayServicios,
+    filtrosActivos,
+    hojaFiltrosVisible,
+    borradorFiltros,
+    borradorActivos,
+    abrirFiltros,
+    cerrarFiltros,
+    cambiarBorrador,
+    aplicarFiltros,
+    limpiarFiltros,
   } = catalogo;
   // El catálogo aparece una sola vez al terminar de cargar (no en cada tarjeta).
   const entrada = useEntradaContenido();
@@ -74,7 +88,10 @@ export function ListaServicios({ catalogo }: { catalogo: CatalogoServiciosViewMo
   } else {
     contenido = (
       <Animated.View entering={entrada} style={styles.seccion}>
-        <Buscador valor={busqueda} onCambiar={setBusqueda} />
+        <View style={styles.filaBusqueda}>
+          <Buscador valor={busqueda} onCambiar={setBusqueda} />
+          <BotonFiltros activos={filtrosActivos} onPress={abrirFiltros} />
+        </View>
         <FilaPastillas>
           <PastillaFiltro
             texto="Todas"
@@ -92,7 +109,13 @@ export function ListaServicios({ catalogo }: { catalogo: CatalogoServiciosViewMo
             />
           ))}
         </FilaPastillas>
-        {serviciosVisibles.length === 0 ? (
+        {serviciosVisibles.length === 0 && filtrosActivos > 0 ? (
+          <EmptyState
+            titulo="Sin servicios con estos filtros"
+            mensaje="Ningún servicio coincide con el precio, la duración o la evaluación que elegiste. Cambia los valores o limpia los filtros."
+            accion={{ titulo: 'Limpiar filtros', onPress: limpiarFiltros }}
+          />
+        ) : serviciosVisibles.length === 0 ? (
           <EmptyState
             titulo="Sin resultados"
             mensaje="No encontramos servicios con ese nombre. Prueba con otra palabra o elige Todas."
@@ -109,6 +132,15 @@ export function ListaServicios({ catalogo }: { catalogo: CatalogoServiciosViewMo
             ))}
           </View>
         )}
+        <HojaFiltrosServicios
+          visible={hojaFiltrosVisible}
+          borrador={borradorFiltros}
+          activos={borradorActivos}
+          onCambiar={cambiarBorrador}
+          onCerrar={cerrarFiltros}
+          onAplicar={aplicarFiltros}
+          onLimpiar={limpiarFiltros}
+        />
       </Animated.View>
     );
   }
@@ -148,7 +180,7 @@ function Buscador({ valor, onCambiar }: { valor: string; onCambiar: (texto: stri
       <TextInput
         value={valor}
         onChangeText={onCambiar}
-        placeholder="Buscar servicio por nombre"
+        placeholder="Buscar servicio"
         placeholderTextColor={colores.campoPlaceholder}
         accessibilityLabel="Buscar un servicio por nombre"
         returnKeyType="search"
@@ -187,7 +219,13 @@ const styles = StyleSheet.create({
   seccion: {
     gap: espacio.l,
   },
+  // Buscador y "Filtros" en la misma fila, con la misma altura.
+  filaBusqueda: {
+    flexDirection: 'row',
+    gap: espacio.s,
+  },
   buscador: {
+    flex: 1,
     minHeight: toqueMinimo,
     flexDirection: 'row',
     alignItems: 'center',

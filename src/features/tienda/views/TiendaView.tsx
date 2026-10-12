@@ -12,20 +12,29 @@ import {
 import Animated from 'react-native-reanimated';
 
 import { EmptyState } from '@/shared/ui/EmptyState';
+import { BotonFiltros } from '@/shared/ui/Filtros';
 import { useEntradaContenido } from '@/shared/ui/movimiento';
 import { ScreenHeader } from '@/shared/ui/ScreenHeader';
 import { Skeleton } from '@/shared/ui/Skeleton';
-import { controles, espacio, fuente, pantalla, radio, tienda, tipo, toqueMinimo } from '@/shared/ui/tokens';
+import {
+  controles,
+  espacio,
+  filtrosTienda,
+  fuente,
+  pantalla,
+  radio,
+  tienda,
+  tipo,
+  toqueMinimo,
+} from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
 import { BuscadorProductos } from '../components/BuscadorProductos';
 import { FiltroCategorias } from '../components/FiltroCategorias';
+import { HojaFiltrosTienda } from '../components/HojaFiltrosTienda';
 import { TarjetaProducto, TarjetaProductoEsqueleto } from '../components/TarjetaProducto';
 import type { ProductoCatalogo } from '../models/productoModel';
 import { useCatalogoViewModel } from '../viewmodels/useCatalogoViewModel';
-
-/** Con una sola columna no se usa columnWrapperStyle (FlatList lo rechaza con numColumns 1). */
-const VARIAS_COLUMNAS = tienda.columnas > 1;
 
 /** Filas del skeleton: tarjetasEsqueleto repartidas en las columnas de la cuadrícula. */
 const FILAS_ESQUELETO = Array.from(
@@ -37,7 +46,7 @@ function claveProducto(producto: ProductoCatalogo): string {
   return String(producto.id);
 }
 
-/** Pestaña Tienda (GP-06.4): catálogo público (una columna, como la web) con búsqueda y categorías. */
+/** Pestaña Tienda (GP-06.4): catálogo público en dos columnas con búsqueda, categorías y filtros. */
 export default function TiendaView() {
   const { colores } = useTheme();
   const { width } = useWindowDimensions();
@@ -50,15 +59,7 @@ export default function TiendaView() {
 
   const { abrirProducto } = vm;
   const renderProducto = useCallback<ListRenderItem<ProductoCatalogo>>(
-    ({ item }) =>
-      VARIAS_COLUMNAS ? (
-        <TarjetaProducto producto={item} ancho={anchoTarjeta} onAbrir={abrirProducto} />
-      ) : (
-        // En una columna el margen lateral va en cada celda: columnWrapperStyle solo existe con varias.
-        <View style={styles.celda}>
-          <TarjetaProducto producto={item} ancho={anchoTarjeta} onAbrir={abrirProducto} />
-        </View>
-      ),
+    ({ item }) => <TarjetaProducto producto={item} ancho={anchoTarjeta} onAbrir={abrirProducto} />,
     [anchoTarjeta, abrirProducto],
   );
 
@@ -93,7 +94,10 @@ export default function TiendaView() {
           accessibilityLabel="Cargando productos"
           style={styles.esqueleto}
         >
-          <Skeleton estilo={styles.buscadorEsqueleto} />
+          <View style={styles.filaBuscador}>
+            <Skeleton estilo={[styles.buscadorEsqueleto, styles.buscador]} />
+            <Skeleton estilo={[styles.buscadorEsqueleto, styles.botonFiltrosEsqueleto]} />
+          </View>
           <View style={styles.chipsEsqueleto}>
             <Skeleton estilo={styles.chipEsqueleto} />
             <Skeleton estilo={styles.chipEsqueleto} />
@@ -147,7 +151,12 @@ export default function TiendaView() {
     <View>
       {encabezadoPantalla}
       <View style={styles.controles}>
-        <BuscadorProductos valor={vm.busqueda} onCambiar={vm.setBusqueda} />
+        <View style={styles.filaBuscador}>
+          <View style={styles.buscador}>
+            <BuscadorProductos valor={vm.busqueda} onCambiar={vm.setBusqueda} />
+          </View>
+          <BotonFiltros activos={vm.filtrosActivos} onPress={vm.abrirFiltros} />
+        </View>
         <FiltroCategorias categorias={vm.categorias} elegida={vm.categoria} onElegir={vm.setCategoria} />
         {vm.errorRefresco ? (
           <Text accessibilityLiveRegion="polite" style={[styles.aviso, { color: colores.peligro }]}>
@@ -162,7 +171,7 @@ export default function TiendaView() {
     <View style={styles.estado}>
       <EmptyState
         titulo="No encontramos productos"
-        mensaje="Prueba con otra búsqueda o categoría."
+        mensaje="Prueba con otra búsqueda, categoría o filtro."
         accion={{ titulo: 'Ver todos', onPress: vm.limpiarFiltros }}
       />
     </View>
@@ -175,7 +184,7 @@ export default function TiendaView() {
         keyExtractor={claveProducto}
         renderItem={renderProducto}
         numColumns={tienda.columnas}
-        columnWrapperStyle={VARIAS_COLUMNAS ? styles.filaProductos : undefined}
+        columnWrapperStyle={styles.filaProductos}
         ItemSeparatorComponent={SeparadorFilas}
         ListHeaderComponent={encabezadoLista}
         ListEmptyComponent={sinResultados}
@@ -187,12 +196,25 @@ export default function TiendaView() {
         maxToRenderPerBatch={tienda.tarjetasEsqueleto}
         windowSize={7}
       />
+      <HojaFiltrosTienda
+        visible={vm.hojaFiltros}
+        onCerrar={vm.cerrarFiltros}
+        categoria={vm.categoria}
+        borrador={vm.borrador}
+        borradorActivos={vm.borradorActivos}
+        grupos={vm.gruposFiltro}
+        onCambiarPrecioMinimo={vm.setPrecioMinimo}
+        onCambiarPrecioMaximo={vm.setPrecioMaximo}
+        onAlternar={vm.alternarOpcion}
+        onLimpiar={vm.limpiarBorrador}
+        onAplicar={vm.aplicarFiltros}
+      />
     </Animated.View>
   );
 }
 
 function SeparadorFilas() {
-  return <View style={VARIAS_COLUMNAS ? styles.separador : styles.separadorUnaColumna} />;
+  return <View style={styles.separador} />;
 }
 
 const styles = StyleSheet.create({
@@ -208,6 +230,15 @@ const styles = StyleSheet.create({
     paddingBottom: espacio.xl,
     gap: espacio.l,
   },
+  // Buscador y botón "Filtros" en la misma fila: el buscador toma el ancho que sobra.
+  filaBuscador: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: filtrosTienda.separacionBoton,
+  },
+  buscador: {
+    flex: 1,
+  },
   aviso: {
     fontFamily: fuente.texto,
     fontSize: tipo.pequeno.tamano,
@@ -221,22 +252,19 @@ const styles = StyleSheet.create({
   separador: {
     height: espacio.m,
   },
-  separadorUnaColumna: {
-    height: tienda.separacionTarjetas,
-  },
-  celda: {
-    paddingHorizontal: pantalla.margen,
-  },
   estado: {
     paddingHorizontal: pantalla.margen,
   },
   esqueleto: {
     paddingHorizontal: pantalla.margen,
-    gap: tienda.separacionTarjetas,
+    gap: espacio.m,
   },
   buscadorEsqueleto: {
     height: toqueMinimo,
     borderRadius: radio.campo,
+  },
+  botonFiltrosEsqueleto: {
+    width: filtrosTienda.anchoBotonEsqueleto,
   },
   chipsEsqueleto: {
     flexDirection: 'row',

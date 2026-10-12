@@ -150,6 +150,8 @@ export const duracion = {
   parallax: 600,
   /** Con movimiento reducido, hojas y diálogos solo se funden en este tiempo (sistema.css). */
   reducido: 160,
+  /** La foto de la cabecera no se vuelve a leer de /me al enfocar una pestaña antes de este tiempo. */
+  refrescoFotoCabecera: 60000,
   /** Medio ciclo del pulso de los skeletons. */
   pulso: 900,
   /** Cambio de estado de un campo (verificando, disponible, requisito cumplido): igual que presionar. */
@@ -367,12 +369,10 @@ export const fondoHero = {
 
 /** Tienda (GP-06.4): catálogo, carrito y pedidos. */
 export const tienda = {
-  /** Columnas de la cuadrícula de productos: una, como TarjetaCatalogo de la web en móvil. */
-  columnas: 1,
-  /** Separación entre tarjetas del catálogo en una columna (gap-6 de la web). */
-  separacionTarjetas: espacio.xxl,
-  /** Tarjetas que dibuja el skeleton mientras carga el catálogo (en una columna, las que llenan la pantalla). */
-  tarjetasEsqueleto: 2,
+  /** Columnas de la cuadrícula de productos. */
+  columnas: 2,
+  /** Tarjetas que dibuja el skeleton mientras carga el catálogo. */
+  tarjetasEsqueleto: 6,
   /** Lado de la foto cuadrada de una fila del carrito o de un pedido. */
   miniatura: 72,
   /** Ancho / alto de la foto de la tarjeta y de la galería del detalle (cuadradas). */
@@ -589,4 +589,58 @@ export const perfil = {
   icono: 20,
   /** Título de sección: Geist 600 14/20. */
   tituloSeccion: { tamano: 14, linea: 20 },
+} as const;
+
+/** Hoja de filtros de la Tienda y su botón junto al buscador (space-y-6 del panel de la web). */
+export const filtrosTienda = {
+  /** Entre un grupo de filtros y el siguiente dentro de la hoja (space-y-6 de la web). */
+  separacionSecciones: espacio.xxl,
+  /** Entre el buscador y el botón "Filtros" en la misma fila. */
+  separacionBoton: espacio.s,
+  /** Ancho del esqueleto del botón "Filtros" mientras carga el catálogo. */
+  anchoBotonEsqueleto: 104,
+} as const;
+
+/**
+ * Cabecera de las pestañas: logotipo de imagen (Header.tsx de la web: w-8 h-8 en móvil) y la foto de
+ * la clienta en un círculo a la derecha, dentro de un área táctil de 48. Solo medidas.
+ */
+export const cabeceraFoto = {
+  /** Lado de la imagen del logotipo (logo-miru, cuadrada): el alto útil de la cabecera de 56. */
+  logotipo: 48,
+  /** Diámetro visual del círculo de la foto o de las iniciales. */
+  circulo: 36,
+  /** Anillo del círculo sobre el carbón (como el contorno del contador). */
+  anillo: borde.campo,
+  /** Iniciales: Geist 600 14/18 dentro del círculo de 36. */
+  iniciales: { tamano: 14, linea: 18 },
+  /** Las iniciales crecen con la fuente del sistema solo hasta este factor: el círculo mide 36. */
+  escalaMaximaIniciales: 1.2,
+} as const;
+
+/**
+ * Carruseles de Inicio (productos y servicios al azar, debajo del hero). Solo medidas: los colores
+ * salen de colores.ts por useTheme().
+ */
+export const carruselInicio = {
+  /**
+   * Tarjetas que se ven a la vez en el ancho de la pantalla (sin el margen de la izquierda): la
+   * fracción hace que siempre asome parte de la siguiente y se note que la fila sigue. A 360 dp la
+   * de producto mide 197 y la de servicio 293; a 412 dp, 229 y 340.
+   */
+  productosVisibles: 1.6,
+  serviciosVisibles: 1.1,
+  /** Entre tarjetas del carrusel: más cerrado que el gap-6 (24) de la web para que asome la siguiente. */
+  separacion: espacio.l,
+  /**
+   * Relleno de arriba y abajo de la fila: la lista horizontal recorta lo que sale de ella y sin
+   * este aire se cortaría la sombra de las tarjetas (desplazamiento 8 + difuminado).
+   */
+  rellenoSombra: espacio.l,
+  /** Tarjetas del skeleton mientras carga: las que llenan el ancho de la pantalla. */
+  esqueletos: 2,
+  /** "VER TODOS": Geist 600 14 en mayúsculas con 0.05em de espaciado (tracking-wider de la web). */
+  trackingVerTodos: 0.7,
+  /** Flecha de "Ver todos" (ArrowRight 16 de la web). */
+  iconoVerTodos: 16,
 } as const;

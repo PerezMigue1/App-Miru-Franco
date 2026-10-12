@@ -119,8 +119,9 @@ export interface Colores {
   /** Ícono y etiqueta de las pestañas inactivas: también --marfil fijo. */
   iconoInactivo: string;
   /**
-   * Pastilla de la pestaña activa: marfil al 16 % sobre el vino (cliente.css), con anillo de 1px en
-   * --marfil sólido: el de la web (al 28 %) solo da 1.87:1 y el indicador pide 3:1 (10.85:1).
+   * Pastilla de la pestaña activa: rosa --hover de fondo y de anillo, en los dos temas. El ícono
+   * marfil encima da 4.88:1. Contra la franja vino la pastilla da 2.22:1, así que la activa también
+   * se distingue por el peso de la etiqueta (marfil sobre vino, 10.85:1).
    */
   franjaPastilla: string;
   franjaAnillo: string;
@@ -230,8 +231,8 @@ export const temaClaro: Colores = {
   barraFondo: paleta.vino,
   iconoActivo: paleta.crema,
   iconoInactivo: paleta.crema,
-  franjaPastilla: transparencias.marfil16,
-  franjaAnillo: paleta.crema,
+  franjaPastilla: paleta.hover,
+  franjaAnillo: paleta.hover,
   franjaPresionada: transparencias.marfil12,
   contadorFondo: paleta.vino,
   contadorTexto: paleta.crema,
@@ -300,8 +301,8 @@ export const temaOscuro: Colores = {
   barraFondo: paleta.vino,
   iconoActivo: paleta.crema,
   iconoInactivo: paleta.crema,
-  franjaPastilla: transparencias.marfil16,
-  franjaAnillo: paleta.crema,
+  franjaPastilla: paleta.hover,
+  franjaAnillo: paleta.hover,
   franjaPresionada: transparencias.marfil12,
   contadorFondo: paleta.vino,
   contadorTexto: paleta.blanco,

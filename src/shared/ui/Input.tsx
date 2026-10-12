@@ -32,6 +32,8 @@ export type TipoInput =
   | 'correo'
   | 'telefono'
   | 'fecha'
+  /** Cantidad entera (filtros de precio y duración): teclado numérico. */
+  | 'numero'
   | 'claveActual'
   | 'claveNueva'
   /** Datos de salud: sin sugerencias, corrección ni autollenado del teclado. */
@@ -102,6 +104,7 @@ const AJUSTES: Record<TipoInput, TextInputProps> = {
     keyboardType: 'number-pad',
   },
   fecha: { autoComplete: 'birthdate-full', keyboardType: 'number-pad', maxLength: LARGO_FECHA },
+  numero: { keyboardType: 'number-pad', autoComplete: 'off', autoCorrect: false },
   // Sin autocorrección: el teclado no aprende la contraseña ni la cambia al mostrarla.
   claveActual: {
     autoComplete: 'password',

@@ -56,7 +56,7 @@ export default function ClienteLayout() {
         },
         tabBarItemStyle: { minHeight: pestanas.altoItem },
         tabBarIconStyle: estiloIconoPestana,
-        // Pastilla translúcida en la activa y marfil al 12 % al presionar, sin onda de Android.
+        // Pastilla rosa (--hover) en la activa y marfil al 12 % al presionar, sin onda de Android.
         tabBarButton: BotonPestana,
         // Una sola línea: si el sistema agranda la fuente, la etiqueta se encoge en lugar de cortarse.
         tabBarLabel: ({ focused, children }) => (
@@ -67,7 +67,7 @@ export default function ClienteLayout() {
             maxFontSizeMultiplier={franja.escalaMaximaEtiqueta}
             style={{
               color: focused ? colores.textoActivo : colores.iconoInactivo,
-              // La pastilla contra el vino da 1.38:1: la activa también se distingue por el peso.
+              // La pastilla rosa contra el vino da 2.22:1: la activa también se distingue por el peso.
               fontFamily: focused ? fuente.textoFuerte : fuente.textoMedio,
               fontSize: tipo.pestana.tamano,
               lineHeight: tipo.pestana.linea,
@@ -79,7 +79,15 @@ export default function ClienteLayout() {
       }}
     >
       <Tabs.Screen name="inicio" options={{ title: 'Inicio', tabBarIcon: iconoInicio }} />
-      <Tabs.Screen name="citas" options={{ title: 'Citas', tabBarIcon: iconoCitas }} />
+      {/* La ruta sigue siendo `citas`; la pestaña se llama Servicios, como la sección de la web. */}
+      <Tabs.Screen
+        name="citas"
+        options={{
+          title: 'Servicios',
+          tabBarIcon: iconoCitas,
+          tabBarAccessibilityLabel: 'Servicios',
+        }}
+      />
       <Tabs.Screen
         name="carrito"
         options={{
