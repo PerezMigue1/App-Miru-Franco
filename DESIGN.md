@@ -54,8 +54,8 @@ Se reconstruyen con las herramientas de React Native (Reanimated, Gesture Handle
 - Objetivos táctiles de al menos 48dp. Sin scroll horizontal de pantalla.
 
 ## 7. Movimiento
-- Curvas: salida suave `cubic-bezier(0.23, 1, 0.32, 1)`, entrada y salida `cubic-bezier(0.77, 0, 0.175, 1)`.
-- Duraciones: presionar 140 ms, cambio de pestaña 240 ms, entradas de sección hasta 520 ms con escalonado de 60 ms, acceso 680 ms, intro hasta 1.3 s.
+- Curvas: salida suave `cubic-bezier(0.23, 1, 0.32, 1)`, entrada y salida `cubic-bezier(0.77, 0, 0.175, 1)`, hojas inferiores `cubic-bezier(0.32, 0.72, 0, 1)` (arranque rápido, sin rebote)..
+- Duraciones: presionar 140 ms, aparición de listas y estados 220 ms, hoja inferior 240 ms al subir y 200 ms al bajar, cambio de pestaña 240 ms, entradas de sección hasta 520 ms con escalonado de 60 ms, acceso 680 ms, intro hasta 1.3 s.
 - Fuera de las piezas de marca, solo animaciones que comunican estado: presionar, entrada de pantalla, cambio de pestaña, confirmación de cita y de compra.
 - Nunca animar desde escala 0.
 - Si el sistema pide reducir movimiento, se conservan opacidad y color, se elimina el desplazamiento y las piezas de marca quedan en su composición estática.

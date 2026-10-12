@@ -10,16 +10,16 @@ import {
   Text,
   View,
 } from 'react-native';
-import Animated, { Easing, FadeIn, Keyframe, ReduceMotion } from 'react-native-reanimated';
+import Animated, { FadeIn, Keyframe, ReduceMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EncabezadoVolver } from '@/features/auth/components/EncabezadoVolver';
 import { Button } from '@/shared/ui/Button';
 import { EmptyState } from '@/shared/ui/EmptyState';
 import { Input } from '@/shared/ui/Input';
+import { EASE_SALIDA, useEntradaContenido } from '@/shared/ui/movimiento';
 import { Skeleton } from '@/shared/ui/Skeleton';
 import {
-  curva,
   duracion,
   espacio,
   esqueleto,
@@ -50,7 +50,6 @@ import {
   type ReservarCitaViewModel,
 } from '../viewmodels/useReservarCitaViewModel';
 
-const EASE_SALIDA = Easing.bezier(...curva.salida);
 const ESQUELETOS = Array.from({ length: reserva.especialistasEsqueleto }, (_, i) => i);
 const SIN_PRECIO = 'Consulta el precio en el salón';
 
@@ -63,8 +62,15 @@ function conMayuscula(texto: string): string {
 export default function ReservarCitaView() {
   const { colores } = useTheme();
   const { bottom } = useSafeAreaInsets();
-  const { servicioId } = useLocalSearchParams<{ servicioId: string }>();
-  const vm = useReservarCitaViewModel(servicioId);
+  // especialistaId opcional: "Reservar lo mismo" desde Mis citas arranca en Día y hora con ella.
+  const { servicioId, especialistaId } = useLocalSearchParams<{
+    servicioId: string;
+    especialistaId?: string;
+  }>();
+  const vm = useReservarCitaViewModel(
+    servicioId,
+    typeof especialistaId === 'string' ? especialistaId : undefined,
+  );
   const reducido = useMovimientoReducido();
   const refIndicador = useRef<View>(null);
   const refScroll = useRef<ScrollView>(null);
@@ -229,6 +235,8 @@ function PasoDiaHora({ vm }: { vm: ReservarCitaViewModel }) {
 
 function Horarios({ vm }: { vm: ReservarCitaViewModel }) {
   const { colores } = useTheme();
+  // Los horarios aparecen una vez cada que terminan de cargar (al elegir otro día, otra vez).
+  const entrada = useEntradaContenido();
 
   if (vm.estadoHorarios === 'cargando' || vm.estadoHorarios === 'inactivo') {
     return <CuadriculaHorariosEsqueleto />;
@@ -267,11 +275,13 @@ function Horarios({ vm }: { vm: ReservarCitaViewModel }) {
   }
 
   return (
-    <CuadriculaHorarios
-      slots={disponibilidad.slots}
-      seleccionado={vm.slot}
-      onElegir={vm.elegirHorario}
-    />
+    <Animated.View entering={entrada}>
+      <CuadriculaHorarios
+        slots={disponibilidad.slots}
+        seleccionado={vm.slot}
+        onElegir={vm.elegirHorario}
+      />
+    </Animated.View>
   );
 }
 

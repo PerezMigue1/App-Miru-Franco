@@ -4,17 +4,18 @@ import { StatusBar } from 'expo-status-bar';
 import { ArrowLeft, CalendarPlus, Check, Clock, Sparkles, type LucideIcon } from 'lucide-react-native';
 import type { ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { InvitacionSesion } from '@/features/auth/components/InvitacionSesion';
 import { Button } from '@/shared/ui/Button';
 import { EmptyState } from '@/shared/ui/EmptyState';
 import { Monograma } from '@/shared/ui/Monograma';
+import { usePresion } from '@/shared/ui/movimiento';
 import { Skeleton } from '@/shared/ui/Skeleton';
 import {
   catalogo,
   duracion,
-  escalaPresionado,
   esqueleto,
   espacio,
   fuente,
@@ -339,22 +340,34 @@ function BotonRegresar({
   onPress: () => void;
 }) {
   const { colores } = useTheme();
+  const { estilo, hundir, soltar } = usePresion();
   const colorIcono = sobreImagen ? colores.textoSobrePanel : colores.texto;
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel="Regresar"
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.regresar,
-        {
-          top,
-          backgroundColor: sobreImagen ? colores.velo : pressed ? colores.presionado : 'transparent',
-          transform: [{ scale: pressed ? escalaPresionado : 1 }],
-        },
-      ]}
+      onPressIn={hundir}
+      onPressOut={soltar}
+      style={[styles.regresar, { top }]}
     >
-      <ArrowLeft color={colorIcono} size={icono.tamano} strokeWidth={icono.trazo} />
+      {({ pressed }) => (
+        <Animated.View
+          style={[
+            styles.circuloRegresar,
+            {
+              backgroundColor: sobreImagen
+                ? colores.velo
+                : pressed
+                  ? colores.presionado
+                  : 'transparent',
+            },
+            estilo,
+          ]}
+        >
+          <ArrowLeft color={colorIcono} size={icono.tamano} strokeWidth={icono.trazo} />
+        </Animated.View>
+      )}
     </Pressable>
   );
 }
@@ -488,6 +501,9 @@ const styles = StyleSheet.create({
     left: pantalla.margen - espacio.s,
     width: toqueMinimo,
     height: toqueMinimo,
+  },
+  circuloRegresar: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radio.pastilla,

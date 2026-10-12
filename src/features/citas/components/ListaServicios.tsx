@@ -2,8 +2,15 @@ import { useRouter, type Href } from 'expo-router';
 import { Search, X } from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 
 import { EmptyState } from '@/shared/ui/EmptyState';
+import {
+  transicionBorde,
+  transicionSeleccion,
+  useEntradaContenido,
+  usePresion,
+} from '@/shared/ui/movimiento';
 import {
   borde,
   espacio,
@@ -35,6 +42,8 @@ export function ListaServicios({ catalogo }: { catalogo: CatalogoServiciosViewMo
     serviciosVisibles,
     hayServicios,
   } = catalogo;
+  // El catálogo aparece una sola vez al terminar de cargar (no en cada tarjeta).
+  const entrada = useEntradaContenido();
 
   const verTodos = () => {
     setBusqueda('');
@@ -67,7 +76,7 @@ export function ListaServicios({ catalogo }: { catalogo: CatalogoServiciosViewMo
     );
   } else {
     contenido = (
-      <>
+      <Animated.View entering={entrada} style={styles.seccion}>
         <Buscador valor={busqueda} onCambiar={setBusqueda} />
         <ScrollView
           horizontal
@@ -98,7 +107,7 @@ export function ListaServicios({ catalogo }: { catalogo: CatalogoServiciosViewMo
             ))}
           </View>
         )}
-      </>
+      </Animated.View>
     );
   }
 
@@ -115,9 +124,10 @@ function Buscador({ valor, onCambiar }: { valor: string; onCambiar: (texto: stri
   const [enfocado, setEnfocado] = useState(false);
 
   return (
-    <View
+    <Animated.View
       style={[
         styles.buscador,
+        transicionBorde,
         {
           backgroundColor: colores.campoFondo,
           borderColor: enfocado ? colores.foco : colores.campoBorde,
@@ -151,25 +161,37 @@ function Buscador({ valor, onCambiar }: { valor: string; onCambiar: (texto: stri
           <X color={colores.campoPlaceholder} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
         </Pressable>
       ) : null}
-    </View>
+    </Animated.View>
   );
 }
 
+/** Filtro de categoría: se hunde al tocarlo y el relleno de selección se funde en 140 ms. */
 function Chip({ texto, activo, onPress }: { texto: string; activo: boolean; onPress: () => void }) {
   const { colores } = useTheme();
+  const { estilo, hundir, soltar } = usePresion();
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ selected: activo }}
       onPress={onPress}
-      style={[
-        styles.chip,
-        { backgroundColor: activo ? colores.accion : colores.superficieSecundaria },
-      ]}
+      onPressIn={hundir}
+      onPressOut={soltar}
     >
-      <Text style={[styles.textoChip, { color: activo ? colores.textoSobreAccion : colores.texto }]}>
-        {texto}
-      </Text>
+      {/* Color de selección y no de acción: en oscuro el vino casi desaparece sobre carbón. */}
+      <Animated.View
+        style={[
+          styles.chip,
+          transicionSeleccion,
+          { backgroundColor: activo ? colores.seleccion : colores.superficieSecundaria },
+          estilo,
+        ]}
+      >
+        <Text
+          style={[styles.textoChip, { color: activo ? colores.textoSobreSeleccion : colores.texto }]}
+        >
+          {texto}
+        </Text>
+      </Animated.View>
     </Pressable>
   );
 }

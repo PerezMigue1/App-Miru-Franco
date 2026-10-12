@@ -17,7 +17,6 @@ import {
   BackHandler,
   Keyboard,
   KeyboardAvoidingView,
-  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -30,7 +29,6 @@ import {
   type ViewStyle,
 } from 'react-native';
 import Animated, {
-  Easing,
   FadeIn,
   Keyframe,
   ReduceMotion,
@@ -44,21 +42,28 @@ import Svg, { Path } from 'react-native-svg';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { Button } from '@/shared/ui/Button';
+import { Hoja } from '@/shared/ui/Hoja';
 import { Input, type EstadoCampo } from '@/shared/ui/Input';
 import { Monograma } from '@/shared/ui/Monograma';
+import {
+  EASE_ENTRADA_SALIDA,
+  EASE_SALIDA,
+  transicionBorde,
+  transicionSeleccion,
+  useEntradaContenido,
+  usePresion,
+} from '@/shared/ui/movimiento';
 import { Skeleton } from '@/shared/ui/Skeleton';
 import {
   acceso,
   borde,
   casilla,
-  curva,
   esqueleto,
   duracion,
   escalaEntrada,
   espacio,
   fuente,
   icono,
-  opacidad,
   pantalla,
   radio,
   tipo,
@@ -102,9 +107,6 @@ interface AuthContainerProps {
   /** Cierra Acceso y vuelve a explorar la app. */
   onCerrar?: () => void;
 }
-
-const EASE_ENTRADA_SALIDA = Easing.bezier(...curva.entradaSalida);
-const EASE_SALIDA = Easing.bezier(...curva.salida);
 
 /** Lo que muestra el campo de correo según la verificación (solo lo que dice el endpoint). */
 const ESTADO_CORREO: Record<EstadoCorreo, EstadoCampo | null> = {
@@ -335,6 +337,7 @@ export function PantallaAuth({
 }) {
   const { colores } = useTheme();
   const { top, bottom } = useSafeAreaInsets();
+  const { estilo: estiloPresion, hundir, soltar } = usePresion();
   return (
     <KeyboardAvoidingView behavior="padding" style={[styles.raiz, { backgroundColor: colores.fondo }]}>
       <StatusBar style="light" />
@@ -344,12 +347,13 @@ export function PantallaAuth({
           accessibilityLabel="Cerrar"
           accessibilityHint="Vuelve a la app sin iniciar sesión"
           onPress={onCerrar}
-          style={({ pressed }) => [
-            styles.cerrar,
-            { top: top + espacio.s, opacity: pressed ? opacidad.deshabilitado : 1 },
-          ]}
+          onPressIn={hundir}
+          onPressOut={soltar}
+          style={[styles.cerrar, { top: top + espacio.s }]}
         >
-          <X color={colores.textoSobrePanel} size={icono.tamano} strokeWidth={icono.trazo} />
+          <Animated.View style={estiloPresion}>
+            <X color={colores.textoSobrePanel} size={icono.tamano} strokeWidth={icono.trazo} />
+          </Animated.View>
         </Pressable>
       ) : null}
       <ScrollView
@@ -415,18 +419,21 @@ export function Enlace({
   accessibilityHint?: string;
 }) {
   const { colores } = useTheme();
+  const { estilo: estiloPresion, hundir, soltar } = usePresion();
   const alineacion = { inicio: 'flex-start', centro: 'center', fin: 'flex-end' } as const;
   return (
     <Pressable
       accessibilityRole="link"
       accessibilityHint={accessibilityHint}
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.enlace,
-        { alignSelf: alineacion[alinear], backgroundColor: pressed ? colores.presionado : 'transparent' },
-      ]}
+      onPressIn={hundir}
+      onPressOut={soltar}
+      style={{ alignSelf: alineacion[alinear] }}
     >
-      <Text style={[styles.textoEnlace, { color: colores.enlace }]}>{texto}</Text>
+      {/* Se hunde como un botón (140 ms): el enlace también es una acción. */}
+      <Animated.View style={[styles.enlace, estiloPresion]}>
+        <Text style={[styles.textoEnlace, { color: colores.enlace }]}>{texto}</Text>
+      </Animated.View>
     </Pressable>
   );
 }
@@ -682,22 +689,28 @@ function IndicadorPasos({ paso, refIndicador }: { paso: PasoRegistro; refIndicad
         const marcado = hecho || esActual;
         return (
           <Fragment key={item.numero}>
+            {/* Al cambiar de paso, el conector y el círculo toman su color en 140 ms. */}
             {indice > 0 ? (
-              <View
-                style={[styles.conectorPaso, { backgroundColor: marcado ? colores.foco : colores.hairline }]}
+              <Animated.View
+                style={[
+                  styles.conectorPaso,
+                  transicionSeleccion,
+                  { backgroundColor: marcado ? colores.foco : colores.hairline },
+                ]}
               />
             ) : null}
             <View style={styles.itemPaso}>
-              <View
+              <Animated.View
                 style={[
                   styles.circuloPaso,
+                  transicionSeleccion,
                   marcado
                     ? {
                         backgroundColor: colores.accion,
                         borderColor: esActual ? colores.oro : colores.accion,
                         borderWidth: borde.indicador,
                       }
-                    : { borderColor: colores.textoSuave, borderWidth: borde.campo },
+                    : { backgroundColor: 'transparent', borderColor: colores.textoSuave, borderWidth: borde.campo },
                 ]}
               >
                 {hecho ? (
@@ -709,7 +722,7 @@ function IndicadorPasos({ paso, refIndicador }: { paso: PasoRegistro; refIndicad
                     {item.numero}
                   </Text>
                 )}
-              </View>
+              </Animated.View>
               <Text
                 style={[
                   styles.etiquetaPaso,
@@ -1132,21 +1145,22 @@ function Requisito({
  */
 function LeyendaTerminos({ onPress }: { onPress: () => void }) {
   const { colores } = useTheme();
+  const { estilo: estiloPresion, hundir, soltar } = usePresion();
   return (
     <Pressable
       accessibilityRole="link"
       accessibilityLabel="Al crear tu cuenta aceptas los Términos y Condiciones"
       accessibilityHint="Se abre en el navegador"
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.leyenda,
-        { backgroundColor: pressed ? colores.presionado : 'transparent' },
-      ]}
+      onPressIn={hundir}
+      onPressOut={soltar}
     >
-      <Text style={[styles.textoLeyenda, { color: colores.textoSuave }]}>
-        Al crear tu cuenta aceptas los{' '}
-        <Text style={[styles.enlaceEnTexto, { color: colores.enlace }]}>Términos y Condiciones</Text>
-      </Text>
+      <Animated.View style={[styles.leyenda, estiloPresion]}>
+        <Text style={[styles.textoLeyenda, { color: colores.textoSuave }]}>
+          Al crear tu cuenta aceptas los{' '}
+          <Text style={[styles.enlaceEnTexto, { color: colores.enlace }]}>Términos y Condiciones</Text>
+        </Text>
+      </Animated.View>
     </Pressable>
   );
 }
@@ -1184,32 +1198,62 @@ export function Opciones<T extends string>({
             colorBorde = colores.peligro;
           }
           return (
-            <Pressable
+            <Pastilla
               key={opcion.valor}
-              accessibilityRole="radio"
+              etiqueta={opcion.etiqueta}
               accessibilityLabel={`${etiqueta}: ${opcion.etiqueta}`}
-              accessibilityState={{ checked: elegida }}
+              elegida={elegida}
+              colorBorde={colorBorde}
               onPress={() => onElegir(opcion.valor)}
-              style={[
-                styles.opcionCabello,
-                {
-                  backgroundColor: colores.campoFondo,
-                  borderColor: colorBorde,
-                },
-              ]}
-            >
-              {elegida ? (
-                <Check color={colores.foco} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
-              ) : null}
-              <Text style={[styles.textoOpcionCabello, { color: colores.campoTexto }]}>
-                {opcion.etiqueta}
-              </Text>
-            </Pressable>
+            />
           );
         })}
       </View>
       <MensajeCampo error={error} />
     </View>
+  );
+}
+
+/** Una pastilla de Opciones: se hunde al tocarla y su borde cambia de color en 140 ms. */
+function Pastilla({
+  etiqueta,
+  accessibilityLabel,
+  elegida,
+  colorBorde,
+  onPress,
+}: {
+  etiqueta: string;
+  accessibilityLabel: string;
+  elegida: boolean;
+  colorBorde: string;
+  onPress: () => void;
+}) {
+  const { colores } = useTheme();
+  const { estilo: estiloPresion, hundir, soltar } = usePresion();
+  return (
+    <Pressable
+      accessibilityRole="radio"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ checked: elegida }}
+      onPress={onPress}
+      onPressIn={hundir}
+      onPressOut={soltar}
+      style={styles.pulsablePastilla}
+    >
+      <Animated.View
+        style={[
+          styles.opcionCabello,
+          transicionBorde,
+          { backgroundColor: colores.campoFondo, borderColor: colorBorde },
+          estiloPresion,
+        ]}
+      >
+        {elegida ? (
+          <Check color={colores.foco} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
+        ) : null}
+        <Text style={[styles.textoOpcionCabello, { color: colores.campoTexto }]}>{etiqueta}</Text>
+      </Animated.View>
+    </Pressable>
   );
 }
 
@@ -1245,6 +1289,7 @@ export function Aviso({
   estilo?: StyleProp<ViewStyle>;
 }) {
   const { colores } = useTheme();
+  const entrada = useEntradaContenido();
   const esError = tipoAviso === 'error';
   const Icono = esError ? CircleAlert : CircleCheck;
   const color = esError ? colores.peligro : colores.texto;
@@ -1254,14 +1299,16 @@ export function Aviso({
       accessibilityLiveRegion={esError ? 'assertive' : 'polite'}
       style={texto ? estilo : styles.fueraDeFlujo}
     >
+      {/* El mensaje aparece en 220 ms (reducido: solo se funde) en lugar de saltar a la vista. */}
       {texto ? (
-        <View
+        <Animated.View
           accessible
+          entering={entrada}
           style={[styles.aviso, { borderColor: esError ? colores.peligro : colores.hairline }]}
         >
           <Icono color={esError ? colores.peligro : colores.foco} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
           <Text style={[styles.texto, styles.textoAviso, { color }]}>{texto}</Text>
-        </View>
+        </Animated.View>
       ) : null}
     </View>
   );
@@ -1295,7 +1342,7 @@ function MarcaGoogle() {
   );
 }
 
-/** Selector con hoja modal propia: la lista se carga del API al abrirlo. */
+/** Selector con hoja inferior: la lista se carga del API al abrirlo. */
 function Selector({
   refContenedor,
   etiqueta,
@@ -1318,7 +1365,7 @@ function Selector({
   error: string | null;
 }) {
   const { colores } = useTheme();
-  const { bottom } = useSafeAreaInsets();
+  const { estilo: estiloPresion, hundir, soltar } = usePresion();
   const id = useId();
   const [abierto, setAbierto] = useState(false);
   const cerrar = () => setAbierto(false);
@@ -1342,64 +1389,51 @@ function Selector({
         accessibilityLabelledBy={`${id}-etiqueta`}
         accessibilityHint="Abre la lista de preguntas"
         onPress={abrir}
-        style={({ pressed }) => [
-          styles.selector,
-          {
-            backgroundColor: colores.campoFondo,
-            borderColor: pressed ? colores.foco : colorBorde,
-          },
-        ]}
+        onPressIn={hundir}
+        onPressOut={soltar}
       >
-        <Text
-          numberOfLines={2}
-          style={[
-            styles.textoSelector,
-            { color: valor ? colores.campoTexto : colores.campoPlaceholder },
-          ]}
-        >
-          {valor ? valor.pregunta : placeholder}
-        </Text>
-        <ChevronDown color={colores.campoPlaceholder} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
+        {/* Como la barra de búsqueda: se hunde y el borde toma el color de foco en 140 ms. */}
+        {({ pressed }) => (
+          <Animated.View
+            style={[
+              styles.selector,
+              transicionBorde,
+              {
+                backgroundColor: colores.campoFondo,
+                borderColor: pressed ? colores.foco : colorBorde,
+              },
+              estiloPresion,
+            ]}
+          >
+            <Text
+              numberOfLines={2}
+              style={[
+                styles.textoSelector,
+                { color: valor ? colores.campoTexto : colores.campoPlaceholder },
+              ]}
+            >
+              {valor ? valor.pregunta : placeholder}
+            </Text>
+            <ChevronDown color={colores.campoPlaceholder} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
+          </Animated.View>
+        )}
       </Pressable>
       <MensajeCampo error={error} />
 
-      <Modal
-        visible={abierto}
-        transparent
-        animationType="fade"
-        statusBarTranslucent
-        navigationBarTranslucent
-        onRequestClose={cerrar}
-      >
-        <View style={styles.modal}>
-          <Pressable
-            accessibilityLabel="Cerrar la lista"
-            onPress={cerrar}
-            style={[StyleSheet.absoluteFill, { backgroundColor: colores.velo }]}
-          />
-          <View
-            style={[
-              styles.hoja,
-              { backgroundColor: colores.fondo, paddingBottom: bottom + espacio.xl },
-            ]}
-          >
-            <Text accessibilityRole="header" style={[styles.tituloHoja, { color: colores.texto }]}>
-              {etiqueta}
-            </Text>
-            <ContenidoSelector
-              estado={estado}
-              opciones={opciones}
-              valor={valor}
-              onReintentar={onCargar}
-              onElegir={(opcion) => {
-                onElegir(opcion);
-                cerrar();
-              }}
-            />
-            <Button titulo="Cerrar" variante="secundario" onPress={cerrar} />
-          </View>
-        </View>
-      </Modal>
+      {/* La misma hoja de toda la app: sube en 240 ms y baja en 200 ms (reducido: solo se funde). */}
+      <Hoja visible={abierto} onCerrar={cerrar} titulo={etiqueta}>
+        <ContenidoSelector
+          estado={estado}
+          opciones={opciones}
+          valor={valor}
+          onReintentar={onCargar}
+          onElegir={(opcion) => {
+            onElegir(opcion);
+            cerrar();
+          }}
+        />
+        <Button titulo="Cerrar" variante="secundario" onPress={cerrar} />
+      </Hoja>
     </View>
   );
 }
@@ -1506,9 +1540,11 @@ export function Casilla({
         onPress={() => onCambiar(!marcada)}
         style={styles.filaCasilla}
       >
-        <View
+        {/* Al marcarla, el relleno y el borde cambian en 140 ms. */}
+        <Animated.View
           style={[
             styles.casilla,
+            transicionSeleccion,
             {
               borderColor: colorBorde,
               backgroundColor: marcada ? colores.accion : colores.campoFondo,
@@ -1518,7 +1554,7 @@ export function Casilla({
           {marcada ? (
             <Check color={colores.textoSobreAccion} size={icono.tamanoPequeno} strokeWidth={icono.trazoMarca} />
           ) : null}
-        </View>
+        </Animated.View>
         <Text style={[styles.texto, styles.textoCasilla, { color: colores.texto }]}>
           {texto}
           {enlace ? (
@@ -1680,23 +1716,6 @@ const styles = StyleSheet.create({
     fontSize: tipo.cuerpo.tamano,
     lineHeight: tipo.cuerpo.linea,
   },
-  modal: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  hoja: {
-    gap: espacio.l,
-    paddingHorizontal: pantalla.margen,
-    paddingTop: espacio.xxl,
-    borderTopLeftRadius: radio.tarjeta,
-    borderTopRightRadius: radio.tarjeta,
-  },
-  tituloHoja: {
-    fontFamily: fuente.titulo,
-    fontSize: tipo.subtitulo.tamano,
-    lineHeight: tipo.subtitulo.linea,
-    letterSpacing: tracking.titulo,
-  },
   opcion: {
     minHeight: toqueMinimo,
     flexDirection: 'row',
@@ -1731,8 +1750,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: espacio.s,
   },
-  opcionCabello: {
+  pulsablePastilla: {
     flex: 1,
+  },
+  opcionCabello: {
+    // Llena el Pressable: las pastillas quedan del mismo alto aunque una etiqueta use dos líneas.
+    flexGrow: 1,
     minHeight: toqueMinimo,
     flexDirection: 'row',
     alignItems: 'center',

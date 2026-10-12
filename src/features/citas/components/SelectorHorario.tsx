@@ -1,8 +1,10 @@
+import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 
+import { transicionSeleccion, usePresion } from '@/shared/ui/movimiento';
 import { Skeleton } from '@/shared/ui/Skeleton';
 import {
-  escalaPresionado,
   espacio,
   fuente,
   radio,
@@ -41,40 +43,18 @@ interface CuadriculaHorariosProps {
 
 /** Horarios libres en una cuadrícula de tres columnas; el elegido va en el color de selección. */
 export function CuadriculaHorarios({ slots, seleccionado, onElegir }: CuadriculaHorariosProps) {
-  const { colores } = useTheme();
   return (
     <View style={styles.cuadricula}>
       {enFilas(slots, reserva.columnasHorario).map((fila) => (
         <View key={fila[0].inicio} style={styles.fila}>
-          {fila.map((slot) => {
-            const activo = seleccionado?.inicio === slot.inicio;
-            const hora = horaDeSlot(slot);
-            return (
-              <Pressable
-                key={slot.inicio}
-                accessibilityRole="button"
-                accessibilityState={{ selected: activo }}
-                accessibilityLabel={hora}
-                onPress={() => onElegir(slot)}
-                style={({ pressed }) => [
-                  styles.horario,
-                  {
-                    backgroundColor: activo ? colores.seleccion : colores.superficieSecundaria,
-                    transform: [{ scale: pressed ? escalaPresionado : 1 }],
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.textoHorario,
-                    { color: activo ? colores.textoSobreSeleccion : colores.texto },
-                  ]}
-                >
-                  {hora}
-                </Text>
-              </Pressable>
-            );
-          })}
+          {fila.map((slot) => (
+            <ChipHorario
+              key={slot.inicio}
+              slot={slot}
+              activo={seleccionado?.inicio === slot.inicio}
+              onElegir={onElegir}
+            />
+          ))}
           {relleno(fila).map((i) => (
             <View key={`vacio-${i}`} style={styles.celdaVacia} />
           ))}
@@ -83,6 +63,45 @@ export function CuadriculaHorarios({ slots, seleccionado, onElegir }: Cuadricula
     </View>
   );
 }
+
+interface ChipHorarioProps {
+  slot: Slot;
+  activo: boolean;
+  onElegir: (slot: Slot) => void;
+}
+
+/** Un horario: se hunde al tocarlo y el relleno de selección se funde en 140 ms. */
+const ChipHorario = memo(function ChipHorario({ slot, activo, onElegir }: ChipHorarioProps) {
+  const { colores } = useTheme();
+  const { estilo, hundir, soltar } = usePresion();
+  const hora = horaDeSlot(slot);
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected: activo }}
+      accessibilityLabel={hora}
+      onPress={() => onElegir(slot)}
+      onPressIn={hundir}
+      onPressOut={soltar}
+      style={styles.pulsable}
+    >
+      <Animated.View
+        style={[
+          styles.horario,
+          transicionSeleccion,
+          { backgroundColor: activo ? colores.seleccion : colores.superficieSecundaria },
+          estilo,
+        ]}
+      >
+        <Text
+          style={[styles.textoHorario, { color: activo ? colores.textoSobreSeleccion : colores.texto }]}
+        >
+          {hora}
+        </Text>
+      </Animated.View>
+    </Pressable>
+  );
+});
 
 const CHIPS_ESQUELETO = Array.from({ length: reserva.horariosEsqueleto }, (_, i) => i);
 
@@ -114,8 +133,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: espacio.s,
   },
-  horario: {
+  pulsable: {
     flex: 1,
+  },
+  horario: {
+    flexGrow: 1,
     minHeight: toqueMinimo,
     alignItems: 'center',
     justifyContent: 'center',

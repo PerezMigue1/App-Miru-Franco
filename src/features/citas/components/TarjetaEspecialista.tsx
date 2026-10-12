@@ -1,14 +1,13 @@
 import { Image } from 'expo-image';
 import { Check, ChevronRight } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 
 import { Monograma } from '@/shared/ui/Monograma';
+import { usePresion } from '@/shared/ui/movimiento';
 import { Skeleton } from '@/shared/ui/Skeleton';
 import {
-  curva,
   duracion,
-  escalaPresionado,
   espacio,
   esqueleto,
   fuente,
@@ -24,8 +23,6 @@ import { useTheme } from '@/shared/ui/useTheme';
 
 import type { Especialista } from '../models/citaModel';
 
-const EASE_SALIDA = Easing.bezier(...curva.salida);
-
 interface TarjetaEspecialistaProps {
   especialista: Especialista;
   /** Es la especialista ya elegida (al regresar al paso 1). */
@@ -36,9 +33,7 @@ interface TarjetaEspecialistaProps {
 /** Una especialista para elegir: foto en círculo (o monograma), nombre y puesto. Se hunde al tocarla. */
 export function TarjetaEspecialista({ especialista, seleccionada, onPress }: TarjetaEspecialistaProps) {
   const { colores } = useTheme();
-  const escala = useSharedValue(1);
-  const animado = useAnimatedStyle(() => ({ transform: [{ scale: escala.get() }] }));
-  const ajuste = { duration: duracion.presionar, easing: EASE_SALIDA };
+  const { estilo, hundir, soltar } = usePresion();
 
   const etiqueta = [especialista.nombre, especialista.puesto].filter(Boolean).join(', ');
 
@@ -49,14 +44,14 @@ export function TarjetaEspecialista({ especialista, seleccionada, onPress }: Tar
       accessibilityState={{ selected: seleccionada }}
       accessibilityHint="Elige día y hora con ella"
       onPress={onPress}
-      onPressIn={() => escala.set(withTiming(escalaPresionado, ajuste))}
-      onPressOut={() => escala.set(withTiming(1, ajuste))}
+      onPressIn={hundir}
+      onPressOut={soltar}
     >
       <Animated.View
         style={[
           styles.tarjeta,
           { backgroundColor: colores.superficie, shadowColor: colores.sombra },
-          animado,
+          estilo,
         ]}
       >
         <View style={[styles.foto, { backgroundColor: colores.panel }]}>

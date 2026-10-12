@@ -1,12 +1,10 @@
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 
+import { usePresion } from './movimiento';
 import {
   borde,
-  curva,
-  duracion,
-  escalaPresionado,
   espacio,
   fuente,
   opacidad,
@@ -17,8 +15,11 @@ import {
 } from './tokens';
 import { useTheme } from './useTheme';
 
-/** primario: vino con sombra. secundario: terracota. contorno: transparente con borde y texto de contorno. */
-type Variante = 'primario' | 'secundario' | 'contorno';
+/**
+ * primario: vino con sombra. secundario: terracota. contorno: transparente con borde y texto de
+ * contorno. peligro: igual que contorno, pero en el color de peligro (acciones destructivas).
+ */
+type Variante = 'primario' | 'secundario' | 'contorno' | 'peligro';
 
 interface ButtonProps {
   titulo: string;
@@ -30,10 +31,10 @@ interface ButtonProps {
   deshabilitado?: boolean;
   /** Operación en curso: no responde al toque y se anuncia como ocupado, sin atenuarse. */
   cargando?: boolean;
+  /** Etiqueta para el lector de pantalla cuando el título solo no basta; por omisión, el título. */
+  accessibilityLabel?: string;
   accessibilityHint?: string;
 }
-
-const EASE_SALIDA = Easing.bezier(...curva.salida);
 
 /** Botón de la marca: 48dp de alto mínimo y se hunde 140 ms al presionar. */
 export function Button({
@@ -44,46 +45,43 @@ export function Button({
   posicionIcono = 'fin',
   deshabilitado = false,
   cargando = false,
+  accessibilityLabel,
   accessibilityHint,
 }: ButtonProps) {
   const { colores } = useTheme();
-  const escala = useSharedValue(1);
-  const estiloAnimado = useAnimatedStyle(() => ({ transform: [{ scale: escala.get() }] }));
+  const { estilo: estiloPresion, hundir, soltar } = usePresion();
 
   const primario = variante === 'primario';
-  const contorno = variante === 'contorno';
+  const peligro = variante === 'peligro';
+  const contorno = variante === 'contorno' || peligro;
+  const colorContorno = peligro ? colores.peligro : colores.contorno;
   const fondo = primario ? colores.accion : contorno ? 'transparent' : colores.secundario;
   const colorTexto = primario
     ? colores.textoSobreAccion
     : contorno
-      ? colores.contorno
+      ? colorContorno
       : colores.textoSobreSecundario;
-
-  const hundir = () => {
-    escala.set(withTiming(escalaPresionado, { duration: duracion.presionar, easing: EASE_SALIDA }));
-  };
-  const soltar = () => {
-    escala.set(withTiming(1, { duration: duracion.presionar, easing: EASE_SALIDA }));
-  };
 
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ disabled: deshabilitado || cargando, busy: cargando }}
+      accessibilityLabel={accessibilityLabel}
       accessibilityHint={accessibilityHint}
       disabled={deshabilitado || cargando}
       onPress={onPress}
       onPressIn={hundir}
       onPressOut={soltar}
+      // La atenuación va afuera: la presión controla la opacidad de la vista de adentro.
+      style={deshabilitado ? styles.deshabilitado : null}
     >
       <Animated.View
         style={[
           styles.boton,
           primario && styles.sombra,
-          contorno && [styles.contorno, { borderColor: colores.contorno }],
+          contorno && [styles.contorno, { borderColor: colorContorno }],
           { backgroundColor: fondo, shadowColor: colores.sombra },
-          deshabilitado && styles.deshabilitado,
-          estiloAnimado,
+          estiloPresion,
         ]}
       >
         {icono && posicionIcono === 'inicio' ? <View accessible={false}>{icono}</View> : null}

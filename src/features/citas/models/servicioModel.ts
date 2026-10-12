@@ -42,7 +42,7 @@ export interface Servicio {
 }
 
 /** Minutos a "45 min", "1 h 30 min" o "3 h"; null si no es un número válido. */
-function duracionParaMostrar(valor: unknown): string | null {
+export function duracionParaMostrar(valor: unknown): string | null {
   const minutos = typeof valor === 'number' ? valor : Number(texto(valor));
   if (!Number.isFinite(minutos) || minutos <= 0) {
     return null;

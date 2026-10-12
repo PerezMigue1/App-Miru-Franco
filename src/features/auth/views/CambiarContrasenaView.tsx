@@ -8,11 +8,13 @@ import {
   View,
   type TextInput,
 } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/shared/ui/Button';
 import { EmptyState } from '@/shared/ui/EmptyState';
 import { Input } from '@/shared/ui/Input';
+import { useEntradaContenido } from '@/shared/ui/movimiento';
 import { OtpInput } from '@/shared/ui/OtpInput';
 import { Skeleton } from '@/shared/ui/Skeleton';
 import { esqueleto, espacio, fuente, pantalla, tipo, toqueMinimo } from '@/shared/ui/tokens';
@@ -32,6 +34,7 @@ import {
 export default function CambiarContrasenaView() {
   const { colores } = useTheme();
   const { bottom } = useSafeAreaInsets();
+  const entrada = useEntradaContenido();
   const vm = useCambiarContrasenaViewModel();
   const refs = useRef<Partial<Record<CampoContrasena, TextInput | null>>>({});
   const enfoqueAtendido = useRef(0);
@@ -85,102 +88,105 @@ export default function CambiarContrasenaView() {
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={[styles.cuerpo, { paddingBottom: bottom + espacio.x3 }]}
         >
-          {vm.paso === 1 ? (
-            <>
-              <Input
-                ref={ref('actual')}
-                etiqueta="Contraseña actual"
-                tipo="claveActual"
-                valor={vm.valores.actual}
-                onCambiar={(t) => vm.cambiar('actual', t)}
-                onSalir={() => vm.salirDe('actual')}
-                siguiente={() => refs.current.nueva?.focus()}
-                error={vm.errores.actual}
-              />
-              <Input
-                ref={ref('nueva')}
-                etiqueta="Contraseña nueva"
-                tipo="claveNueva"
-                valor={vm.valores.nueva}
-                onCambiar={(t) => vm.cambiar('nueva', t)}
-                onSalir={() => vm.salirDe('nueva')}
-                siguiente={() => refs.current.confirmacion?.focus()}
-                error={marcarFaltantes ? null : vm.errores.nueva}
-                estado={marcarFaltantes ? { tipo: 'error', texto: 'Te faltan requisitos de la contraseña.' } : null}
-                debajo={
-                  <RequisitosClave
-                    requisitos={vm.requisitos}
-                    aviso={vm.avisoDatosPersonales}
-                    marcarFaltantes={marcarFaltantes}
-                  />
-                }
-              />
-              <Input
-                ref={ref('confirmacion')}
-                etiqueta="Confirmar contraseña nueva"
-                tipo="claveNueva"
-                valor={vm.valores.confirmacion}
-                onCambiar={(t) => vm.cambiar('confirmacion', t)}
-                onSalir={() => vm.salirDe('confirmacion')}
-                alEnviar={vm.enviarCodigo}
-                error={vm.errores.confirmacion}
-              />
-              <Aviso tipo="error" texto={vm.aviso} />
-              <Button
-                titulo={tituloEnvio(vm.enviando, vm.codigoVigente)}
-                onPress={vm.enviarCodigo}
-                cargando={vm.enviando}
-              />
-              <Enlace
-                texto="¿Olvidaste tu contraseña?"
-                onPress={vm.abrirOlvido}
-                alinear="centro"
-                accessibilityHint="Se abre en el navegador"
-              />
-            </>
-          ) : (
-            <>
-              <Text style={[styles.texto, { color: colores.texto }]}>{instrucciones}</Text>
-              <OtpInput
-                ref={ref('codigo')}
-                etiqueta="Código de verificación"
-                valor={vm.codigo}
-                onCambiar={vm.setCodigo}
-                error={vm.errores.codigo}
-                deletrear
-              />
-              <Aviso tipo="exito" texto={vm.avisoExito} />
-              <Aviso tipo="error" texto={vm.aviso} />
-              <Text style={[styles.nota, { color: colores.textoSuave }]}>
-                Al cambiarla se cerrará tu sesión en todos tus dispositivos; entra de nuevo con tu
-                contraseña nueva.
-              </Text>
-              <Button
-                titulo={vm.cambiando ? 'Cambiando…' : 'Cambiar contraseña'}
-                onPress={vm.cambiarContrasena}
-                deshabilitado={vm.reenviando}
-                cargando={vm.cambiando}
-              />
-              <Button
-                titulo={vm.reenviando ? 'Reenviando…' : 'Reenviar código'}
-                variante="secundario"
-                onPress={vm.reenviar}
-                deshabilitado={vm.espera > 0 || vm.cambiando}
-                cargando={vm.reenviando}
-              />
-              {/* La espera va como texto legible (el botón deshabilitado se atenúa); no se anuncia
-                  cada segundo. */}
-              {vm.espera > 0 ? (
-                <Text
-                  accessibilityLabel={`Podrás pedir otro código en ${vm.espera} segundos`}
-                  style={[styles.nota, styles.centrado, { color: colores.textoSuave }]}
-                >
-                  Podrás pedir otro código en {vm.espera} s
+          {/* Al cargar y al cambiar de paso, el contenido aparece en 220 ms en lugar de saltar. */}
+          <Animated.View key={vm.paso} entering={entrada} style={styles.paso}>
+            {vm.paso === 1 ? (
+              <>
+                <Input
+                  ref={ref('actual')}
+                  etiqueta="Contraseña actual"
+                  tipo="claveActual"
+                  valor={vm.valores.actual}
+                  onCambiar={(t) => vm.cambiar('actual', t)}
+                  onSalir={() => vm.salirDe('actual')}
+                  siguiente={() => refs.current.nueva?.focus()}
+                  error={vm.errores.actual}
+                />
+                <Input
+                  ref={ref('nueva')}
+                  etiqueta="Contraseña nueva"
+                  tipo="claveNueva"
+                  valor={vm.valores.nueva}
+                  onCambiar={(t) => vm.cambiar('nueva', t)}
+                  onSalir={() => vm.salirDe('nueva')}
+                  siguiente={() => refs.current.confirmacion?.focus()}
+                  error={marcarFaltantes ? null : vm.errores.nueva}
+                  estado={marcarFaltantes ? { tipo: 'error', texto: 'Te faltan requisitos de la contraseña.' } : null}
+                  debajo={
+                    <RequisitosClave
+                      requisitos={vm.requisitos}
+                      aviso={vm.avisoDatosPersonales}
+                      marcarFaltantes={marcarFaltantes}
+                    />
+                  }
+                />
+                <Input
+                  ref={ref('confirmacion')}
+                  etiqueta="Confirmar contraseña nueva"
+                  tipo="claveNueva"
+                  valor={vm.valores.confirmacion}
+                  onCambiar={(t) => vm.cambiar('confirmacion', t)}
+                  onSalir={() => vm.salirDe('confirmacion')}
+                  alEnviar={vm.enviarCodigo}
+                  error={vm.errores.confirmacion}
+                />
+                <Aviso tipo="error" texto={vm.aviso} />
+                <Button
+                  titulo={tituloEnvio(vm.enviando, vm.codigoVigente)}
+                  onPress={vm.enviarCodigo}
+                  cargando={vm.enviando}
+                />
+                <Enlace
+                  texto="¿Olvidaste tu contraseña?"
+                  onPress={vm.abrirOlvido}
+                  alinear="centro"
+                  accessibilityHint="Se abre en el navegador"
+                />
+              </>
+            ) : (
+              <>
+                <Text style={[styles.texto, { color: colores.texto }]}>{instrucciones}</Text>
+                <OtpInput
+                  ref={ref('codigo')}
+                  etiqueta="Código de verificación"
+                  valor={vm.codigo}
+                  onCambiar={vm.setCodigo}
+                  error={vm.errores.codigo}
+                  deletrear
+                />
+                <Aviso tipo="exito" texto={vm.avisoExito} />
+                <Aviso tipo="error" texto={vm.aviso} />
+                <Text style={[styles.nota, { color: colores.textoSuave }]}>
+                  Al cambiarla se cerrará tu sesión en todos tus dispositivos; entra de nuevo con tu
+                  contraseña nueva.
                 </Text>
-              ) : null}
-              <Enlace texto="Corregir mis datos" onPress={vm.volverAlPaso1} alinear="centro" />
-            </>
-          )}
+                <Button
+                  titulo={vm.cambiando ? 'Cambiando…' : 'Cambiar contraseña'}
+                  onPress={vm.cambiarContrasena}
+                  deshabilitado={vm.reenviando}
+                  cargando={vm.cambiando}
+                />
+                <Button
+                  titulo={vm.reenviando ? 'Reenviando…' : 'Reenviar código'}
+                  variante="secundario"
+                  onPress={vm.reenviar}
+                  deshabilitado={vm.espera > 0 || vm.cambiando}
+                  cargando={vm.reenviando}
+                />
+                {/* La espera va como texto legible (el botón deshabilitado se atenúa); no se anuncia
+                    cada segundo. */}
+                {vm.espera > 0 ? (
+                  <Text
+                    accessibilityLabel={`Podrás pedir otro código en ${vm.espera} segundos`}
+                    style={[styles.nota, styles.centrado, { color: colores.textoSuave }]}
+                  >
+                    Podrás pedir otro código en {vm.espera} s
+                  </Text>
+                ) : null}
+                <Enlace texto="Corregir mis datos" onPress={vm.volverAlPaso1} alinear="centro" />
+              </>
+            )}
+          </Animated.View>
         </ScrollView>
       ) : null}
     </KeyboardAvoidingView>
@@ -201,6 +207,9 @@ const styles = StyleSheet.create({
   },
   cuerpo: {
     paddingHorizontal: pantalla.margen,
+    gap: espacio.xl,
+  },
+  paso: {
     gap: espacio.xl,
   },
   texto: {
