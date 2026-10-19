@@ -6,7 +6,6 @@ import {
   ApiError,
   accesoPorVencer,
   alExpirarSesion,
-  apiGet,
   esperarRenovacionEnCurso,
   renovarSesion,
   renovarSesionSiVigente,
@@ -26,7 +25,6 @@ import {
 import {
   ErrorRolNoPermitido,
   ROL_CLIENTE,
-  type RespuestaPerfil,
   type UsuarioSesion,
 } from '../models/AuthModel';
 import {
@@ -34,6 +32,7 @@ import {
   iniciarSesion,
   normalizarUsuario,
   obtenerPerfil,
+  obtenerPerfilConToken,
   type SesionARevocar,
 } from '../models/authService';
 import {
@@ -374,7 +373,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // El canje no trae el usuario: /me con el token recién emitido (su 401 no renueva ni cierra).
     let datos: UsuarioSesion | null = null;
     try {
-      datos = normalizarUsuario((await apiGet<RespuestaPerfil>('/api/auth/me', { token }))?.data);
+      datos = normalizarUsuario((await obtenerPerfilConToken(token))?.data);
     } catch (error) {
       avisarCierre(emitida);
       throw error;

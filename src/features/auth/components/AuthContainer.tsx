@@ -75,11 +75,6 @@ import {
 import { useMovimientoReducido } from '@/shared/ui/useMovimientoReducido';
 import { useTheme } from '@/shared/ui/useTheme';
 
-import {
-  TIPOS_CABELLO,
-  type PreguntaSeguridad,
-  type RequisitoClave,
-} from '../models/AuthModel';
 import type { GoogleViewModel } from '../viewmodels/useGoogleViewModel';
 import type { LoginViewModel } from '../viewmodels/useLoginViewModel';
 import type { RetornoActivacion } from '../viewmodels/useRetornoActivacion';
@@ -88,7 +83,9 @@ import type {
   EstadoCorreo,
   EstadoPreguntas,
   PasoRegistro,
+  PreguntaSeguridad,
   RegistroViewModel,
+  RequisitoClave,
 } from '../viewmodels/useRegistroViewModel';
 
 export type VistaAcceso = 'acceso' | 'registro';
@@ -932,7 +929,7 @@ function PasoCabello({ registro, refs }: { registro: RegistroViewModel; refs: Re
       <Opciones
         refContenedor={refs.bloqueDe('tipoCabello')}
         etiqueta="Tipo de cabello"
-        opciones={TIPOS_CABELLO}
+        opciones={registro.tiposCabello}
         valor={campos.tipoCabello}
         onElegir={(v) => cambiar('tipoCabello', v)}
         error={errores.tipoCabello ?? null}

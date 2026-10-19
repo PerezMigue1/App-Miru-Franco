@@ -12,6 +12,7 @@ import {
   ERROR_TELEFONO,
   MENSAJE_DEMASIADOS_INTENTOS,
   MENSAJE_SIN_CONEXION,
+  TIPOS_CABELLO,
   convertirFechaNacimiento,
   esCorreoValido,
   esErrorDeRed,
@@ -40,6 +41,8 @@ import {
 } from '../models/AuthModel';
 import { obtenerPreguntasSeguridad, registrarUsuario, verificarCorreo } from '../models/authService';
 import { rutaAcceso } from './useRetornoActivacion';
+
+export type { PreguntaSeguridad, RequisitoClave } from '../models/AuthModel';
 
 export interface CamposRegistro {
   nombre: string;
@@ -117,6 +120,8 @@ export interface RegistroViewModel {
   avisoDatosPersonales: string;
   enfoque: PedidoEnfoque | null;
   ayudaTelefono: string;
+  /** Opciones de tipo de cabello del paso 2, en el orden en que se muestran. */
+  tiposCabello: { valor: TipoCabello; etiqueta: string }[];
   preguntas: { estado: EstadoPreguntas; lista: PreguntaSeguridad[]; cargar: () => void };
   abrirAviso: () => void;
   /** Abre los Términos y Condiciones del sitio en el navegador. */
@@ -838,6 +843,7 @@ export function useRegistroViewModel(): RegistroViewModel {
     avisoDatosPersonales: AVISO_DATOS_PERSONALES_CLAVE,
     enfoque,
     ayudaTelefono: AYUDA_TELEFONO,
+    tiposCabello: TIPOS_CABELLO,
     preguntas: { estado: estadoPreguntas, lista: listaPreguntas, cargar: cargarPreguntas },
     abrirAviso,
     abrirTerminos,
