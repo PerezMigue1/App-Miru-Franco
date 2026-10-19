@@ -82,6 +82,11 @@ export function obtenerPerfil(): Promise<RespuestaPerfil> {
   return apiGet<RespuestaPerfil>('/api/auth/me');
 }
 
+/** GET /api/auth/me con un token recién emitido: se envía tal cual y su 401 no renueva ni cierra la sesión. */
+export function obtenerPerfilConToken(token: string): Promise<RespuestaPerfil> {
+  return apiGet<RespuestaPerfil>('/api/auth/me', { token });
+}
+
 /** GET /api/auth/me con el perfil completo (datos capilares y foto), sin normalizar. */
 export function obtenerPerfilCompleto(): Promise<unknown> {
   return apiGet<unknown>('/api/auth/me');

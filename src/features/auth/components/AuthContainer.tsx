@@ -75,11 +75,6 @@ import {
 import { useMovimientoReducido } from '@/shared/ui/useMovimientoReducido';
 import { useTheme } from '@/shared/ui/useTheme';
 
-import {
-  TIPOS_CABELLO,
-  type PreguntaSeguridad,
-  type RequisitoClave,
-} from '../models/AuthModel';
 import type { GoogleViewModel } from '../viewmodels/useGoogleViewModel';
 import type { LoginViewModel } from '../viewmodels/useLoginViewModel';
 import type { RetornoActivacion } from '../viewmodels/useRetornoActivacion';
@@ -88,7 +83,9 @@ import type {
   EstadoCorreo,
   EstadoPreguntas,
   PasoRegistro,
+  PreguntaSeguridad,
   RegistroViewModel,
+  RequisitoClave,
 } from '../viewmodels/useRegistroViewModel';
 
 export type VistaAcceso = 'acceso' | 'registro';
@@ -108,11 +105,14 @@ interface AuthContainerProps {
   onCerrar?: () => void;
 }
 
-/** Lo que muestra el campo de correo según la verificación (solo lo que dice el endpoint). */
+/**
+ * Lo que muestra el campo de correo según la verificación (solo lo que dice el endpoint). La
+ * respuesta sin "existe" no muestra nada: la app nunca afirma que un correo está disponible.
+ */
 const ESTADO_CORREO: Record<EstadoCorreo, EstadoCampo | null> = {
   inactivo: null,
   verificando: { tipo: 'verificando', texto: 'Verificando correo…' },
-  disponible: { tipo: 'exito', texto: 'Correo disponible' },
+  sinAviso: null,
   registrado: { tipo: 'error', texto: 'Este correo ya está registrado' },
   revisando: { tipo: 'aviso', texto: 'Revisando si el correo ya tiene cuenta…' },
   sinConexion: { tipo: 'aviso', texto: 'Sin conexión. Revisaremos el correo cuando haya red.' },
@@ -932,7 +932,7 @@ function PasoCabello({ registro, refs }: { registro: RegistroViewModel; refs: Re
       <Opciones
         refContenedor={refs.bloqueDe('tipoCabello')}
         etiqueta="Tipo de cabello"
-        opciones={TIPOS_CABELLO}
+        opciones={registro.tiposCabello}
         valor={campos.tipoCabello}
         onElegir={(v) => cambiar('tipoCabello', v)}
         error={errores.tipoCabello ?? null}

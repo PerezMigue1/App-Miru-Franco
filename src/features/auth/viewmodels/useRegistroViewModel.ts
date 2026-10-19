@@ -12,6 +12,7 @@ import {
   ERROR_TELEFONO,
   MENSAJE_DEMASIADOS_INTENTOS,
   MENSAJE_SIN_CONEXION,
+  TIPOS_CABELLO,
   convertirFechaNacimiento,
   esCorreoValido,
   esErrorDeRed,
@@ -40,6 +41,8 @@ import {
 } from '../models/AuthModel';
 import { obtenerPreguntasSeguridad, registrarUsuario, verificarCorreo } from '../models/authService';
 import { rutaAcceso } from './useRetornoActivacion';
+
+export type { PreguntaSeguridad, RequisitoClave } from '../models/AuthModel';
 
 export interface CamposRegistro {
   nombre: string;
@@ -74,7 +77,9 @@ export type EstadoPreguntas = 'inactivo' | 'cargando' | 'listo' | 'error';
 export type PasoRegistro = 1 | 2;
 
 /**
- * Verificación del correo: solo lo que dice el endpoint (existe o no).
+ * Verificación del correo: solo lo que dice el endpoint. Sin sesión de admin el backend responde
+ * siempre existe: false para no revelar qué correos tienen cuenta, así que la app nunca afirma que
+ * un correo está disponible: 'sinAviso' es "respondió" y el registro lo revisa con su 409.
  * - 'revisando': sin respuesta a los 6 s; se reintenta.
  * - 'sinConexion': falló la red; se reintenta.
  * - 'sinVerificar': se agotaron los reintentos; el registro lo revisará con su 409.
@@ -83,7 +88,7 @@ export type PasoRegistro = 1 | 2;
 export type EstadoCorreo =
   | 'inactivo'
   | 'verificando'
-  | 'disponible'
+  | 'sinAviso'
   | 'registrado'
   | 'revisando'
   | 'sinConexion'
@@ -117,6 +122,8 @@ export interface RegistroViewModel {
   avisoDatosPersonales: string;
   enfoque: PedidoEnfoque | null;
   ayudaTelefono: string;
+  /** Opciones de tipo de cabello del paso 2, en el orden en que se muestran. */
+  tiposCabello: { valor: TipoCabello; etiqueta: string }[];
   preguntas: { estado: EstadoPreguntas; lista: PreguntaSeguridad[]; cargar: () => void };
   abrirAviso: () => void;
   /** Abre los Términos y Condiciones del sitio en el navegador. */
@@ -187,6 +194,8 @@ const DATOS_DE_LA_CLAVE: CampoRegistro[] = ['nombre', 'correo', 'telefono', 'nac
 const NO_COINCIDEN = 'Las contraseñas no coinciden';
 const REVISA_CAMPOS = 'Revisa los campos marcados.';
 const NO_PUDIMOS_CREAR = 'No pudimos crear tu cuenta. Intenta de nuevo.';
+const CORREO_CON_CUENTA =
+  'Este correo ya tiene una cuenta. Toca Iniciar sesión para entrar o recuperar tu contraseña.';
 
 function problemaDeTelefono(telefono: string): string | null {
   if (!telefono) {
@@ -361,7 +370,7 @@ export function useRegistroViewModel(): RegistroViewModel {
   const ronda = useRef(0);
   const correoRonda = useRef<string | null>(null);
   const resuelta = useRef(false);
-  const resultado = useRef<'registrado' | 'disponible' | null>(null);
+  const resultado = useRef<'registrado' | 'sinAviso' | null>(null);
   const reintentosHechos = useRef(0);
   const espera = useRef<Temporizador | null>(null);
   const reintento = useRef<Temporizador | null>(null);
@@ -434,7 +443,7 @@ export function useRegistroViewModel(): RegistroViewModel {
       return;
     }
     resuelta.current = true;
-    resultado.current = existe ? 'registrado' : 'disponible';
+    resultado.current = existe ? 'registrado' : 'sinAviso';
     limpiarReintento();
     limpiarLimites();
     setEstadoCorreo(resultado.current);
@@ -606,6 +615,10 @@ export function useRegistroViewModel(): RegistroViewModel {
     if (errorGeneral === REVISA_CAMPOS && !Object.values(siguientes).some(Boolean)) {
       setErrorGeneral(null);
     }
+    if (campo === 'correo' && errorGeneral === CORREO_CON_CUENTA) {
+      // El aviso del 409 era de ese correo: con otro ya no aplica.
+      setErrorGeneral(null);
+    }
     const activarEnVivo: Partial<Record<CampoRegistro, boolean>> = {};
     if (campo === 'confirmacion' && siguientes.confirmacion) {
       activarEnVivo.confirmacion = true;
@@ -703,7 +716,7 @@ export function useRegistroViewModel(): RegistroViewModel {
     }
     setErrorGeneral(null);
     let registrado = estadoCorreo === 'registrado';
-    if (!registrado && estadoCorreo !== 'disponible') {
+    if (!registrado && estadoCorreo !== 'sinAviso') {
       const version = cambios.current;
       setVerificandoCorreo(true);
       try {
@@ -761,14 +774,16 @@ export function useRegistroViewModel(): RegistroViewModel {
       push({ pathname: '/activar', params: { email, enviado: '1', volverA: rutaAcceso(ruta) } });
     } catch (error) {
       if (estadoHttp(error) === 409) {
-        // El correo ya tiene cuenta: se muestra en el propio campo, en el paso 1 (solo si el
-        // campo sigue teniendo el correo que se envió).
+        // El correo ya tiene cuenta: se muestra en el propio campo, en el paso 1, con "Iniciar
+        // sesión" (desde Acceso también puede recuperar la contraseña). Solo si el campo sigue
+        // teniendo el correo que se envió.
         if (montado.current) {
-          if (normalizarCorreo(ultimoCorreo.current) === email) {
+          const mismoCorreo = normalizarCorreo(ultimoCorreo.current) === email;
+          if (mismoCorreo) {
             marcarRegistrado(email);
           }
           irAPaso(1);
-          setErrorGeneral(REVISA_CAMPOS);
+          setErrorGeneral(mismoCorreo ? CORREO_CON_CUENTA : REVISA_CAMPOS);
           pedirEnfoque('correo');
         }
       } else {
@@ -838,6 +853,7 @@ export function useRegistroViewModel(): RegistroViewModel {
     avisoDatosPersonales: AVISO_DATOS_PERSONALES_CLAVE,
     enfoque,
     ayudaTelefono: AYUDA_TELEFONO,
+    tiposCabello: TIPOS_CABELLO,
     preguntas: { estado: estadoPreguntas, lista: listaPreguntas, cargar: cargarPreguntas },
     abrirAviso,
     abrirTerminos,

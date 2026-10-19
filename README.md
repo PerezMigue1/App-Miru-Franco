@@ -9,8 +9,8 @@ Para arrancar la app: `npm install` y luego `npx expo start --go --tunnel -c`.
 Cada feature vive en `src/features/<feature>/` (auth, inicio, citas, tienda, notificaciones) con cuatro carpetas. La referencia es `src/features/auth`.
 
 - `models/`: tipos y llamadas a la API. Toda petición pasa por `src/shared/api/apiClient.ts` (`apiGet`, `apiPost`, `apiPut`, `apiPatch`, `apiDelete`) y la respuesta se normaliza a los tipos de la feature. Ejemplos: `auth/models/authService.ts`, `citas/models/citaModel.ts`, `tienda/models/productoModel.ts`.
-- `viewmodels/`: estado y lógica en hooks (`useLoginViewModel`, `useMisCitasViewModel`, `useCarritoViewModel`...). Llaman a las funciones de `models/` y entregan a la vista datos listos para pintar. La única llamada directa a `apiClient` desde un viewmodel es `GET /api/auth/me` en `auth/viewmodels/useAuth.tsx`.
-- `views/`: solo pintan; toman todo de su viewmodel (por ejemplo, `LoginView.tsx` usa `useLoginViewModel`).
+- `viewmodels/`: estado y lógica en hooks (`useLoginViewModel`, `useMisCitasViewModel`, `useCarritoViewModel`...). Llaman a las funciones de `models/` y entregan a la vista datos listos para pintar. Ningún viewmodel hace peticiones directas con `apiGet`, `apiPost`, `apiPut`, `apiPatch` o `apiDelete`: de `apiClient` solo toman `ApiError` y, en `auth/viewmodels/useAuth.tsx`, las funciones de manejo de sesión (`renovarSesion`, `alExpirarSesion`...). El perfil tras el inicio con Google lo pide `obtenerPerfilConToken` de `auth/models/authService.ts`.
+- `views/`: solo pintan; toman todo de su viewmodel (por ejemplo, `LoginView.tsx` usa `useLoginViewModel`). En auth, `AuthContainer.tsx` y las vistas de acceso no importan nada de `models/`: los tipos y las opciones (como `tiposCabello`) les llegan de `useRegistroViewModel`. La prueba `test/unit/gp-05/reglas-auth.test.ts` vigila esto y que `useAuth.tsx` no haga peticiones directas.
 - `components/`: piezas visuales propias de la feature (`TarjetaCita`, `SelectorHorario`, `FilaCarrito`...).
 
 Fuera de las features:
@@ -36,7 +36,7 @@ Regla: shared no depende de features. `src/shared` no importa nada de `src/featu
 - Uso: `throw crearErrorApi({ tipo: 'respuesta', status: response.status, cuerpo: data })`.
 
 **Repository**
-- `src/features/*/models/*Model.ts` y `src/features/auth/models/authService.ts`: funciones como `listarMisCitas`, `obtenerCita`, `crearCita` y `cancelarCita` (`citaModel.ts`), `obtenerCatalogo` (`productoModel.ts`) u `obtenerCarrito` (`carritoModel.ts`) ocultan la ruta HTTP y convierten la respuesta cruda en tipos de la feature (`normalizarCita`, `normalizarProducto`, `normalizarItem`). Los viewmodels piden datos a estas funciones sin saber de dónde salen.
+- `src/features/*/models/*Model.ts` y `src/features/auth/models/authService.ts`: funciones como `listarMisCitas`, `obtenerCita`, `crearCita` y `cancelarCita` (`citaModel.ts`), `obtenerCatalogo` (`productoModel.ts`) u `obtenerCarrito` (`carritoModel.ts`) ocultan la ruta HTTP y convierten la respuesta cruda en tipos de la feature (`normalizarCita`, `normalizarProducto`, `normalizarItem`). Los viewmodels piden datos a estas funciones sin saber de dónde salen. En `authService.ts`, `obtenerPerfilConToken` pide `GET /api/auth/me` con el token recién emitido tras el inicio con Google.
 
 **Observer**
 - `src/features/tienda/viewmodels/usePiezasCarrito.ts`: estado en memoria con un `Set` de `oyentes`; `suscribir()` agrega y quita oyentes, `fijar()` les avisa cuando cambia el número de piezas y `usePiezasCarrito()` se conecta con `useSyncExternalStore(suscribir, leerPiezas)`. Otras pantallas publican cambios con `avisarCambioCarrito()` y `publicarPiezasCarrito()`.
