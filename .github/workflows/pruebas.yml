@@ -17,6 +17,7 @@ jobs:
   pruebas:
     name: Tipos, pruebas y cobertura
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Descargar el código
         uses: actions/checkout@v4
@@ -28,7 +29,7 @@ jobs:
           cache: npm
 
       - name: Instalar dependencias
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Revisar tipos
         run: npm run typecheck
@@ -40,7 +41,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          npx jest --ci --coverage --json --outputFile=jest-resultados.json 2>&1 | tee jest-salida.txt
+          npm run test:ci 2>&1 | tee jest-salida.txt
 
       - name: Escribir resumen de pruebas y cobertura
         if: always()
@@ -91,8 +92,9 @@ jobs:
   sast:
     name: Análisis estático (Semgrep)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     container:
-      image: semgrep/semgrep
+      image: semgrep/semgrep:1.180.0
     steps:
       - name: Descargar el código
         uses: actions/checkout@v4

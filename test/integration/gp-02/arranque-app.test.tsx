@@ -1,6 +1,13 @@
 /// <reference types="jest" />
 
-import { fireEvent, renderRouter, screen, waitFor } from 'expo-router/testing-library';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  renderRouter,
+  screen,
+  waitFor,
+} from 'expo-router/testing-library';
 import type { TestInstance } from 'test-renderer';
 
 import { leerSecureStore } from '../../helpers/secureStore';
@@ -40,8 +47,8 @@ function respuesta(cuerpo: unknown, status = 200): Response {
     ok: status >= 200 && status < 300,
     status,
     headers: new Headers({ 'Content-Type': 'application/json' }),
-    text: async () => textoCuerpo,
-    json: async () => JSON.parse(textoCuerpo) as unknown,
+    text: () => Promise.resolve(textoCuerpo),
+    json: () => Promise.resolve(JSON.parse(textoCuerpo) as unknown),
   } as unknown as Response;
 }
 
@@ -98,7 +105,17 @@ describe('Arranque de la app con las rutas reales (GP-02)', () => {
     espiaAviso = jest.spyOn(console, 'warn');
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    // Se desmonta la app aquí, con los temporizadores falsos que activa renderRouter todavía puestos:
+    // este afterEach corre antes que la limpieza automática de Testing Library. Si el desmontaje
+    // ocurre ya con los reales, StatusBar de React Native llama al clearImmediate real con el
+    // Immediate falso que guardó al montarse, y en Node 22 eso descuadra el contador interno de
+    // setImmediate: ningún setImmediate vuelve a correr y Jest se queda esperando para siempre.
+    await cleanup();
+    // Lo que el desmontaje dejó programado corre ahora, todavía con los temporizadores falsos.
+    await act(async () => {
+      jest.runOnlyPendingTimers();
+    });
     espiaError.mockRestore();
     espiaAviso.mockRestore();
     // renderRouter activa los temporizadores falsos; se devuelven los reales para la siguiente prueba.
@@ -106,15 +123,15 @@ describe('Arranque de la app con las rutas reales (GP-02)', () => {
   });
 
   it('abre en Inicio sin sesión, pinta los catálogos simulados y ofrece la bienvenida', async () => {
-    const fetchSimulado = jest.fn(async (entrada: unknown) => {
+    const fetchSimulado = jest.fn((entrada: unknown) => {
       const url = urlDe(entrada);
       if (url === `${API}/api/servicios`) {
-        return respuesta(SERVICIOS);
+        return Promise.resolve(respuesta(SERVICIOS));
       }
       if (url === `${API}/api/productos`) {
-        return respuesta(PRODUCTOS);
+        return Promise.resolve(respuesta(PRODUCTOS));
       }
-      return respuesta({ message: 'No encontrado' }, 404);
+      return Promise.resolve(respuesta({ message: 'No encontrado' }, 404));
     });
     globalThis.fetch = fetchSimulado as unknown as typeof fetch;
 

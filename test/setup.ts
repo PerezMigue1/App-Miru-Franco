@@ -23,13 +23,15 @@ jest.mock('expo-secure-store', () => {
     ALWAYS_THIS_DEVICE_ONLY: 4,
     WHEN_UNLOCKED: 5,
     WHEN_UNLOCKED_THIS_DEVICE_ONLY: 6,
-    isAvailableAsync: jest.fn(async () => true),
-    getItemAsync: jest.fn(async (clave: string) => almacen.get(clave) ?? null),
-    setItemAsync: jest.fn(async (clave: string, valor: string) => {
+    isAvailableAsync: jest.fn(() => Promise.resolve(true)),
+    getItemAsync: jest.fn((clave: string) => Promise.resolve(almacen.get(clave) ?? null)),
+    setItemAsync: jest.fn((clave: string, valor: string) => {
       almacen.set(clave, valor);
+      return Promise.resolve();
     }),
-    deleteItemAsync: jest.fn(async (clave: string) => {
+    deleteItemAsync: jest.fn((clave: string) => {
       almacen.delete(clave);
+      return Promise.resolve();
     }),
     getItem: jest.fn((clave: string) => almacen.get(clave) ?? null),
     setItem: jest.fn((clave: string, valor: string) => {
@@ -42,15 +44,15 @@ jest.mock('expo-secure-store', () => {
 // expo-font: las fuentes se dan por cargadas.
 jest.mock('expo-font', () => ({
   useFonts: jest.fn(() => [true, null]),
-  loadAsync: jest.fn(async () => undefined),
+  loadAsync: jest.fn(() => Promise.resolve(undefined)),
   isLoaded: jest.fn(() => true),
   isLoading: jest.fn(() => false),
 }));
 
 // expo-splash-screen: todo resuelve sin hacer nada.
 jest.mock('expo-splash-screen', () => ({
-  preventAutoHideAsync: jest.fn(async () => true),
-  hideAsync: jest.fn(async () => true),
+  preventAutoHideAsync: jest.fn(() => Promise.resolve(true)),
+  hideAsync: jest.fn(() => Promise.resolve(true)),
   hide: jest.fn(),
   setOptions: jest.fn(),
 }));

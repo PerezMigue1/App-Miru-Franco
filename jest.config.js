@@ -4,14 +4,14 @@ process.env.EXPO_PUBLIC_WEB_URL = 'http://web.test';
 
 // Mismo transformador de Babel que jest-expo aplica a .js/.ts, para paquetes que publican .mjs
 // (por ejemplo lucide-react-native).
-const transformadorExpo = require('jest-expo/jest-preset').transform['\\.[jt]sx?$'];
+const transformadorExpo = require('jest-expo/jest-preset').transform[String.raw`\.[jt]sx?$`];
 
 /** @type {import('jest').Config} */
 module.exports = {
   preset: 'jest-expo',
   roots: ['<rootDir>/test'],
   transform: {
-    '\\.mjs$': transformadorExpo,
+    [String.raw`\.mjs$`]: transformadorExpo,
   },
   setupFilesAfterEnv: ['<rootDir>/test/setup.ts'],
   moduleNameMapper: {
