@@ -1,56 +1,56 @@
-# Welcome to your Expo app 👋
+# App Miru Franco
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Para arrancar la app: `npm install` y luego `npx expo start --go --tunnel -c`.
 
-## Get started
+## Arquitectura y patrones
 
-1. Install dependencies
+### MVVM por feature
 
-   ```bash
-   npm install
-   ```
+Cada feature vive en `src/features/<feature>/` (auth, inicio, citas, tienda, notificaciones) con cuatro carpetas. La referencia es `src/features/auth`.
 
-2. Start the app
+- `models/`: tipos y llamadas a la API. Toda petición pasa por `src/shared/api/apiClient.ts` (`apiGet`, `apiPost`, `apiPut`, `apiPatch`, `apiDelete`) y la respuesta se normaliza a los tipos de la feature. Ejemplos: `auth/models/authService.ts`, `citas/models/citaModel.ts`, `tienda/models/productoModel.ts`.
+- `viewmodels/`: estado y lógica en hooks (`useLoginViewModel`, `useMisCitasViewModel`, `useCarritoViewModel`...). Llaman a las funciones de `models/` y entregan a la vista datos listos para pintar. La única llamada directa a `apiClient` desde un viewmodel es `GET /api/auth/me` en `auth/viewmodels/useAuth.tsx`.
+- `views/`: solo pintan; toman todo de su viewmodel (por ejemplo, `LoginView.tsx` usa `useLoginViewModel`).
+- `components/`: piezas visuales propias de la feature (`TarjetaCita`, `SelectorHorario`, `FilaCarrito`...).
 
-   ```bash
-   npx expo start
-   ```
+Fuera de las features:
 
-In the output, you'll find options to open the app in a
+- `src/app`: solo rutas de Expo Router; cada archivo reexporta una vista (por ejemplo, `src/app/(auth)/login.tsx` exporta `LoginView`).
+- `src/shared/api`: cliente HTTP con renovación de sesión (`apiClient.ts`), sesión en SecureStore (`tokenStorage.ts`) y subida multipart (`subirMultipart.ts`).
+- `src/shared/ui`: colores (`colores.ts`), tokens (`tokens.ts`), tema (`useTheme.ts`, `apariencia.tsx`) y componentes compartidos.
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+### Patrones de diseño
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+**Singleton (estado de módulo único)**
+- `src/shared/api/apiClient.ts`: el módulo guarda una sola `renovacionEnCurso`; `renovarEnVuelo()` la crea solo si no existe (`renovacionEnCurso ??= ...`), así varias peticiones a la vez comparten una sola renovación. También guarda un único `manejadorSesionExpirada` y el último `refreshConsumido`.
+- `src/shared/api/tokenStorage.ts`: un solo contador `generacion` (`generacionActual()`, `nuevaGeneracion()`) y una sola cola `cola` (`enCola()`) por la que pasan, una tras otra, todas las lecturas y escrituras de la sesión en SecureStore.
 
-## Get a fresh project
+**Factory (función fábrica)**
+- `src/shared/api/apiClient.ts`: `sesionTerminada(code)` construye el `ApiError` 401 de sesión terminada (mensaje fijo y `code` `SESION_VENCIDA` si el servidor no mandó otro); lo usan `prepararSalidaMovil`, `reintentarMovil` y `cerrarTrasRechazo` en lugar de armarlo cada uno.
 
-When you're ready, run:
+**Repository**
+- `src/features/*/models/*Model.ts` y `src/features/auth/models/authService.ts`: funciones como `listarMisCitas`, `obtenerCita`, `crearCita` y `cancelarCita` (`citaModel.ts`), `obtenerCatalogo` (`productoModel.ts`) u `obtenerCarrito` (`carritoModel.ts`) ocultan la ruta HTTP y convierten la respuesta cruda en tipos de la feature (`normalizarCita`, `normalizarProducto`, `normalizarItem`). Los viewmodels piden datos a estas funciones sin saber de dónde salen.
+
+**Observer**
+- `src/features/tienda/viewmodels/usePiezasCarrito.ts`: estado en memoria con un `Set` de `oyentes`; `suscribir()` agrega y quita oyentes, `fijar()` les avisa cuando cambia el número de piezas y `usePiezasCarrito()` se conecta con `useSyncExternalStore(suscribir, leerPiezas)`. Otras pantallas publican cambios con `avisarCambioCarrito()` y `publicarPiezasCarrito()`.
+- `src/features/auth/viewmodels/useFotoClienta.ts`: el mismo esquema (`oyentes`, `suscribir`, `fijar`, `useSyncExternalStore`) para la foto de la cabecera; Perfil avisa con `fijarFotoClienta()`.
+- `src/shared/api/apiClient.ts`: `alExpirarSesion(manejador)` registra a quien se entera cuando la sesión expira (un solo manejador) y devuelve la función para quitarlo; `AuthProvider` en `useAuth.tsx` se registra ahí para quedar sin sesión y avisarle a la clienta.
+
+## Pruebas
 
 ```bash
-npm run reset-project
+npm test               # corre Jest
+npm run test:coverage  # Jest con cobertura
+npm run typecheck      # tsc --noEmit
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Estructura de `test/`:
 
-### Other setup steps
+- `test/setup.ts`: configuración global. Mocks de `expo-secure-store` (en memoria, se vacía antes de cada prueba), `expo-font`, `expo-splash-screen`, `react-native-reanimated` y `react-native-worklets`; `fetch` simulado que rechaza si la prueba no lo configura; variables de entorno de prueba con la API en `http://api.test`.
+- `test/helpers/`: utilidades compartidas, como `secureStore.ts` para limpiar y leer el almacén simulado de SecureStore.
+- `test/unit/<tarea>/` y `test/integration/<tarea>/`: pruebas unitarias y de integración agrupadas por tarea (por ejemplo, `test/unit/gp-02` y `test/integration/gp-02`).
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+Workflow `.github/workflows/pruebas.yml` (se dispara en `pull_request` y `push` hacia `main`, `develop` y `release`; no usa secretos):
 
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+- Job `pruebas` (Node 22): `npm ci`, `npm run typecheck` y `npx jest --ci --coverage`; publica el resumen de pruebas y cobertura en el resumen del job y sube la cobertura como artefacto.
+- Job `sast`: Semgrep con las reglas `p/javascript`, `p/typescript`, `p/react` y `p/secrets`; resume los hallazgos por severidad y falla si hay alguno de severidad ERROR.

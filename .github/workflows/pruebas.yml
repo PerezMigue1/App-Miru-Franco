@@ -1,0 +1,146 @@
+name: Pruebas
+
+on:
+  pull_request:
+    branches: [main, develop, release]
+  push:
+    branches: [main, develop, release]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pruebas:
+    name: Tipos, pruebas y cobertura
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      - name: Preparar Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Revisar tipos
+        run: npm run typecheck
+
+      # La salida de texto (incluye el text-summary de cobertura) y el JSON de Jest
+      # se guardan para el resumen. pipefail hace que el paso falle si fallan las pruebas.
+      - name: Correr pruebas con cobertura
+        id: jest
+        shell: bash
+        run: |
+          set -o pipefail
+          npx jest --ci --coverage --json --outputFile=jest-resultados.json 2>&1 | tee jest-salida.txt
+
+      - name: Escribir resumen de pruebas y cobertura
+        if: always()
+        shell: bash
+        env:
+          RESULTADO_JEST: ${{ steps.jest.outcome }}
+        run: |
+          {
+            echo "## Pruebas"
+            echo ""
+            if [ -f jest-resultados.json ]; then
+              node -e '
+                const r = require("./jest-resultados.json");
+                const filas = [
+                  ["Suites", r.numPassedTestSuites, r.numFailedTestSuites, r.numPendingTestSuites, r.numTotalTestSuites],
+                  ["Pruebas", r.numPassedTests, r.numFailedTests, r.numPendingTests, r.numTotalTests],
+                ];
+                console.log("| | Pasan | Fallan | Omitidas | Total |");
+                console.log("|---|---|---|---|---|");
+                for (const f of filas) console.log("| " + f.join(" | ") + " |");
+                console.log("");
+                console.log(r.success ? "Resultado: todas las pruebas pasaron." : "Resultado: hay pruebas que fallaron.");
+              '
+            else
+              echo "No se generaron resultados de Jest (estado del paso: ${RESULTADO_JEST:-sin correr})."
+            fi
+            echo ""
+            echo "## Cobertura"
+            echo ""
+            if [ -f jest-salida.txt ] && grep -Eq '^(Statements|Branches|Functions|Lines) +:' jest-salida.txt; then
+              echo '```'
+              sed 's/\x1b\[[0-9;]*m//g' jest-salida.txt | grep -E '^(Statements|Branches|Functions|Lines) +:'
+              echo '```'
+            else
+              echo "No hay resumen de cobertura."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Subir cobertura
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cobertura
+          path: coverage/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  sast:
+    name: Análisis estático (Semgrep)
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      # Solo reglas públicas del registro, sin login ni token. Falla el job si hay hallazgos ERROR.
+      - name: Escanear con Semgrep
+        run: |
+          semgrep scan \
+            --config p/javascript \
+            --config p/typescript \
+            --config p/react \
+            --config p/secrets \
+            --severity ERROR \
+            --error \
+            --metrics=off \
+            --exclude node_modules \
+            --exclude coverage \
+            --exclude assets \
+            --json-output=semgrep.json \
+            .
+
+      - name: Escribir resumen de Semgrep
+        if: always()
+        env:
+          PYTHONIOENCODING: utf-8
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json, os
+          from collections import Counter
+
+          print("## Semgrep")
+          print("")
+          if not os.path.isfile("semgrep.json"):
+              print("No se generó semgrep.json; el escaneo no terminó.")
+              raise SystemExit(0)
+
+          with open("semgrep.json", encoding="utf-8") as f:
+              datos = json.load(f)
+
+          conteo = Counter(r.get("extra", {}).get("severity", "SIN_SEVERIDAD") for r in datos.get("results", []))
+          print("| Severidad | Hallazgos |")
+          print("|---|---|")
+          for sev in ["ERROR", "WARNING", "INFO"]:
+              print(f"| {sev} | {conteo.pop(sev, 0)} |")
+          for sev, n in sorted(conteo.items()):
+              print(f"| {sev} | {n} |")
+          print("")
+          print(f"Errores del escáner: {len(datos.get('errors', []))}")
+          print("")
+          print("Nota: el escaneo aplica solo reglas de severidad ERROR (--severity ERROR).")
+          PY
