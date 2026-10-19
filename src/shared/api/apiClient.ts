@@ -114,7 +114,7 @@ async function fetchWithTimeout(url: string, init: RequestInit): Promise<Respons
     return await fetch(url, { ...init, signal: controller.signal });
   } catch {
     // Fallo de red o timeout (AbortError).
-    throw new ErrorDeRed();
+    throw crearErrorApi({ tipo: 'red' });
   } finally {
     clearTimeout(timeoutId);
   }
@@ -159,6 +159,34 @@ function getErrorCode(body: unknown): string | undefined {
   return undefined;
 }
 
+/** Datos para crear un error de la API; el Factory decide la clase, el mensaje, el status y el code. */
+export type DatosErrorApi =
+  | { tipo: 'red' }
+  | { tipo: 'respuesta'; status: number; cuerpo: unknown }
+  | { tipo: 'sesionTerminada'; code?: string };
+
+/**
+ * Factory de errores de la API: toda creación de ApiError y ErrorDeRed de este archivo pasa por
+ * aquí. 'red': sin red o sin respuesta a tiempo; 'respuesta': cuerpo de error del backend;
+ * 'sesionTerminada': 401 con el mensaje para la clienta y el code del rechazo (o SESION_VENCIDA).
+ */
+export function crearErrorApi(datos: { tipo: 'red' }): ErrorDeRed;
+export function crearErrorApi(datos: Exclude<DatosErrorApi, { tipo: 'red' }>): ApiError;
+export function crearErrorApi(datos: DatosErrorApi): ApiError | ErrorDeRed {
+  switch (datos.tipo) {
+    case 'red':
+      return new ErrorDeRed();
+    case 'respuesta':
+      return new ApiError(
+        datos.status,
+        getErrorMessage(datos.cuerpo, datos.status),
+        getErrorCode(datos.cuerpo),
+      );
+    case 'sesionTerminada':
+      return new ApiError(401, MENSAJE_SESION_TERMINADA, datos.code ?? 'SESION_VENCIDA');
+  }
+}
+
 function enviar(
   method: HttpMethod,
   path: string,
@@ -184,7 +212,7 @@ function enviar(
 async function leer<T>(response: Response): Promise<T> {
   const data = await parseBody(response);
   if (!response.ok) {
-    throw new ApiError(response.status, getErrorMessage(data, response.status), getErrorCode(data));
+    throw crearErrorApi({ tipo: 'respuesta', status: response.status, cuerpo: data });
   }
   return data as T;
 }
@@ -307,7 +335,7 @@ async function pedirRenovacionMovil(refreshToken: string): Promise<RespuestaMovi
   try {
     respuesta = await enviar('POST', RUTA_RENOVAR_MOVIL, { refreshToken }, null);
   } catch (error) {
-    return { tipo: 'falla', error: error instanceof Error ? error : new ErrorDeRed() };
+    return { tipo: 'falla', error: error instanceof Error ? error : crearErrorApi({ tipo: 'red' }) };
   }
   const { status } = respuesta;
   // Solo 200, 401 (sesión vencida o revocada) y 409 (reuso) dicen que el servidor ya no acepta este
@@ -330,10 +358,7 @@ async function pedirRenovacionMovil(refreshToken: string): Promise<RespuestaMovi
   if (consumido) {
     return { tipo: 'rechazo', code: getErrorCode(datos) };
   }
-  return {
-    tipo: 'falla',
-    error: new ApiError(status, getErrorMessage(datos, status), getErrorCode(datos)),
-  };
+  return { tipo: 'falla', error: crearErrorApi({ tipo: 'respuesta', status, cuerpo: datos }) };
 }
 
 /**
@@ -535,10 +560,6 @@ async function solicitudClasica<T>(method: HttpMethod, path: string, body: unkno
   return leer<T>(respuesta);
 }
 
-function sesionTerminada(code: string | undefined): ApiError {
-  return new ApiError(401, MENSAJE_SESION_TERMINADA, code ?? 'SESION_VENCIDA');
-}
-
 /** Sesión con la que sale una petición móvil y la renovación previa, si la hubo. */
 interface SalidaMovil {
   generacion: number;
@@ -557,10 +578,10 @@ async function prepararSalidaMovil(): Promise<SalidaMovil> {
   }
   const previa = await renovarEnVuelo({ tipo: 'previo' });
   if (previa.resultado === 'rechazada') {
-    throw sesionTerminada(previa.code);
+    throw crearErrorApi({ tipo: 'sesionTerminada', code: previa.code });
   }
   if (previa.resultado === 'fallida' && accesoVencido(sesion)) {
-    throw previa.error ?? new ErrorDeRed();
+    throw previa.error ?? crearErrorApi({ tipo: 'red' });
   }
   // 'descartada': la sesión cambió; la petición sale con la que haya ahora.
   return { generacion: generacionActual(), sesion: await leerSesion(), previa };
@@ -569,7 +590,7 @@ async function prepararSalidaMovil(): Promise<SalidaMovil> {
 /** El acceso de la sesión fue rechazado justo después de renovarse: se cierra y se avisa. */
 async function cerrarTrasRechazo(token: string, generacion: number): Promise<never> {
   await expirarSesion(token, generacion);
-  throw sesionTerminada(undefined);
+  throw crearErrorApi({ tipo: 'sesionTerminada' });
 }
 
 /**
@@ -586,7 +607,7 @@ async function reintentarMovil<T>(
 ): Promise<T> {
   const renovacion = await renovarEnVuelo({ tipo: 'reintento', token: sesion.token });
   if (renovacion.resultado === 'rechazada') {
-    throw sesionTerminada(renovacion.code);
+    throw crearErrorApi({ tipo: 'sesionTerminada', code: renovacion.code });
   }
   if (renovacion.resultado === 'fallida' && renovacion.error) {
     throw renovacion.error;
