@@ -29,8 +29,11 @@ import {
 } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
-import type { Especialista, Servicio } from '../models/servicioModel';
-import { useDetalleServicioViewModel } from '../viewmodels/useDetalleServicioViewModel';
+import {
+  useDetalleServicioViewModel,
+  type Especialista,
+  type Servicio,
+} from '../viewmodels/useDetalleServicioViewModel';
 
 /** Detalle de un servicio: foto, datos, reservar primero y después lo que incluye. */
 export default function DetalleServicioView() {
@@ -111,7 +114,7 @@ export default function DetalleServicioView() {
         >
           <EmptyState
             titulo="Este servicio ya no está disponible"
-            mensaje="Puede que el salón lo haya retirado. Mira los demás servicios en Citas."
+            mensaje="Puede que el salón lo haya retirado. Mira los demás servicios del salón."
             accion={{ titulo: 'Ver servicios', onPress: () => router.replace('/citas') }}
           />
         </ScrollView>

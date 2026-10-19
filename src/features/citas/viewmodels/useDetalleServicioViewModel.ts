@@ -6,6 +6,9 @@ import { ApiError } from '@/shared/api/apiClient';
 
 import { obtenerServicio, type Servicio } from '../models/servicioModel';
 
+// La vista no importa de models/: recibe estos tipos del viewmodel.
+export type { Especialista, Servicio } from '../models/servicioModel';
+
 export type EstadoDetalleServicio = 'cargando' | 'listo' | 'error' | 'noEncontrado';
 
 export interface DetalleServicioViewModel {
