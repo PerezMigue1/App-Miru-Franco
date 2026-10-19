@@ -26,7 +26,12 @@ Fuera de las features:
 - `src/shared/api/tokenStorage.ts`: un solo contador `generacion` (`generacionActual()`, `nuevaGeneracion()`) y una sola cola `cola` (`enCola()`) por la que pasan, una tras otra, todas las lecturas y escrituras de la sesión en SecureStore.
 
 **Factory (función fábrica)**
-- `src/shared/api/apiClient.ts`: `sesionTerminada(code)` construye el `ApiError` 401 de sesión terminada (mensaje fijo y `code` `SESION_VENCIDA` si el servidor no mandó otro); lo usan `prepararSalidaMovil`, `reintentarMovil` y `cerrarTrasRechazo` en lugar de armarlo cada uno.
+- `src/shared/api/apiClient.ts`: `crearErrorApi(datos)` es la única función que crea los errores del cliente HTTP; recibe un tipo y decide la clase, el mensaje, el status y el `code`:
+  - `{ tipo: 'red' }`: `ErrorDeRed` ("Sin conexión con el servidor.") cuando no hay red o no llega respuesta dentro del límite de 15 s; nunca cierra la sesión.
+  - `{ tipo: 'respuesta', status, cuerpo }`: `ApiError` de una respuesta con error del backend, con el `message` (o `error`) y el `code` del cuerpo, o "Error en la solicitud (status)." si no vienen.
+  - `{ tipo: 'sesionTerminada', code? }`: `ApiError` 401 de sesión terminada, con mensaje fijo para la clienta y `code` `SESION_VENCIDA` si el servidor no mandó otro.
+- La usan `fetchWithTimeout` (sin red o tiempo agotado), `leer` (respuestas con error), `pedirRenovacionMovil` (falla al renovar), `prepararSalidaMovil`, `reintentarMovil` y `cerrarTrasRechazo` (sesión terminada), en lugar de armar cada uno su error. Sus sobrecargas dan el tipo exacto: `ErrorDeRed` para `'red'` y `ApiError` para los demás.
+- Uso: `throw crearErrorApi({ tipo: 'respuesta', status: response.status, cuerpo: data })`.
 
 **Repository**
 - `src/features/*/models/*Model.ts` y `src/features/auth/models/authService.ts`: funciones como `listarMisCitas`, `obtenerCita`, `crearCita` y `cancelarCita` (`citaModel.ts`), `obtenerCatalogo` (`productoModel.ts`) u `obtenerCarrito` (`carritoModel.ts`) ocultan la ruta HTTP y convierten la respuesta cruda en tipos de la feature (`normalizarCita`, `normalizarProducto`, `normalizarItem`). Los viewmodels piden datos a estas funciones sin saber de dónde salen.
