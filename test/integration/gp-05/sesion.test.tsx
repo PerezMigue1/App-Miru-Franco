@@ -1,29 +1,20 @@
 /// <reference types="jest" />
 
+// Primero los mocks: tienen que quedar registrados antes de cargar expo-router/testing-library.
+import '../../helpers/mocksPantallas';
+
 import * as SecureStore from 'expo-secure-store';
 import { fireEvent, screen, waitFor } from 'expo-router/testing-library';
-import type { TestInstance } from 'test-renderer';
 
-import { cerrarRouter, iniciarRouter } from '../../helpers/router';
+import {
+  abrirApp,
+  cerrarIntroSiAparece,
+  LIMITE_MS,
+  prepararPruebasDePantalla,
+  ultimoBoton,
+} from '../../helpers/pantallas';
 import { leerSecureStore } from '../../helpers/secureStore';
-
-/**
- * expo-router/testing-library carga build/testing-library/mocks.js, que vuelve a registrar el mock de
- * react-native-reanimated con el mock básico de la librería y reemplaza al de test/setup.ts (la app
- * no carga sin cubicBezier, steps, linear y useReducedMotion). Se sustituye ese archivo por lo mismo
- * que hace, salvo lo de Reanimated (ver GP-02).
- */
-jest.mock('expo-router/build/testing-library/mocks', () => {
-  require('react-native-gesture-handler/jestSetup');
-  return {};
-});
-
-jest.mock('expo-linking', () => ({
-  ...jest.requireActual<object>('expo-linking'),
-  createURL: (ruta: string) => `appmirufranco://${ruta}`,
-  resolveScheme: () => 'appmirufranco',
-  addEventListener: () => ({ remove: () => undefined }),
-}));
+import { leerLlamada, respuesta } from '../../helpers/servidorSimulado';
 
 /**
  * GP-05: sesión de la clienta con las pantallas reales (renderRouter sobre src/app) y solo el
@@ -32,14 +23,10 @@ jest.mock('expo-linking', () => ({
  * Inicio sin sesión; "Cerrar sesión" en Perfil borra el token y lo revoca en el servidor.
  */
 
-const API = 'http://api.test';
 const RUTA_RENOVAR = '/api/auth/movil/renovar';
 const CLAVE_SESION = 'auth_sesion';
 const AVISO_SESION_TERMINADA = 'Tu sesión terminó. Inicia sesión de nuevo.';
 const INVITACION_INICIO = 'Crea tu cuenta para reservar citas y comprar';
-
-/** Límite amplio: sin caché de Jest, renderRouter transforma todas las rutas de src/app (ver GP-02). */
-const LIMITE_MS = 180_000;
 
 function base64Url(texto: string): string {
   return btoa(texto).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
@@ -59,18 +46,6 @@ const USUARIO = {
   rol: 'cliente',
 };
 
-/** Respuesta mínima con lo que lee apiClient (ok, status y text()), más json() y headers. */
-function respuesta(cuerpo: unknown, status = 200): Response {
-  const textoCuerpo = JSON.stringify(cuerpo);
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    headers: new Headers({ 'Content-Type': 'application/json' }),
-    text: () => Promise.resolve(textoCuerpo),
-    json: () => Promise.resolve(JSON.parse(textoCuerpo) as unknown),
-  } as unknown as Response;
-}
-
 const SERVICIOS = {
   success: true,
   data: [{ id: 1, nombre: 'Corte y peinado', precio: '350', duracionMinutos: 60, activo: true }],
@@ -88,16 +63,6 @@ const PRODUCTOS = {
     },
   ],
 };
-
-function urlDe(entrada: unknown): string {
-  if (typeof entrada === 'string') {
-    return entrada;
-  }
-  if (entrada instanceof URL) {
-    return entrada.href;
-  }
-  return (entrada as { url: string }).url;
-}
 
 interface Llamada {
   ruta: string;
@@ -128,10 +93,8 @@ interface OpcionesServidor {
 function simularServidor(opciones: OpcionesServidor): ServidorSimulado {
   let tokenValido = opciones.tokenValido;
   const fetchSimulado = jest.fn((entrada: unknown, init: RequestInit = {}) => {
-    const url = urlDe(entrada);
-    const ruta = url.startsWith(API) ? url.slice(API.length) : url;
-    const metodo = init.method ?? 'GET';
-    const auth = (init.headers as Record<string, string> | undefined)?.Authorization;
+    const { ruta, metodo, cabeceras } = leerLlamada(entrada, init);
+    const auth = cabeceras.Authorization;
     if (ruta === '/api/servicios') {
       return Promise.resolve(respuesta(SERVICIOS));
     }
@@ -164,13 +127,8 @@ function simularServidor(opciones: OpcionesServidor): ServidorSimulado {
 
   const llamadas = (): Llamada[] =>
     (fetchSimulado.mock.calls as unknown as [unknown, RequestInit | undefined][]).map(([entrada, init]) => {
-      const url = urlDe(entrada);
-      return {
-        ruta: url.startsWith(API) ? url.slice(API.length) : url,
-        metodo: init?.method ?? 'GET',
-        auth: (init?.headers as Record<string, string> | undefined)?.Authorization,
-        cuerpo: typeof init?.body === 'string' ? (JSON.parse(init.body) as unknown) : undefined,
-      };
+      const { ruta, metodo, cabeceras, cuerpo } = leerLlamada(entrada, init);
+      return { ruta, metodo, auth: cabeceras.Authorization, cuerpo };
     });
   return {
     fetch: fetchSimulado,
@@ -210,59 +168,9 @@ function sesionGuardada(): { token: string; refreshToken?: string; usuario: { no
   return texto === undefined ? null : (JSON.parse(texto) as { token: string; refreshToken?: string; usuario: { nombre: string } });
 }
 
-/** Capa de la intro de la grieta (IntroGrieta): oculta a TalkBack y con onLayout (ver GP-02). */
-function capasIntro(): TestInstance[] {
-  return screen.container.queryAll(
-    (nodo) =>
-      typeof nodo.type === 'string' &&
-      nodo.props.accessibilityElementsHidden === true &&
-      nodo.props.importantForAccessibility === 'no-hide-descendants' &&
-      typeof nodo.props.onLayout === 'function',
-  );
-}
-
-/** La intro sale una vez por proceso de JS: si sigue a la vista, se le manda la medida y termina. */
-async function cerrarIntroSiAparece(): Promise<void> {
-  const intro = capasIntro();
-  if (intro.length === 1) {
-    await fireEvent.layout(intro[0], { x: 0, y: 0, width: 390, height: 844 });
-  }
-  await waitFor(() => expect(capasIntro()).toHaveLength(0));
-}
-
-interface App {
-  getPathname: () => string;
-}
-
-/** Abre la app real en la ruta indicada y cierra la intro. */
-async function abrirApp(ruta: string): Promise<App> {
-  const app = iniciarRouter('src/app', { initialUrl: ruta });
-  await app;
-  return { getPathname: () => app.getPathname() };
-}
-
-/** Último botón con ese nombre: el de la hoja (su Modal va después del Stack en el árbol). */
-function ultimoBoton(nombre: string): TestInstance {
-  const botones = screen.getAllByRole('button', { name: nombre });
-  return botones[botones.length - 1];
-}
 
 describe('Sesión con las pantallas reales (GP-05)', () => {
-  let espiaError: jest.SpyInstance;
-  let espiaAviso: jest.SpyInstance;
-
-  beforeEach(() => {
-    // Ningún aviso de React ni de la app debe salir durante estas pruebas.
-    espiaError = jest.spyOn(console, 'error');
-    espiaAviso = jest.spyOn(console, 'warn');
-  });
-
-  afterEach(async () => {
-    // Desmonta y corre lo pendiente con los temporizadores falsos y luego vuelve a los reales.
-    await cerrarRouter();
-    espiaError.mockRestore();
-    espiaAviso.mockRestore();
-  });
+  const esperarConsolaLimpia = prepararPruebasDePantalla();
 
   it(
     'abrir la app con una sesión guardada la restaura y la valida con /api/auth/me',
@@ -297,8 +205,7 @@ describe('Sesión con las pantallas reales (GP-05)', () => {
       expect(screen.getByText('clienta@ejemplo.test')).toBeOnTheScreen();
       expect(screen.getByText('Cerrar sesión')).toBeOnTheScreen();
 
-      expect(espiaError).not.toHaveBeenCalled();
-      expect(espiaAviso).not.toHaveBeenCalled();
+      esperarConsolaLimpia();
     },
     LIMITE_MS,
   );
@@ -335,8 +242,7 @@ describe('Sesión con las pantallas reales (GP-05)', () => {
       // Los tokens rotados quedaron guardados juntos.
       expect(sesionGuardada()).toMatchObject({ token: nuevo.token, refreshToken: nuevo.refreshToken });
 
-      expect(espiaError).not.toHaveBeenCalled();
-      expect(espiaAviso).not.toHaveBeenCalled();
+      esperarConsolaLimpia();
     },
     LIMITE_MS,
   );
@@ -369,8 +275,7 @@ describe('Sesión con las pantallas reales (GP-05)', () => {
       await fireEvent.press(screen.getByRole('button', { name: 'Cerrar aviso' }));
       await waitFor(() => expect(screen.queryByText(AVISO_SESION_TERMINADA)).not.toBeOnTheScreen());
 
-      expect(espiaError).not.toHaveBeenCalled();
-      expect(espiaAviso).not.toHaveBeenCalled();
+      esperarConsolaLimpia();
     },
     LIMITE_MS,
   );
@@ -413,8 +318,7 @@ describe('Sesión con las pantallas reales (GP-05)', () => {
       });
       expect(servidor.llamadasA(RUTA_RENOVAR)).toHaveLength(0);
 
-      expect(espiaError).not.toHaveBeenCalled();
-      expect(espiaAviso).not.toHaveBeenCalled();
+      esperarConsolaLimpia();
     },
     LIMITE_MS,
   );
