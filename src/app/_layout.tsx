@@ -13,8 +13,10 @@ import { StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { HojaBienvenida } from '@/features/auth/components/HojaBienvenida';
+import { sesionCabecera } from '@/features/auth/viewmodels/sesionCabecera';
 import { AuthProvider, useAuth } from '@/features/auth/viewmodels/useAuth';
 import { SesionRequeridaProvider } from '@/features/auth/viewmodels/useRequiereSesion';
+import { SesionCabeceraProvider } from '@/shared/ui/AccionesCabecera';
 import { AparienciaProvider, useApariencia } from '@/shared/ui/apariencia';
 import { FondoBarraEstado } from '@/shared/ui/FondoBarraEstado';
 import { IntroGrieta } from '@/shared/ui/IntroGrieta';
@@ -40,9 +42,12 @@ export default function RootLayout() {
   // La sesión se restaura en paralelo a la carga de fuentes.
   return (
     <AuthProvider>
-      <AparienciaProvider>
-        <Navegacion fuentesListas={fuentesListas} />
-      </AparienciaProvider>
+      {/* La raíz compone shared y features: la cabecera compartida recibe la sesión de auth. */}
+      <SesionCabeceraProvider sesion={sesionCabecera}>
+        <AparienciaProvider>
+          <Navegacion fuentesListas={fuentesListas} />
+        </AparienciaProvider>
+      </SesionCabeceraProvider>
     </AuthProvider>
   );
 }

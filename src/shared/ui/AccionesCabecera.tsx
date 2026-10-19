@@ -1,13 +1,9 @@
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { Bell, UserRound } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
-
-import { useAuth } from '@/features/auth/viewmodels/useAuth';
-import { useFotoClienta } from '@/features/auth/viewmodels/useFotoClienta';
-import { useRequiereSesion } from '@/features/auth/viewmodels/useRequiereSesion';
 
 import { BotonCromo } from './CabeceraCompacta';
 import { usePresion } from './movimiento';
@@ -24,15 +20,54 @@ import {
 import { useTheme } from './useTheme';
 
 /**
+ * Lo que la cabecera necesita saber de la sesión, en forma de hooks. src/shared no depende de
+ * src/features: la raíz (src/app/_layout.tsx) inyecta la implementación real de la feature auth con
+ * SesionCabeceraProvider.
+ */
+export interface SesionCabecera {
+  /** Si hay una clienta con sesión y su nombre (vacío sin sesión), para las iniciales del círculo. */
+  useSesion: () => { conSesion: boolean; nombre: string };
+  /** URL de la foto de la clienta, o null si no tiene o aún no se conoce. */
+  useFoto: () => string | null;
+  /** Envuelve una acción: con sesión la ejecuta; sin sesión pide iniciar sesión antes. */
+  useRequiereSesion: () => (accion?: () => void) => void;
+}
+
+const ContextoSesionCabecera = createContext<SesionCabecera | null>(null);
+
+/** Entrega a AccionesCabecera los hooks de sesión. El valor debe ser una constante de módulo. */
+export function SesionCabeceraProvider({
+  sesion,
+  children,
+}: {
+  sesion: SesionCabecera;
+  children: ReactNode;
+}) {
+  return (
+    <ContextoSesionCabecera.Provider value={sesion}>{children}</ContextoSesionCabecera.Provider>
+  );
+}
+
+/** Los hooks de sesión inyectados; sin proveedor es un error de armado de la app. */
+function useSesionCabecera(): SesionCabecera {
+  const sesion = useContext(ContextoSesionCabecera);
+  if (!sesion) {
+    throw new Error('AccionesCabecera debe usarse dentro de SesionCabeceraProvider.');
+  }
+  return sesion;
+}
+
+/**
  * Acciones de la cabecera de las pestañas, iguales en todas: la campana (sin sesión pide iniciar
  * sesión antes de abrir los avisos) y la foto de la clienta, que abre Perfil. Sin sesión, en lugar
- * de la foto va "Iniciar sesión" con el estilo del botón de la cabecera web.
+ * de la foto va "Iniciar sesión" con el estilo del botón de la cabecera web. La sesión llega
+ * inyectada por SesionCabeceraProvider, porque src/shared no depende de src/features.
  */
 export function AccionesCabecera() {
   const { navigate } = useRouter();
-  const { estado } = useAuth();
+  const { useSesion, useRequiereSesion } = useSesionCabecera();
+  const { conSesion } = useSesion();
   const requiereSesion = useRequiereSesion();
-  const conSesion = estado === 'autenticado';
   return (
     <>
       <BotonCromo
@@ -67,11 +102,12 @@ function inicialesDe(nombre: string): string {
  */
 function BotonFoto({ onPress }: { onPress: () => void }) {
   const { colores } = useTheme();
-  const { usuario } = useAuth();
-  const foto = useFotoClienta();
+  const { useSesion, useFoto } = useSesionCabecera();
+  const { nombre } = useSesion();
+  const foto = useFoto();
   const { estilo, hundir, soltar } = usePresion();
   const [fallo, setFallo] = useState<string | null>(null);
-  const iniciales = inicialesDe(usuario?.nombre ?? '');
+  const iniciales = inicialesDe(nombre);
   // Una foto nueva vuelve a intentarse aunque la anterior haya fallado.
   useEffect(() => setFallo(null), [foto]);
   const conFoto = foto !== null && fallo !== foto;

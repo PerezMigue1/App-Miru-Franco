@@ -19,6 +19,8 @@ Fuera de las features:
 - `src/shared/api`: cliente HTTP con renovación de sesión (`apiClient.ts`), sesión en SecureStore (`tokenStorage.ts`) y subida multipart (`subirMultipart.ts`).
 - `src/shared/ui`: colores (`colores.ts`), tokens (`tokens.ts`), tema (`useTheme.ts`, `apariencia.tsx`) y componentes compartidos.
 
+Regla: shared no depende de features. `src/shared` no importa nada de `src/features`; cuando una pieza compartida necesita algo de una feature, se lo inyecta la raíz `src/app/_layout.tsx`. Ejemplo: `AccionesCabecera` recibe la sesión con `SesionCabeceraProvider`, y la implementación real vive en `features/auth/viewmodels/sesionCabecera.ts`. La prueba `test/unit/gp-04/reglas-diseno.test.ts` lo vigila.
+
 ### Patrones de diseño
 
 **Singleton (estado de módulo único)**
