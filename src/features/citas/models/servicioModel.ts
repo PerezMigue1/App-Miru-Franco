@@ -27,7 +27,7 @@ export interface Servicio {
   descripcionLarga: string;
   /** "$1,200" listo para mostrar, o null si no hay precio válido. */
   precio: string | null;
-  /** "$360" si el servicio pide anticipo, o null. */
+  /** "$360" si el servicio pide anticipo, o null (también si el backend manda anticipoAplica: false). */
   anticipo: string | null;
   /** "45 min", "1 h 30 min", "3 h", o null si no hay duración válida. */
   duracion: string | null;
@@ -48,6 +48,10 @@ export function duracionParaMostrar(valor: unknown): string | null {
     return null;
   }
   const total = Math.round(minutos);
+  // Entre 0 y 0.5 pasa el filtro, pero redondeado daría "0 min".
+  if (total <= 0) {
+    return null;
+  }
   const horas = Math.floor(total / 60);
   const resto = total % 60;
   if (horas === 0) {
@@ -71,8 +75,10 @@ function normalizarEspecialista(crudo: Crudo): Especialista | null {
   if (!nombre) {
     return null;
   }
+  // En servicio_especialistas el id de la fila no es el de la persona: la agenda usa usuarioId.
+  const idPersona = [crudo.usuarioId, usuario?.id].find((valor) => texto(valor) !== '');
   return {
-    id: idDe(crudo),
+    id: typeof idPersona === 'string' || typeof idPersona === 'number' ? idPersona : idDe(crudo),
     nombre,
     foto: primeraImagen(crudo.foto, crudo.imagen, usuario?.foto),
   };
@@ -93,7 +99,8 @@ function normalizarServicio(crudo: Crudo): Servicio {
     descripcion: texto(crudo.descripcion),
     descripcionLarga: texto(crudo.descripcionLarga),
     precio: precioParaMostrar(texto(crudo.precio)),
-    anticipo: precioParaMostrar(texto(crudo.anticipoMonto)),
+    // Con anticipoAplica en false hoy no se pide anticipo al agendar; sin el campo se usa el monto.
+    anticipo: crudo.anticipoAplica === false ? null : precioParaMostrar(texto(crudo.anticipoMonto)),
     duracion: duracionParaMostrar(crudo.duracionMinutos),
     requiereEvaluacion: crudo.requiereEvaluacion === true,
     activo: typeof crudo.activo === 'boolean' ? crudo.activo : undefined,
