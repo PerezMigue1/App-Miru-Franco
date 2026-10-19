@@ -3,7 +3,6 @@
 // Primero los mocks: tienen que quedar registrados antes de cargar expo-router/testing-library.
 import '../../helpers/mocksPantallas';
 
-import * as SecureStore from 'expo-secure-store';
 import { fireEvent, screen, waitFor } from 'expo-router/testing-library';
 
 import {
@@ -14,6 +13,7 @@ import {
   ultimoBoton,
 } from '../../helpers/pantallas';
 import { leerSecureStore } from '../../helpers/secureStore';
+import { CLAVE_SESION, jwtFicticio, sembrarSesion as sembrar, sesionGuardada } from '../../helpers/sesionGuardada';
 import { leerLlamada, respuesta } from '../../helpers/servidorSimulado';
 
 /**
@@ -24,20 +24,8 @@ import { leerLlamada, respuesta } from '../../helpers/servidorSimulado';
  */
 
 const RUTA_RENOVAR = '/api/auth/movil/renovar';
-const CLAVE_SESION = 'auth_sesion';
 const AVISO_SESION_TERMINADA = 'Tu sesión terminó. Inicia sesión de nuevo.';
 const INVITACION_INICIO = 'Crea tu cuenta para reservar citas y comprar';
-
-function base64Url(texto: string): string {
-  return btoa(texto).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
-}
-
-/** JWT armado a mano con datos falsos: 15 minutos de vida (exp menos iat). */
-function jwtFicticio(nombre: string): string {
-  const cabecera = base64Url(JSON.stringify({ alg: 'none', typ: 'JWT' }));
-  const datos = base64Url(JSON.stringify({ sub: nombre, iat: 1_000, exp: 1_000 + 15 * 60 }));
-  return `${cabecera}.${datos}.firma-ficticia`;
-}
 
 const USUARIO = {
   id: 'clienta-ficticia-1',
@@ -137,37 +125,10 @@ function simularServidor(opciones: OpcionesServidor): ServidorSimulado {
   };
 }
 
-interface SesionSembrada {
-  token: string;
-  refreshToken: string;
+/** Sesión móvil vigente de la clienta guardada, como la deja un inicio de sesión anterior. */
+function sembrarSesion(): ReturnType<typeof sembrar> {
+  return sembrar(USUARIO);
 }
-
-/**
- * Siembra en SecureStore una sesión móvil vigente, como la que deja un inicio de sesión anterior,
- * y marca la bienvenida como vista (la clienta ya abrió la app antes).
- */
-let sembradas = 0;
-
-async function sembrarSesion(): Promise<SesionSembrada> {
-  // apiClient recuerda en memoria el último refreshToken consumido (y los módulos se comparten entre
-  // las pruebas de este archivo): cada prueba siembra uno distinto.
-  sembradas += 1;
-  const sesion = {
-    token: jwtFicticio(`clienta-ficticia-1-${sembradas}`),
-    refreshToken: `refresh-ficticio-guardado-${sembradas}`,
-    emitidoEn: Date.now(),
-    usuario: USUARIO,
-  };
-  await SecureStore.setItemAsync(CLAVE_SESION, JSON.stringify(sesion));
-  await SecureStore.setItemAsync('bienvenida_vista', '1');
-  return { token: sesion.token, refreshToken: sesion.refreshToken };
-}
-
-function sesionGuardada(): { token: string; refreshToken?: string; usuario: { nombre: string } } | null {
-  const texto = leerSecureStore()[CLAVE_SESION];
-  return texto === undefined ? null : (JSON.parse(texto) as { token: string; refreshToken?: string; usuario: { nombre: string } });
-}
-
 
 describe('Sesión con las pantallas reales (GP-05)', () => {
   const esperarConsolaLimpia = prepararPruebasDePantalla();

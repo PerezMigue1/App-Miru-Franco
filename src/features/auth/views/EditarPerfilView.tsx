@@ -30,7 +30,6 @@ import {
 } from '../components/AuthContainer';
 import { EncabezadoVolver } from '../components/EncabezadoVolver';
 import { HojaConfirmacion } from '../components/HojaConfirmacion';
-import { AYUDA_TELEFONO, TIPOS_CABELLO } from '../models/AuthModel';
 import { useEditarPerfilViewModel, type CampoPerfil } from '../viewmodels/useEditarPerfilViewModel';
 
 /** Editar perfil: "Tus datos" y "Tu cabello", con las reglas y los componentes del registro. */
@@ -122,7 +121,7 @@ export default function EditarPerfilView() {
               valor={f.telefono}
               onCambiar={(t) => cambiar('telefono', t)}
               onSalir={() => salirDe('telefono')}
-              ayuda={AYUDA_TELEFONO}
+              ayuda={vm.ayudaTelefono}
               error={errores.telefono}
             />
             <Input
@@ -141,7 +140,7 @@ export default function EditarPerfilView() {
             </Text>
             <Opciones
               etiqueta="Tipo de cabello"
-              opciones={TIPOS_CABELLO}
+              opciones={vm.tiposCabello}
               valor={f.tipoCabello}
               onElegir={(v) => cambiar('tipoCabello', v)}
               error={null}
