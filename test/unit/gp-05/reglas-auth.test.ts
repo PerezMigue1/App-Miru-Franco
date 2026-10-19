@@ -12,8 +12,9 @@ import path from 'path';
  * cadena; la consulta del perfil con un token recién emitido vive en authService.ts
  * (obtenerPerfilConToken).
  *
- * Regla 2: AuthContainer.tsx y las vistas de acceso (LoginView, RegistroView, ActivarView y
- * RecuperarView) no importan nada de models/, ni valores ni tipos: lo reciben de su viewmodel.
+ * Regla 2: AuthContainer.tsx, las vistas de acceso (LoginView, RegistroView, ActivarView y
+ * RecuperarView) y las de perfil (PerfilView, EditarPerfilView y CambiarContrasenaView) no importan
+ * nada de models/, ni valores ni tipos: lo reciben de su viewmodel.
  */
 
 const RAIZ = path.resolve(__dirname, '../../..');
@@ -29,6 +30,9 @@ const ARCHIVOS_SIN_MODELOS = [
   path.join(AUTH, 'views', 'RegistroView.tsx'),
   path.join(AUTH, 'views', 'ActivarView.tsx'),
   path.join(AUTH, 'views', 'RecuperarView.tsx'),
+  path.join(AUTH, 'views', 'PerfilView.tsx'),
+  path.join(AUTH, 'views', 'EditarPerfilView.tsx'),
+  path.join(AUTH, 'views', 'CambiarContrasenaView.tsx'),
 ];
 
 /** Ruta relativa a la raíz con diagonales normales, para mensajes legibles en cualquier sistema. */
@@ -193,10 +197,10 @@ describe('Regla 1: useAuth.tsx usa authService.ts para hablar con el servidor', 
 });
 
 // ---------------------------------------------------------------------------------------------
-// Regla 2: AuthContainer y las vistas de acceso no importan de models/
+// Regla 2: AuthContainer, las vistas de acceso y las de perfil no importan de models/
 // ---------------------------------------------------------------------------------------------
 
-describe('Regla 2: AuthContainer y las vistas de acceso reciben todo de su viewmodel', () => {
+describe('Regla 2: AuthContainer, las vistas de acceso y las de perfil reciben todo de su viewmodel', () => {
   it('existen los archivos que se revisan', () => {
     const faltantes = ARCHIVOS_SIN_MODELOS.filter((ruta) => !fs.existsSync(ruta)).map(relativa);
     expect(faltantes).toEqual([]);

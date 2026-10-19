@@ -3,6 +3,7 @@
 import { fireEvent, screen, waitFor } from 'expo-router/testing-library';
 import type { TestInstance } from 'test-renderer';
 
+import { espiarConsola } from './consola';
 import { cerrarRouter, iniciarRouter } from './router';
 import { leerSecureStore } from './secureStore';
 
@@ -16,24 +17,7 @@ export const LIMITE_MS = 180_000;
  * ningún error ni aviso de React o de la app.
  */
 export function prepararPruebasDePantalla(): () => void {
-  let espiaError: jest.SpyInstance;
-  let espiaAviso: jest.SpyInstance;
-
-  beforeEach(() => {
-    espiaError = jest.spyOn(console, 'error');
-    espiaAviso = jest.spyOn(console, 'warn');
-  });
-
-  afterEach(async () => {
-    await cerrarRouter();
-    espiaError.mockRestore();
-    espiaAviso.mockRestore();
-  });
-
-  return () => {
-    expect(espiaError).not.toHaveBeenCalled();
-    expect(espiaAviso).not.toHaveBeenCalled();
-  };
+  return espiarConsola(cerrarRouter);
 }
 
 /** Capa de la intro de la grieta (IntroGrieta): oculta a TalkBack y con onLayout (ver GP-02). */

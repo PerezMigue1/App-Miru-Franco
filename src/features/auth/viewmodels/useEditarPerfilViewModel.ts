@@ -8,9 +8,11 @@ import { telefonoSinLada } from '@/shared/ui/digitos';
 import { useCandado } from '@/shared/ui/useCandado';
 
 import {
+  AYUDA_TELEFONO,
   ERROR_CONSENTIMIENTO_SALUD,
   ERROR_TELEFONO,
   MENSAJE_SIN_CONEXION,
+  TIPOS_CABELLO,
   convertirFechaNacimiento,
   esErrorDeRed,
   esTelefonoValido,
@@ -20,6 +22,7 @@ import {
   problemaDeTieneTratamientos,
   problemaDeTratamientos,
   urlAvisoPrivacidad,
+  type TipoCabello,
 } from '../models/AuthModel';
 import { actualizarPerfil, obtenerPerfilCompleto } from '../models/authService';
 import {
@@ -59,6 +62,9 @@ export interface EditarPerfilViewModel {
   guardando: boolean;
   guardar: () => void;
   enfoque: EnfoquePerfil | null;
+  ayudaTelefono: string;
+  /** Opciones de tipo de cabello de "Tu cabello", en el orden en que se muestran. */
+  tiposCabello: { valor: TipoCabello; etiqueta: string }[];
   abrirAviso: () => void;
   /** Volver: si hay cambios sin guardar, primero se pregunta. */
   volver: () => void;
@@ -343,6 +349,8 @@ export function useEditarPerfilViewModel(): EditarPerfilViewModel {
       }
     },
     enfoque,
+    ayudaTelefono: AYUDA_TELEFONO,
+    tiposCabello: TIPOS_CABELLO,
     abrirAviso,
     volver,
     confirmarSalida,
