@@ -105,11 +105,14 @@ interface AuthContainerProps {
   onCerrar?: () => void;
 }
 
-/** Lo que muestra el campo de correo según la verificación (solo lo que dice el endpoint). */
+/**
+ * Lo que muestra el campo de correo según la verificación (solo lo que dice el endpoint). La
+ * respuesta sin "existe" no muestra nada: la app nunca afirma que un correo está disponible.
+ */
 const ESTADO_CORREO: Record<EstadoCorreo, EstadoCampo | null> = {
   inactivo: null,
   verificando: { tipo: 'verificando', texto: 'Verificando correo…' },
-  disponible: { tipo: 'exito', texto: 'Correo disponible' },
+  sinAviso: null,
   registrado: { tipo: 'error', texto: 'Este correo ya está registrado' },
   revisando: { tipo: 'aviso', texto: 'Revisando si el correo ya tiene cuenta…' },
   sinConexion: { tipo: 'aviso', texto: 'Sin conexión. Revisaremos el correo cuando haya red.' },

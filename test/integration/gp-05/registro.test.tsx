@@ -108,6 +108,23 @@ function llamadasA(llamadas: Llamada[], metodo: string, ruta: string): Llamada[]
   return llamadas.filter((l) => l.metodo === metodo && l.url === `${API}${ruta}`);
 }
 
+/** Lo que responde hoy POST /api/auth/verificar-correo sin sesión de admin, exista o no la cuenta. */
+const RESPUESTA_CORREO_NEUTRAL = { existe: false, message: 'Comprobaremos el correo al crear la cuenta' };
+
+/**
+ * Espera a que llegue la respuesta neutral de la verificación del correo y revisa que el campo no
+ * afirme nada: ni "Correo disponible" ni el texto del servidor.
+ */
+async function esperarRespuestaNeutral(llamadas: Llamada[]): Promise<void> {
+  await waitFor(() =>
+    expect(llamadasA(llamadas, 'POST', '/api/auth/verificar-correo').length).toBeGreaterThan(0),
+  );
+  await waitFor(() => expect(screen.queryByText('Verificando correo…')).not.toBeOnTheScreen());
+  expect(screen.queryByText('Correo disponible')).not.toBeOnTheScreen();
+  expect(screen.queryByText(RESPUESTA_CORREO_NEUTRAL.message)).not.toBeOnTheScreen();
+  expect(screen.queryByText('Este correo ya está registrado')).not.toBeOnTheScreen();
+}
+
 /** Capa de la intro de la grieta (IntroGrieta): oculta a TalkBack y con onLayout (ver GP-02). */
 function capasIntro(): TestInstance[] {
   return screen.container.queryAll(
@@ -230,15 +247,15 @@ describe('Registro de una clienta en dos pasos (GP-05)', () => {
     'completa los dos pasos, envía el cuerpo esperado al backend y pasa a Activar',
     async () => {
       const llamadas = simularServidor({
-        'POST /api/auth/verificar-correo': () => respuesta({ existe: false }),
+        'POST /api/auth/verificar-correo': () => respuesta(RESPUESTA_CORREO_NEUTRAL),
         'POST /api/usuarios/registro': () =>
           respuesta({ success: true, message: 'Usuario registrado. Revisa tu correo.' }, 201),
       });
       const app = await abrirRegistro();
 
       await llenarPaso1();
-      // El correo se verifica solo, ya normalizado.
-      expect(await screen.findByText('Correo disponible')).toBeOnTheScreen();
+      // El correo se verifica solo, ya normalizado; la respuesta neutral no se da por disponible.
+      await esperarRespuestaNeutral(llamadas);
       const verificaciones = llamadasA(llamadas, 'POST', '/api/auth/verificar-correo');
       expect(verificaciones.length).toBeGreaterThan(0);
       for (const verificacion of verificaciones) {
@@ -344,14 +361,14 @@ describe('Registro de una clienta en dos pasos (GP-05)', () => {
     'si el backend responde 409 al registrar, vuelve al paso 1 con el correo marcado y sin ir a Activar',
     async () => {
       const llamadas = simularServidor({
-        'POST /api/auth/verificar-correo': () => respuesta({ existe: false }),
+        'POST /api/auth/verificar-correo': () => respuesta(RESPUESTA_CORREO_NEUTRAL),
         'POST /api/usuarios/registro': () =>
           respuesta({ statusCode: 409, message: 'Conflict: email already exists' }, 409),
       });
       const app = await abrirRegistro();
 
       await llenarPaso1();
-      expect(await screen.findByText('Correo disponible')).toBeOnTheScreen();
+      await esperarRespuestaNeutral(llamadas);
       await fireEvent.press(screen.getByRole('button', { name: 'Continuar' }));
       expect(await screen.findByText('Cuéntanos sobre tu cabello')).toBeOnTheScreen();
       await llenarPaso2();
@@ -359,11 +376,23 @@ describe('Registro de una clienta en dos pasos (GP-05)', () => {
 
       expect(await screen.findByText('Este correo ya está registrado')).toBeOnTheScreen();
       expect(screen.getByLabelText('Paso 1 de 2: Tu cuenta')).toBeOnTheScreen();
-      expect(screen.getByText('Revisa los campos marcados.')).toBeOnTheScreen();
+      expect(
+        screen.getByText(
+          'Este correo ya tiene una cuenta. Toca Iniciar sesión para entrar o recuperar tu contraseña.',
+        ),
+      ).toBeOnTheScreen();
+      expect(screen.queryByText('Revisa los campos marcados.')).not.toBeOnTheScreen();
       expect(llamadasA(llamadas, 'POST', '/api/usuarios/registro')).toHaveLength(1);
       expect(app.getPathname()).toBe('/registro');
       // El texto técnico del servidor nunca llega a la pantalla.
       expect(screen.queryByText('Conflict: email already exists')).not.toBeOnTheScreen();
+
+      // "Iniciar sesión" lleva a Acceso con el correo escrito, donde está "¿Olvidaste tu contraseña?".
+      await fireEvent.press(screen.getByRole('link', { name: 'Iniciar sesión' }));
+      expect(await screen.findByText('Inicia sesión')).toBeOnTheScreen();
+      expect(screen.getByRole('tab', { name: 'Acceso' })).toBeSelected();
+      expect(screen.getByLabelText('Correo electrónico')).toHaveProp('value', 'Clienta@Ejemplo.test');
+      expect(screen.getByText('¿Olvidaste tu contraseña?')).toBeOnTheScreen();
 
       expect(espiaError).not.toHaveBeenCalled();
       expect(espiaAviso).not.toHaveBeenCalled();

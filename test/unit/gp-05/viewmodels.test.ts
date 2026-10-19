@@ -497,7 +497,7 @@ async function llenar(result: ResultadoRegistro, campos: Partial<CamposRegistro>
   }
 }
 
-/** Llena el paso 1, pulsa "Continuar" con el correo disponible y espera el paso 2. */
+/** Llena el paso 1, pulsa "Continuar" con la respuesta neutral del correo y espera el paso 2. */
 async function llegarAlPaso2(result: ResultadoRegistro): Promise<void> {
   await llenar(result, PASO_1_VALIDO);
   await act(async () => {
@@ -631,8 +631,13 @@ describe('useRegistroViewModel', () => {
       expect(result.current.errores.telefono).toBeNull();
     });
 
-    it('con todo válido y el correo disponible pasa al paso 2', async () => {
-      const simulado = servidor({ [URL_VERIFICAR_CORREO]: { cuerpo: { existe: false } } });
+    it('con todo válido y la respuesta neutral del correo pasa al paso 2 sin darlo por disponible', async () => {
+      // Sin sesión de admin el backend siempre responde así, tenga o no cuenta el correo.
+      const simulado = servidor({
+        [URL_VERIFICAR_CORREO]: {
+          cuerpo: { existe: false, message: 'Comprobaremos el correo al crear la cuenta' },
+        },
+      });
       const { result } = await renderHook(() => useRegistroViewModel());
       await llenar(result, PASO_1_VALIDO);
 
@@ -642,7 +647,7 @@ describe('useRegistroViewModel', () => {
       await waitFor(() => expect(result.current.paso).toBe(2));
 
       expect(result.current.direccionPaso).toBe(1);
-      expect(result.current.estadoCorreo).toBe('disponible');
+      expect(result.current.estadoCorreo).toBe('sinAviso');
       expect(result.current.verificandoCorreo).toBe(false);
       expect(result.current.errorGeneral).toBeNull();
       const [verificacion] = llamadasA(simulado, URL_VERIFICAR_CORREO);
@@ -698,7 +703,7 @@ describe('useRegistroViewModel', () => {
       await act(async () => {
         await jest.advanceTimersByTimeAsync(1);
       });
-      await waitFor(() => expect(result.current.estadoCorreo).toBe('disponible'));
+      await waitFor(() => expect(result.current.estadoCorreo).toBe('sinAviso'));
       const llamadas = llamadasA(simulado, URL_VERIFICAR_CORREO);
       expect(llamadas).toHaveLength(1);
       expect(cuerpoDe(llamadas[0])).toEqual({ correo: CORREO });
@@ -733,7 +738,7 @@ describe('useRegistroViewModel', () => {
       await act(async () => {
         await jest.advanceTimersByTimeAsync(5000);
       });
-      await waitFor(() => expect(result.current.estadoCorreo).toBe('disponible'));
+      await waitFor(() => expect(result.current.estadoCorreo).toBe('sinAviso'));
       expect(llamadasA(simulado, URL_VERIFICAR_CORREO)).toHaveLength(2);
     });
 
@@ -942,7 +947,7 @@ describe('useRegistroViewModel', () => {
       expect(mockRouter.push).toHaveBeenCalledTimes(1);
     });
 
-    it('un 409 regresa al paso 1 y marca el correo como registrado', async () => {
+    it('un 409 regresa al paso 1, marca el correo y ofrece iniciar sesión o recuperar la contraseña', async () => {
       servidor({
         [URL_VERIFICAR_CORREO]: { cuerpo: { existe: false } },
         [URL_REGISTRO]: { cuerpo: { message: 'El correo ya está registrado' }, status: 409 },
@@ -957,10 +962,31 @@ describe('useRegistroViewModel', () => {
       await waitFor(() => expect(result.current.paso).toBe(1));
 
       expect(result.current.estadoCorreo).toBe('registrado');
-      expect(result.current.errorGeneral).toBe('Revisa los campos marcados.');
+      expect(result.current.errorGeneral).toBe(
+        'Este correo ya tiene una cuenta. Toca Iniciar sesión para entrar o recuperar tu contraseña.',
+      );
       expect(result.current.enfoque?.campo).toBe('correo');
       expect(result.current.cargando).toBe(false);
       expect(mockRouter.push).not.toHaveBeenCalled();
+    });
+
+    it('tras el 409, escribir otro correo quita el aviso de cuenta existente', async () => {
+      servidor({
+        [URL_VERIFICAR_CORREO]: { cuerpo: { existe: false } },
+        [URL_REGISTRO]: { cuerpo: { message: 'El correo ya está registrado' }, status: 409 },
+      });
+      const { result } = await renderHook(() => useRegistroViewModel());
+      await llegarAlPaso2(result);
+      await llenar(result, PASO_2_VALIDO);
+      await act(async () => {
+        result.current.crearCuenta();
+      });
+      await waitFor(() => expect(result.current.estadoCorreo).toBe('registrado'));
+
+      await cambiarCampo(result, 'correo', 'otra.clienta@ejemplo.test');
+
+      expect(result.current.errorGeneral).toBeNull();
+      expect(result.current.estadoCorreo).toBe('inactivo');
     });
 
     it.each([
