@@ -14,6 +14,19 @@ import {
   type Cita,
 } from '../models/citaModel';
 
+// La vista no importa de models/: recibe estas funciones y tipos del viewmodel.
+export {
+  admiteCambios,
+  avisoAnticipoEnSalon,
+  estadoAnticipo,
+  etiquetaEstadoAnticipo,
+  etiquetaEstadoCita,
+  limitePagoCorto,
+  motivoCancelacionParaClienta,
+} from '../models/citaModel';
+export type { Cita, EstadoAnticipoCita } from '../models/citaModel';
+export { duracionParaMostrar } from '../models/servicioModel';
+
 export type EstadoDetalleCita = 'cargando' | 'listo' | 'error' | 'noEncontrado';
 
 export interface DetalleCitaViewModel {

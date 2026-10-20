@@ -9,6 +9,7 @@ import {
   admiteCambios,
   compararMeses,
   esHorarioOcupado,
+  esHorarioPasado,
   fechaLocal,
   mensajeReprogramacion,
   mesDe,
@@ -21,6 +22,9 @@ import {
   type MesCalendario,
   type Slot,
 } from '../models/citaModel';
+
+// La vista no importa de models/: recibe estas funciones del viewmodel.
+export { fechaLegible, horaLegible } from '../models/citaModel';
 
 /** 'sinCambios': la cita ya no se puede reprogramar (terminó, se canceló o está en curso). */
 export type EstadoReprogramar = 'cargando' | 'listo' | 'error' | 'noEncontrado' | 'sinCambios';
@@ -275,8 +279,8 @@ export function useReprogramarCitaViewModel(citaId: string | undefined): Reprogr
         }
         setEnviando(false);
         setErrorEnvio(mensajeReprogramacion(error));
-        if (esHorarioOcupado(error)) {
-          // Alguien más tomó ese horario: se limpia y se recarga la disponibilidad del día.
+        if (esHorarioOcupado(error) || esHorarioPasado(error)) {
+          // Alguien más tomó ese horario o ya empezó: se limpia y se recarga la disponibilidad del día.
           setSlot(null);
           cargarHorarios(cita.especialistaId, fecha, cita.servicioId);
         }

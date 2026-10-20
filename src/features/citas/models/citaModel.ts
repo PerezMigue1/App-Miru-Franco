@@ -454,11 +454,18 @@ function pagosAprobados(cita: Cita): PagoCita[] {
 }
 
 /**
+ * motivoCancelacion con el que el backend cancela la cita cuyo anticipo no se pagó a tiempo
+ * (MOTIVO_ANTICIPO_NO_PAGADO de la barrida de anticipos). No es texto para la clienta.
+ */
+const MOTIVO_ANTICIPO_NO_PAGADO = 'anticipo_no_pagado';
+
+/**
  * Estado del anticipo, en este orden: sin anticipo → 'no_requiere'; un pago aprobado retenido →
  * 'retenido'; anticipoPagadoEn con un pago aprobado → 'pagado' ('retenido' si la cita es no_asistio);
  * un pago en revisión → 'en_revision'; un pago reembolsado → 'reembolsado'; anticipoPagadoEn sin pago
  * aprobado → 'pagado' ('retenido' si la cita es no_asistio), como la web; cita cancelada sin pago →
- * 'liberada'; si no, 'pendiente' o 'vencido' según anticipoVenceEn ('pendiente' sin plazo válido).
+ * 'vencido' si la canceló el backend por no pagar a tiempo y 'liberada' si no; si no, 'pendiente' o
+ * 'vencido' según anticipoVenceEn ('pendiente' sin plazo válido).
  */
 export function estadoAnticipo(cita: Cita, ahora: Date = new Date()): EstadoAnticipoCita {
   if (cita.anticipoRequerido <= 0) {
@@ -482,7 +489,7 @@ export function estadoAnticipo(cita: Cita, ahora: Date = new Date()): EstadoAnti
     return cita.estado === 'no_asistio' ? 'retenido' : 'pagado';
   }
   if (cita.estado === 'cancelada') {
-    return 'liberada';
+    return cita.motivoCancelacion === MOTIVO_ANTICIPO_NO_PAGADO ? 'vencido' : 'liberada';
   }
   const vence = cita.anticipoVenceEn ? new Date(cita.anticipoVenceEn).getTime() : Number.NaN;
   if (Number.isNaN(vence)) {
@@ -501,6 +508,19 @@ const ETIQUETAS_ANTICIPO: Record<EstadoAnticipoCita, EtiquetaEstado> = {
   pendiente: { texto: 'Anticipo pendiente', tono: 'aviso' },
   vencido: { texto: 'Anticipo vencido', tono: 'aviso' },
 };
+
+/**
+ * Motivo de la cancelación para mostrar a la clienta: el del backend por anticipo no pagado se
+ * explica con palabras; cualquier otro (el que escribió la clienta o el salón) va igual. null si no hay.
+ */
+export function motivoCancelacionParaClienta(cita: Cita): string | null {
+  if (!cita.motivoCancelacion) {
+    return null;
+  }
+  return cita.motivoCancelacion === MOTIVO_ANTICIPO_NO_PAGADO
+    ? 'No recibimos tu anticipo a tiempo y el horario quedó libre.'
+    : cita.motivoCancelacion;
+}
 
 /** Insignia del estado del anticipo. */
 export function etiquetaEstadoAnticipo(estado: EstadoAnticipoCita): EtiquetaEstado {
@@ -552,9 +572,16 @@ export function esVigente(cita: Cita): boolean {
   return ESTADOS_VIGENTES.includes(cita.estado);
 }
 
-/** La clienta puede reprogramarla o cancelarla: pendiente, confirmada o reprogramada. */
-export function admiteCambios(cita: Cita): boolean {
-  return ESTADOS_CON_CAMBIOS.includes(cita.estado);
+/**
+ * La clienta puede reprogramarla o cancelarla: pendiente, confirmada o reprogramada y que todavía
+ * no empieza (como la web). Una cita con inicio que no se puede leer no admite cambios.
+ */
+export function admiteCambios(cita: Cita, ahora: Date = new Date()): boolean {
+  if (!ESTADOS_CON_CAMBIOS.includes(cita.estado)) {
+    return false;
+  }
+  const inicio = new Date(cita.fechaHoraInicio).getTime();
+  return Number.isFinite(inicio) && inicio > ahora.getTime();
 }
 
 /** Milisegundos del inicio; 0 si no se puede leer. */
@@ -631,13 +658,53 @@ function esCitaSinCambios(error: unknown): boolean {
 }
 
 /**
+ * 400 de reprogramarCita porque el horario elegido ya empezó: "Elige un horario que todavía no haya
+ * pasado". Igual que el horario ocupado, obliga a recargar la disponibilidad.
+ */
+export function esHorarioPasado(error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    error.status === 400 &&
+    error.message.toLowerCase().includes('todavía no haya pasado')
+  );
+}
+
+/**
+ * 400 de reprogramarCita con menos aviso del que pide la regla horasAvisoCancelarReagendar (solo desde
+ * el portal): "Para reagendar con menos de N horas de anticipación, comunícate con el salón.". El
+ * mensaje lo arma la app con el número de horas si viene; null si es otro error.
+ */
+function mensajeAvisoReagendar(error: unknown): string | null {
+  if (!(error instanceof ApiError) || error.status !== 400) {
+    return null;
+  }
+  const mensaje = error.message.toLowerCase();
+  if (!mensaje.includes('para reagendar con menos de')) {
+    return null;
+  }
+  const horas = Number(/menos de (\d+) hora/.exec(mensaje)?.[1] ?? 0);
+  if (horas <= 0) {
+    return 'Para reagendar con tan poco tiempo, comunícate con el salón.';
+  }
+  return `Para reagendar con menos de ${horas} ${horas === 1 ? 'hora' : 'horas'} de anticipación, comunícate con el salón.`;
+}
+
+/**
  * Mensaje para la clienta al fallar reprogramarCita. Del servidor solo se muestran los textos de
  * MENSAJES_ANTICIPO_PARA_CLIENTA (p. ej. "Ya no da tiempo de pagar el anticipo antes de tu cita.",
- * que llega si el nuevo horario no deja tiempo para pagar el anticipo pendiente).
+ * que llega si el nuevo horario no deja tiempo para pagar el anticipo pendiente); el horario que ya
+ * pasó y el aviso mínimo para reagendar llevan mensajes propios, que no invitan a reintentar.
  */
 export function mensajeReprogramacion(error: unknown): string {
   if (esHorarioOcupado(error)) {
     return MENSAJE_HORARIO_OCUPADO;
+  }
+  if (esHorarioPasado(error)) {
+    return 'Ese horario ya pasó. Elige otro.';
+  }
+  const aviso = mensajeAvisoReagendar(error);
+  if (aviso) {
+    return aviso;
   }
   const comun = mensajeComunDeCita(error);
   if (comun) {
