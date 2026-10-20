@@ -19,6 +19,9 @@ import {
   type Cita,
 } from '../models/citaModel';
 
+// La vista no importa de models/: recibe este tipo del viewmodel.
+export type { Cita } from '../models/citaModel';
+
 export type EstadoCargaAnticipo = 'cargando' | 'listo' | 'error' | 'noEncontrado';
 
 /**
@@ -316,6 +319,9 @@ export function useAnticipoViewModel(
     candado(() => revisarEstado(id));
   }, [revisarAlAbrir, estado, cita, pago.tipo, candado, revisarEstado]);
 
+  // Mercado Pago todavía procesa el pago (o lo revisa): la app nunca lo trata como no pagado.
+  const enProceso = pago.tipo === 'noCompletado' && pago.enProceso;
+
   const accionPrincipal = useCallback(() => {
     if (pago.tipo === 'cerrada') {
       verMisCitas();
@@ -325,16 +331,15 @@ export function useAnticipoViewModel(
     if (id == null || id === '') {
       return;
     }
-    candado(() => (pago.tipo === 'errorRevision' ? revisarEstado(id) : pagar(id)));
-  }, [candado, cita, pagar, pago.tipo, revisarEstado, verMisCitas]);
+    // Con el pago en proceso se vuelve a consultar, nunca se crea otra preferencia (cobro doble).
+    const revisar = pago.tipo === 'errorRevision' || enProceso;
+    candado(() => (revisar ? revisarEstado(id) : pagar(id)));
+  }, [candado, cita, enProceso, pagar, pago.tipo, revisarEstado, verMisCitas]);
 
   // En el salón y sin pago en curso: ni cita cerrada ni pago que Mercado Pago todavía procesa.
-  const enSalon =
-    cita != null &&
-    cita.anticipoEnSalon &&
-    pago.tipo !== 'cerrada' &&
-    !(pago.tipo === 'noCompletado' && pago.enProceso);
-  const limite = cita && !enSalon ? limiteAnticipo(cita.anticipoVenceEn) : null;
+  const enSalon = cita != null && cita.anticipoEnSalon && pago.tipo !== 'cerrada' && !enProceso;
+  // Con el pago en proceso no se pide pagar antes de una hora: ya pagó o está pagando.
+  const limite = cita && !enSalon && !enProceso ? limiteAnticipo(cita.anticipoVenceEn) : null;
 
   return {
     estado,

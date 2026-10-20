@@ -22,8 +22,7 @@ import { useTheme } from '@/shared/ui/useTheme';
 
 import { BadgeEstado } from '../components/BadgeEstado';
 import { ResumenCita } from '../components/ResumenCita';
-import type { Cita } from '../models/citaModel';
-import { useAnticipoViewModel, type EstadoPago } from '../viewmodels/useAnticipoViewModel';
+import { useAnticipoViewModel, type Cita, type EstadoPago } from '../viewmodels/useAnticipoViewModel';
 
 function tituloBoton(pago: EstadoPago, enSalon: boolean): string {
   switch (pago.tipo) {
@@ -32,7 +31,8 @@ function tituloBoton(pago: EstadoPago, enSalon: boolean): string {
     case 'errorRevision':
       return 'Revisar mi pago';
     case 'noCompletado':
-      return 'Intentar de nuevo';
+      // En proceso se vuelve a consultar el pago; no se abre otro.
+      return pago.enProceso ? 'Revisar mi pago' : 'Intentar de nuevo';
     default:
       // En el salón, el botón ofrece adelantar el pago en línea con el mismo flujo.
       return enSalon ? 'Pagar anticipo' : 'Pagar con Mercado Pago';
@@ -54,6 +54,11 @@ export default function AnticipoView() {
 
   const listo = vm.estado === 'listo' && vm.cita != null;
   const ocupado = vm.pago.tipo === 'abriendo' || vm.pago.tipo === 'revisando';
+  // El botón no abre Mercado Pago: lleva a Mis citas o vuelve a consultar el pago.
+  const sinNavegador =
+    vm.pago.tipo === 'cerrada' ||
+    vm.pago.tipo === 'errorRevision' ||
+    (vm.pago.tipo === 'noCompletado' && vm.pago.enProceso);
 
   return (
     <View style={[styles.raiz, { backgroundColor: colores.fondo }]}>
@@ -74,11 +79,7 @@ export default function AnticipoView() {
               titulo={tituloBoton(vm.pago, vm.avisoSalon != null)}
               onPress={vm.accionPrincipal}
               cargando={ocupado}
-              accessibilityHint={
-                vm.pago.tipo === 'cerrada' || vm.pago.tipo === 'errorRevision'
-                  ? undefined
-                  : 'Abre Mercado Pago en el navegador'
-              }
+              accessibilityHint={sinNavegador ? undefined : 'Abre Mercado Pago en el navegador'}
             />
           </View>
         </>
@@ -140,6 +141,7 @@ function Contenido({
 }) {
   const { colores } = useTheme();
   const cerrada = pago.tipo === 'cerrada';
+  const enProceso = pago.tipo === 'noCompletado' && pago.enProceso;
   const monto = cita.anticipoMonto ?? `$${cita.anticipoRequerido}`;
 
   return (
@@ -169,7 +171,7 @@ function Contenido({
         </View>
         {!cerrada ? (
           <View style={styles.estadoPago}>
-            <BadgeEstado texto="Pendiente de pago" tono="aviso" />
+            <BadgeEstado texto={enProceso ? 'Pago en revisión' : 'Pendiente de pago'} tono="aviso" />
             {limite ? (
               <View style={styles.limite} accessible accessibilityLabel={limite}>
                 <View style={styles.iconoLinea}>
@@ -209,7 +211,7 @@ function AvisoPago({ pago }: { pago: EstadoPago }) {
       return (
         <View style={styles.bloqueAviso}>
           <Text style={[styles.tituloAviso, { color: colores.texto }]}>
-            Tu pago no se ha completado
+            {pago.enProceso ? 'Tu pago está en proceso' : 'Tu pago no se ha completado'}
           </Text>
           <Text style={[styles.textoAviso, { color: colores.textoSuave }]}>
             {pago.enProceso

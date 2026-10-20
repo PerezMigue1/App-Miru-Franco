@@ -23,10 +23,10 @@ import { useTheme } from '@/shared/ui/useTheme';
 
 import { BadgeEstado, type TonoBadge } from '../components/BadgeEstado';
 import { ResumenCita } from '../components/ResumenCita';
-import type { Cita } from '../models/citaModel';
 import {
   useCitaConfirmadaViewModel,
   type AnticipoConfirmacion,
+  type Cita,
 } from '../viewmodels/useCitaConfirmadaViewModel';
 
 const BADGE_ANTICIPO: Record<AnticipoConfirmacion, { texto: string; tono: TonoBadge }> = {
