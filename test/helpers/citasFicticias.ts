@@ -1,6 +1,6 @@
 /// <reference types="jest" />
 
-import type { Cita, EstadoAnticipo, Slot } from '@/features/citas/models/citaModel';
+import type { Cita, EstadoAnticipo, PagoCita, Slot } from '@/features/citas/models/citaModel';
 
 import { RUTAS_DE_FONDO, USUARIO } from './datosClienta';
 import {
@@ -810,3 +810,172 @@ export function disponibilidadesDe(fecha: string, servicio: ServicioCrudo): Disp
     }),
   );
 }
+
+// ── GP-06.3: Mis citas ───────────────────────────────────────────────────────────────────────
+
+/** Domingo 18 de octubre: el día anterior a HOY. */
+export const AYER = '2026-10-18';
+
+/** Estados de la cita en el backend (CitaEstado). */
+export const ESTADOS_CITA = [
+  'pendiente',
+  'confirmada',
+  'reprogramada',
+  'en_curso',
+  'completada',
+  'cancelada',
+  'no_asistio',
+] as const;
+
+/** Cuándo el salón retuvo el anticipo pagado (ya no se reembolsa). */
+export const RETENIDO_EN_ISO = '2026-10-19T16:30:00.000Z';
+
+/** Motivo con el que cancela la clienta. */
+export const MOTIVO_CANCELACION = 'Me surgió un viaje';
+
+export const RUTA_MIS_CITAS = 'GET /api/citas?propios=true&orden=fechaHoraInicio&limit=100';
+
+/** "PATCH /api/citas/:id/reprogramar?propios=true". */
+export function rutaReprogramar(id: string | number = ID_CITA): string {
+  return `PATCH /api/citas/${encodeURIComponent(String(id))}/reprogramar?propios=true`;
+}
+
+/** "PATCH /api/citas/:id/cancelar?propios=true". */
+export function rutaCancelar(id: string | number = ID_CITA): string {
+  return `PATCH /api/citas/${encodeURIComponent(String(id))}/cancelar?propios=true`;
+}
+
+/** Cita cruda reprogramada al slot (estado 'reprogramada'; el anticipo se conserva). */
+export function citaReprogramada(slot: Slot, cambios: Partial<CitaCruda> = {}): CitaCruda {
+  return citaConAnticipo({ estado: 'reprogramada', fechaHoraInicio: slot.inicio, fechaHoraFin: slot.fin, ...cambios });
+}
+
+/** Cita cruda cancelada por la clienta con MOTIVO_CANCELACION y el anticipo sin pagar. */
+export function citaCancelada(cambios: Partial<CitaCruda> = {}): CitaCruda {
+  return citaConAnticipo({ estado: 'cancelada', motivoCancelacion: MOTIVO_CANCELACION, ...cambios });
+}
+
+/**
+ * Citas de la clienta para la lista, a mediodía de México (el mismo día en UTC y en México): la de
+ * anticipo sin pagar del martes, una pagada del sábado, una completada y una cancelada pasadas.
+ */
+export const MIS_CITAS_CRUDAS: CitaCruda[] = [
+  CITA_CON_ANTICIPO,
+  citaAnticipoPagado({
+    id: 502,
+    fechaHoraInicio: isoMexico(DIA_SABADO, '12:00'),
+    fechaHoraFin: isoMexico(DIA_SABADO, '14:30'),
+  }),
+  citaCruda({
+    id: 503,
+    estado: 'completada',
+    fechaHoraInicio: isoMexico('2026-10-10', '12:00'),
+    fechaHoraFin: isoMexico('2026-10-10', '12:45'),
+  }),
+  citaCancelada({
+    id: 504,
+    fechaHoraInicio: isoMexico('2026-10-12', '12:00'),
+    fechaHoraFin: isoMexico('2026-10-12', '14:30'),
+  }),
+];
+
+/** Cuerpo de GET /api/citas?propios=true: { success, count, page, limit, totalPages, data }. */
+export function cuerpoMisCitas(lista: unknown[] = MIS_CITAS_CRUDAS): unknown {
+  return { success: true, count: lista.length, page: 1, limit: 100, totalPages: 1, data: lista };
+}
+
+/** Pago ya normalizado (PagoCita): el pendiente de $360 de pagoCrudo, con los cambios indicados. */
+export function pagoNormalizado(cambios: Partial<PagoCita> = {}): PagoCita {
+  return { estado: 'pendiente', monto: 360, metodo: 'mercadopago', pagadoEn: null, retenidoEn: null, ...cambios };
+}
+
+/** Cita normalizada (la de anticipo sin pagar) con ese id, que empieza en `inicio` y dura 150 min. */
+export function citaNormalizadaEn(id: string | number, inicio: Date | string, cambios: Partial<Cita> = {}): Cita {
+  const fechaHoraInicio = new Date(inicio).toISOString();
+  return citaNormalizada({
+    id,
+    fechaHoraInicio,
+    fechaHoraFin: masMinutos(fechaHoraInicio, SERVICIO_CON_ANTICIPO_DURACION).toISOString(),
+    ...cambios,
+  });
+}
+
+/** Mensajes reales del backend al reprogramar y cancelar. */
+export const MENSAJES_MIS_CITAS = {
+  reprogramarCompletada: "No se puede reprogramar una cita en estado 'completada'",
+  cancelarCancelada: "No se puede cancelar una cita en estado 'cancelada'",
+  citaCobrada: 'La cita ya se cobró; no se puede editar ni reprogramar. Cancela la venta primero.',
+  motivoNoPermitido: 'El motivo contiene caracteres no permitidos',
+  motivoVacio: ['motivoCancelacion should not be empty'],
+  citaNoEncontrada: `Cita ${ID_CITA} no encontrada`,
+} as const;
+
+/** Cuerpos de error del backend al reprogramar y cancelar (el horario ocupado es ERRORES.horarioOcupado). */
+export const ERRORES_MIS_CITAS = {
+  reprogramarCompletada: cuerpoError(400, MENSAJES_MIS_CITAS.reprogramarCompletada),
+  cancelarCancelada: cuerpoError(400, MENSAJES_MIS_CITAS.cancelarCancelada),
+  /** 409: la cita ya se cobró en el salón. */
+  citaCobrada: cuerpoError(409, MENSAJES_MIS_CITAS.citaCobrada),
+  /** 400 del filtro de caracteres del backend. */
+  motivoNoPermitido: cuerpoError(400, MENSAJES_MIS_CITAS.motivoNoPermitido),
+  /** 400 de validación del DTO con el mensaje en arreglo. */
+  motivoVacio: cuerpoError(400, [...MENSAJES_MIS_CITAS.motivoVacio]),
+  /** 404 de una cita ajena o que no existe. */
+  citaNoEncontrada: cuerpoError(404, MENSAJES_MIS_CITAS.citaNoEncontrada),
+} satisfies Record<string, CuerpoError>;
+
+/** Textos que la app muestra a la clienta al fallar reprogramar o cancelar (escritos a mano). */
+export const TEXTOS_MIS_CITAS = {
+  sinConexion: 'Sin conexión. Revisa tu internet e intenta de nuevo.',
+  sesionTerminada: 'Tu sesión terminó. Inicia sesión de nuevo.',
+  citaNoEncontrada: 'No encontramos esta cita.',
+  horarioOcupado: 'Ese horario ya se ocupó. Elige otro.',
+  citaCobrada: 'Esta cita ya se cobró en el salón y no se puede cambiar.',
+  reprogramarNoSePuede: 'Esta cita ya no se puede reprogramar.',
+  reprogramarGenerico: 'No pudimos cambiar tu cita. Intenta de nuevo en un momento.',
+  cancelarNoSePuede: 'Esta cita ya no se puede cancelar.',
+  cancelarGenerico: 'No pudimos cancelar tu cita. Intenta de nuevo en un momento.',
+  motivoCaracteres: 'Tu motivo tiene caracteres que no podemos guardar. Escríbelo de otra forma.',
+  motivoVacio: 'Escribe el motivo de la cancelación.',
+} as const;
+
+/**
+ * Rutas de Mis citas para servidorConRutas: la lista de `citas` (por omisión MIS_CITAS_CRUDAS) y,
+ * para cada una, su detalle, reprogramar (la devuelve reprogramada al horario que mande la app) y
+ * cancelar (la devuelve cancelada con el motivo recibido).
+ */
+export function rutasMisCitas(citas: CitaCruda[] = MIS_CITAS_CRUDAS): Record<string, Manejador> {
+  const rutas: Record<string, Manejador> = {
+    [RUTA_MIS_CITAS]: () => respuesta(cuerpoMisCitas(citas)),
+  };
+  for (const cita of citas) {
+    rutas[rutaCita(cita.id)] = () => respuesta(cuerpoCita(cita));
+    rutas[rutaReprogramar(cita.id)] = (cuerpo) => {
+      const datos = (cuerpo ?? {}) as { fechaHoraInicio?: string; fechaHoraFin?: string };
+      return respuesta(
+        cuerpoCita({
+          ...cita,
+          estado: 'reprogramada',
+          fechaHoraInicio: datos.fechaHoraInicio ?? cita.fechaHoraInicio,
+          fechaHoraFin: datos.fechaHoraFin ?? cita.fechaHoraFin,
+        }),
+      );
+    };
+    rutas[rutaCancelar(cita.id)] = (cuerpo) => {
+      const { motivoCancelacion = null } = (cuerpo ?? {}) as { motivoCancelacion?: string | null };
+      return respuesta(cuerpoCita({ ...cita, estado: 'cancelada', motivoCancelacion }));
+    };
+  }
+  return rutas;
+}
+
+/**
+ * Servidor simulado con lo de fondo, el catálogo de servicios, rutasReserva() y rutasMisCitas().
+ * Las rutas de cada prueba van encima; lo demás responde 404.
+ */
+export const simularServidorMisCitas = servidorConRutas({
+  ...RUTAS_DE_FONDO,
+  ...rutasServicios(),
+  ...rutasReserva(),
+  ...rutasMisCitas(),
+});

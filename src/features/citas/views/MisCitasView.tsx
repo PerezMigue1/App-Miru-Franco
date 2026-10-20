@@ -33,8 +33,11 @@ import { useMovimientoReducido } from '@/shared/ui/useMovimientoReducido';
 import { useTheme } from '@/shared/ui/useTheme';
 
 import { TarjetaCita, TarjetaCitaEsqueleto } from '../components/TarjetaCita';
-import type { Cita } from '../models/citaModel';
-import { useMisCitasViewModel, type MisCitasViewModel } from '../viewmodels/useMisCitasViewModel';
+import {
+  useMisCitasViewModel,
+  type Cita,
+  type MisCitasViewModel,
+} from '../viewmodels/useMisCitasViewModel';
 
 type Segmento = 'proximas' | 'historial';
 
@@ -63,7 +66,8 @@ export default function MisCitasView() {
     if (router.canGoBack()) {
       router.back();
     } else {
-      router.replace('/citas');
+      // Mis citas solo se abre desde Perfil (usePerfilViewModel.abrirMisCitas).
+      router.replace('/perfil');
     }
   };
 

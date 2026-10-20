@@ -20,6 +20,7 @@ import {
 } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
+import type { Cita } from '../models/citaModel';
 import {
   estadoAnticipo,
   etiquetaEstadoAnticipo,
@@ -27,8 +28,7 @@ import {
   fechaLegible,
   horaLegible,
   limitePagoCorto,
-  type Cita,
-} from '../models/citaModel';
+} from '../viewmodels/presentacionCita';
 import { BadgeEstado } from './BadgeEstado';
 
 interface TarjetaCitaProps {

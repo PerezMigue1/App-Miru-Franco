@@ -5,7 +5,8 @@ import { StyleSheet, Text, View } from 'react-native';
 import { espacio, fuente, icono, radio, sombra, tipo, tracking } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
-import { fechaLegible, horaLegible, type Cita } from '../models/citaModel';
+import type { Cita } from '../models/citaModel';
+import { fechaLegible, horaLegible } from '../viewmodels/presentacionCita';
 
 interface ResumenCitaProps {
   cita: Cita;

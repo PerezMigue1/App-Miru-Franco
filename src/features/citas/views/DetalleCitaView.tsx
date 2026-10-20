@@ -28,15 +28,16 @@ import { Dato, ResumenCita } from '../components/ResumenCita';
 import {
   admiteCambios,
   avisoAnticipoEnSalon,
+  duracionParaMostrar,
   estadoAnticipo,
   etiquetaEstadoAnticipo,
   etiquetaEstadoCita,
   limitePagoCorto,
+  motivoCancelacionParaClienta,
+  useDetalleCitaViewModel,
   type Cita,
   type EstadoAnticipoCita,
-} from '../models/citaModel';
-import { duracionParaMostrar } from '../models/servicioModel';
-import { useDetalleCitaViewModel } from '../viewmodels/useDetalleCitaViewModel';
+} from '../viewmodels/useDetalleCitaViewModel';
 
 /** Qué significa cada estado del anticipo, sin prometer nada que el salón no haga. */
 const EXPLICACION_ANTICIPO: Partial<Record<EstadoAnticipoCita, string>> = {
@@ -47,6 +48,10 @@ const EXPLICACION_ANTICIPO: Partial<Record<EstadoAnticipoCita, string>> = {
   reembolsado: 'El salón te devolvió el anticipo.',
   liberada: 'La cita se canceló antes de pagar el anticipo, así que no hay nada que pagar.',
 };
+
+/** Anticipo vencido en una cita que el backend ya canceló: el horario ya quedó libre. */
+const EXPLICACION_VENCIDO_CANCELADA =
+  'El plazo para pagar el anticipo terminó. Como el anticipo no llegó a tiempo, el horario quedó libre.';
 
 /** Detalle de una cita de la clienta: datos, estado del anticipo, reprogramar y cancelar. */
 export default function DetalleCitaView() {
@@ -152,6 +157,7 @@ function Contenido({
   const duracion = duracionParaMostrar(cita.servicioDuracionMinutos);
   const cambios = admiteCambios(cita);
   const conPago = cambios && anticipo === 'pendiente';
+  const motivoCancelacion = motivoCancelacionParaClienta(cita);
 
   return (
     <>
@@ -212,9 +218,9 @@ function Contenido({
         </Seccion>
       ) : null}
 
-      {cita.motivoCancelacion ? (
+      {motivoCancelacion ? (
         <Seccion titulo="Motivo de la cancelación">
-          <Text style={[styles.cuerpo, { color: colores.texto }]}>{cita.motivoCancelacion}</Text>
+          <Text style={[styles.cuerpo, { color: colores.texto }]}>{motivoCancelacion}</Text>
         </Seccion>
       ) : null}
 
@@ -276,7 +282,10 @@ function ExplicacionAnticipo({
     );
   }
 
-  const explicacion = EXPLICACION_ANTICIPO[anticipo];
+  const explicacion =
+    anticipo === 'vencido' && cita.estado === 'cancelada'
+      ? EXPLICACION_VENCIDO_CANCELADA
+      : EXPLICACION_ANTICIPO[anticipo];
   if (!explicacion) {
     return null;
   }

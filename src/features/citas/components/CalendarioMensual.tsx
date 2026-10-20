@@ -18,6 +18,7 @@ import {
 } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
+import type { DiaCalendario, MesCalendario } from '../models/citaModel';
 import {
   compararMeses,
   ENCABEZADOS_SEMANA,
@@ -26,9 +27,7 @@ import {
   mesDe,
   semanasDelMes,
   tituloMes,
-  type DiaCalendario,
-  type MesCalendario,
-} from '../models/citaModel';
+} from '../viewmodels/presentacionCita';
 
 interface CalendarioMensualProps {
   /** Mes que se está mostrando. */

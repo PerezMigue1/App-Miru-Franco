@@ -7,6 +7,9 @@ import { useAuth } from '@/features/auth/viewmodels/useAuth';
 import { listarMisCitas, separarMisCitas, type Cita } from '../models/citaModel';
 import { obtenerServicios } from '../models/servicioModel';
 
+// La vista no importa de models/: recibe este tipo del viewmodel.
+export type { Cita } from '../models/citaModel';
+
 export type EstadoMisCitas = 'cargando' | 'listo' | 'error';
 
 export interface MisCitasViewModel {

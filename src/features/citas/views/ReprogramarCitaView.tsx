@@ -30,8 +30,9 @@ import {
   CuadriculaHorariosEsqueleto,
   horaDeSlot,
 } from '../components/SelectorHorario';
-import { fechaLegible, horaLegible } from '../models/citaModel';
 import {
+  fechaLegible,
+  horaLegible,
   useReprogramarCitaViewModel,
   type ReprogramarCitaViewModel,
 } from '../viewmodels/useReprogramarCitaViewModel';

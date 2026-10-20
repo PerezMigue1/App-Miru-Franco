@@ -14,7 +14,8 @@ import {
 } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
-import { horaLegible, type Slot } from '../models/citaModel';
+import type { Slot } from '../models/citaModel';
+import { horaLegible } from '../viewmodels/presentacionCita';
 
 /** Parte una lista en filas de `columnas` elementos. */
 function enFilas<T>(elementos: T[], columnas: number): T[][] {
