@@ -26,6 +26,9 @@ import {
 } from '../models/citaModel';
 import { obtenerServicio, type Servicio } from '../models/servicioModel';
 
+// La vista no importa de models/: recibe esta función del viewmodel.
+export { fechaLegible } from '../models/citaModel';
+
 export type PasoReserva = 1 | 2 | 3;
 export type EstadoReserva = 'cargando' | 'listo' | 'error' | 'noEncontrado';
 export type EstadoHorarios = 'inactivo' | 'cargando' | 'listo' | 'error';

@@ -13,6 +13,9 @@ import {
   type Cita,
 } from '../models/citaModel';
 
+// La vista no importa de models/: recibe este tipo del viewmodel.
+export type { Cita } from '../models/citaModel';
+
 export type EstadoCitaConfirmada = 'cargando' | 'listo' | 'error' | 'noEncontrado';
 
 /**

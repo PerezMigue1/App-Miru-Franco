@@ -9,8 +9,10 @@ import {
   urlHttps,
   type Crudo,
 } from '@/features/inicio/models/inicioService';
-import type { TonoBadge } from '../components/BadgeEstado';
 import type { Especialista as EspecialistaDeServicio } from './servicioModel';
+
+/** Tono de una insignia (BadgeEstado); vive aquí para que el model no importe componentes. */
+export type TonoBadge = 'aviso' | 'exito' | 'neutro' | 'peligro' | 'info';
 
 /** Especialista para agendar: la del servicio más su puesto y especialidades (GET /api/citas/especialistas). */
 export interface Especialista extends EspecialistaDeServicio {
@@ -392,6 +394,7 @@ export const MENSAJES_ANTICIPO_PARA_CLIENTA: readonly string[] = [
   'Ya tienes una cita por pagar en el salón. Paga su anticipo o elige pagar en línea.',
   'Para esta cita, el anticipo se paga en línea.',
   'Ya no da tiempo de pagar el anticipo antes de tu cita.',
+  'El pago del anticipo en línea no está disponible por ahora. Elige pagarlo en el salón.',
 ];
 
 /** El mensaje del 400 de crearCita si es uno de MENSAJES_ANTICIPO_PARA_CLIENTA; null si no. */

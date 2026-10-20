@@ -3,7 +3,9 @@ import { StyleSheet, Text, View } from 'react-native';
 import { borde, fuente, insignia, radio, tipo } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
-export type TonoBadge = 'aviso' | 'exito' | 'neutro' | 'peligro' | 'info';
+import type { TonoBadge } from '../models/citaModel';
+
+export type { TonoBadge };
 
 interface BadgeEstadoProps {
   texto: string;

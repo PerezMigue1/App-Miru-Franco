@@ -43,8 +43,8 @@ import {
   horaDeSlot,
 } from '../components/SelectorHorario';
 import { TarjetaEspecialista, TarjetaEspecialistaEsqueleto } from '../components/TarjetaEspecialista';
-import { fechaLegible } from '../models/citaModel';
 import {
+  fechaLegible,
   PASOS_RESERVA,
   useReservarCitaViewModel,
   type ReservarCitaViewModel,
@@ -138,7 +138,7 @@ export default function ReservarCitaView() {
         <ScrollView contentContainerStyle={[styles.estado, relleno]}>
           <EmptyState
             titulo="Este servicio ya no está disponible"
-            mensaje="Puede que el salón lo haya retirado. Mira los demás servicios en Citas."
+            mensaje="Puede que el salón lo haya retirado. Mira los demás servicios en Servicios."
             accion={{ titulo: 'Ver servicios', onPress: vm.verServicios }}
           />
         </ScrollView>
