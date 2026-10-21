@@ -624,6 +624,45 @@ export function respuestaError(cuerpo: CuerpoError): Response {
   return respuesta(cuerpo, cuerpo.statusCode);
 }
 
+/** Campo `error` en español que pone el filtro global del backend (ERROR_POR_ESTADO). */
+const ERROR_DEL_FILTRO: Record<number, string> = {
+  400: 'Solicitud inválida',
+  401: 'No autenticado',
+  409: 'Conflicto',
+  503: 'Servicio no disponible',
+};
+
+/** Ruta de crear la cita como la escribe el filtro del backend en `path`. */
+const PATH_CREAR_CITA = '/api/citas?propios=true';
+
+/** Cuerpo de error completo del filtro global del backend (http-exception.filter.ts). */
+export interface CuerpoErrorFiltro extends CuerpoError {
+  success: false;
+  timestamp: string;
+  path: string;
+}
+
+/**
+ * Cuerpo de error tal como lo arma el filtro global del backend:
+ * { success: false, statusCode, timestamp, path, error, message[, code] }, con `error` en español.
+ */
+export function cuerpoErrorFiltro(
+  statusCode: number,
+  message: string | string[],
+  path: string = PATH_CREAR_CITA,
+  code?: string,
+): CuerpoErrorFiltro {
+  return {
+    success: false,
+    statusCode,
+    timestamp: AHORA_ISO,
+    path,
+    ...(ERROR_DEL_FILTRO[statusCode] ? { error: ERROR_DEL_FILTRO[statusCode] } : {}),
+    message,
+    ...(code ? { code } : {}),
+  };
+}
+
 /** Mensajes reales del backend de citas y anticipos. */
 export const MENSAJES_BACKEND = {
   horarioOcupado: 'El especialista ya tiene una cita en ese horario (cita #77)',
@@ -633,6 +672,10 @@ export const MENSAJES_BACKEND = {
   sinTiempoSalon: 'Ya no da tiempo de pagar en el salón. Paga el anticipo en línea.',
   unaPorPagarEnSalon: 'Ya tienes una cita por pagar en el salón. Paga su anticipo o elige pagar en línea.',
   soloEnLinea: 'Para esta cita, el anticipo se paga en línea.',
+  /** El salón apagó la regla permitirAnticipoEnSalon: el anticipo solo se paga en línea. */
+  anticipoSalonNoPermitido: 'El anticipo se paga en línea.',
+  /** 503 genérico del filtro del backend (base caída o pool de conexiones agotado). */
+  servicioNoDisponible: 'El servicio no está disponible en este momento. Intenta de nuevo en unos segundos.',
   /** Render sin ANTICIPOS_DESDE o Mercado Pago sin configurar: solo queda pagar en el salón. */
   anticipoEnLineaNoDisponible: 'El pago del anticipo en línea no está disponible por ahora. Elige pagarlo en el salón.',
   noPideAnticipo: 'Esta cita no pide anticipo',
@@ -658,6 +701,10 @@ export const ERRORES = {
   unaPorPagarEnSalon: cuerpoError(400, MENSAJES_BACKEND.unaPorPagarEnSalon),
   soloEnLinea: cuerpoError(400, MENSAJES_BACKEND.soloEnLinea),
   anticipoEnLineaNoDisponible: cuerpoError(400, MENSAJES_BACKEND.anticipoEnLineaNoDisponible),
+  /** 400 de POST /api/citas con pagoAnticipo 'salon' y la regla permitirAnticipoEnSalon apagada. */
+  anticipoSalonNoPermitido: cuerpoErrorFiltro(400, MENSAJES_BACKEND.anticipoSalonNoPermitido),
+  /** 503 genérico del filtro (no es propio del anticipo). */
+  servicioNoDisponible: cuerpoErrorFiltro(503, MENSAJES_BACKEND.servicioNoDisponible),
   /** 400 de la preferencia: la cita no pide anticipo. */
   noPideAnticipo: cuerpoError(400, MENSAJES_BACKEND.noPideAnticipo),
   /** 409 de la preferencia. */
@@ -673,6 +720,19 @@ export const ERRORES = {
   /** 401 de POST /api/auth/movil/renovar: la sesión venció y se cierra. */
   sesionVencida: cuerpoError(401, MENSAJES_BACKEND.sesionVencida, 'SESION_VENCIDA'),
 } satisfies Record<string, CuerpoError>;
+
+/**
+ * 400 de POST /api/citas cuando la regla maxCitasPorPagarEnSalon vale `n` distinto de 1 y la clienta
+ * ya tiene esas citas por pagar en el salón (con n = 1 el backend manda MENSAJES_BACKEND.unaPorPagarEnSalon).
+ */
+export function mensajeVariasPorPagarEnSalon(n: number): string {
+  return `Ya tienes ${n} citas por pagar en el salón. Paga su anticipo o elige pagar en línea.`;
+}
+
+/** Cuerpo del 400 de mensajeVariasPorPagarEnSalon(n), como lo arma el filtro del backend. */
+export function errorVariasPorPagarEnSalon(n: number): CuerpoErrorFiltro {
+  return cuerpoErrorFiltro(400, mensajeVariasPorPagarEnSalon(n));
+}
 
 /** El error con el que se rechaza la promesa (falla si se cumple), para revisarlo con instanceof. */
 export async function errorDe(promesa: Promise<unknown>): Promise<unknown> {
@@ -979,3 +1039,56 @@ export const simularServidorMisCitas = servidorConRutas({
   ...rutasReserva(),
   ...rutasMisCitas(),
 });
+
+// ── GP-06.5: anticipo en el salón ────────────────────────────────────────────────────────────
+
+/** Plazo de la cita ficticia (martes a las 11:00 de México) pagando en el salón: 15 minutos antes, 10:45. */
+export const VENCE_EN_SALON_ISO = '2026-10-20T16:45:00.000Z';
+
+/** motivoCancelacion con el que la barrida de anticipos cancela la cita que no se pagó a tiempo. */
+export const MOTIVO_ANTICIPO_NO_PAGADO = 'anticipo_no_pagado';
+
+/**
+ * Cita cruda con anticipo de $360 a pagar en el salón y sin pagar: anticipoEnSalon true y el plazo
+ * como lo calcula el backend (inicio menos 15 minutos). Si los cambios traen otro inicio, el fin
+ * (150 min) y el plazo se calculan con él.
+ */
+export function citaEnSalon(cambios: Partial<CitaCruda> = {}): CitaCruda {
+  const inicio = cambios.fechaHoraInicio ?? INICIO_CITA_ISO;
+  return citaConAnticipo({
+    fechaHoraInicio: inicio,
+    fechaHoraFin: masMinutos(inicio, SERVICIO_CON_ANTICIPO_DURACION).toISOString(),
+    anticipoEnSalon: true,
+    anticipoVenceEn: venceAnticipo(inicio, AHORA, true),
+    ...cambios,
+  });
+}
+
+/** Pago crudo del anticipo cobrado en el salón: aprobado, en efectivo y sin proveedor. */
+export function pagoEnSalon(cambios: Partial<PagoCrudo> = {}): PagoCrudo {
+  return pagoCrudo({ estado: 'aprobado', metodo: 'efectivo', proveedor: null, pagadoEn: PAGADO_EN_ISO, ...cambios });
+}
+
+/** Cita en el salón ya pagada en el salón: confirmada, con anticipoPagadoEn y el pago en efectivo. */
+export function citaPagadaEnSalon(cambios: Partial<CitaCruda> = {}): CitaCruda {
+  return citaEnSalon({ estado: 'confirmada', anticipoPagadoEn: PAGADO_EN_ISO, pagos: [pagoEnSalon()], ...cambios });
+}
+
+/** Cita en el salón que la barrida canceló porque no se pagó el anticipo a tiempo (no toca pagos). */
+export function citaCanceladaPorAnticipo(cambios: Partial<CitaCruda> = {}): CitaCruda {
+  return citaEnSalon({ estado: 'cancelada', motivoCancelacion: MOTIVO_ANTICIPO_NO_PAGADO, ...cambios });
+}
+
+/** citaEnSalon() tal como la entrega el modelo, con los cambios indicados. */
+export function citaEnSalonNormalizada(cambios: Partial<Cita> = {}): Cita {
+  return citaNormalizada({ anticipoEnSalon: true, anticipoVenceEn: VENCE_EN_SALON_ISO, ...cambios });
+}
+
+/** Aviso de la cita en el salón cuando no hay plazo válido (escrito a mano). */
+export const AVISO_EN_SALON_SIN_PLAZO =
+  'Paga tu anticipo en el salón a más tardar 15 minutos antes de tu cita. También puedes pagarlo en línea.';
+
+/** Aviso de la cita en el salón con el límite ya armado ('antes de las 10:45 a. m.'), escrito a mano. */
+export function avisoEnSalonEsperado(limite: string): string {
+  return `Paga tu anticipo en el salón ${limite} (15 minutos antes de tu cita). También puedes pagarlo en línea.`;
+}
