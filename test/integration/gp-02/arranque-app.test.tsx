@@ -173,13 +173,16 @@ describe('Arranque de la app con las rutas reales (GP-02)', () => {
     expect(arranque.getPathname()).toBe('/inicio');
     expect(arranque.getSegments()).toEqual(['(cliente)', 'inicio']);
 
-    // Solo se pidieron los dos catálogos públicos, sin token y siempre a la API de prueba.
+    // Solo se pidieron los dos catálogos públicos y la configuración pública del salón (GP-07.1,
+    // aquí responde 404 y la app sigue con el respaldo), sin token y siempre a la API de prueba.
     const urls = fetchSimulado.mock.calls.map(([entrada]) => urlDe(entrada));
     expect(urls.length).toBeGreaterThan(0);
     for (const url of urls) {
       expect(url.startsWith(`${API}/`)).toBe(true);
     }
-    expect(new Set(urls)).toEqual(new Set([`${API}/api/servicios`, `${API}/api/productos`]));
+    expect(new Set(urls)).toEqual(
+      new Set([`${API}/api/servicios`, `${API}/api/productos`, `${API}/api/configuracion-publica`]),
+    );
     for (const [, init] of fetchSimulado.mock.calls as unknown as [unknown, RequestInit][]) {
       expect(init.method).toBe('GET');
       expect((init.headers as Record<string, string>).Authorization).toBeUndefined();
