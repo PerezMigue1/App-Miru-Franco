@@ -7,7 +7,6 @@ import { ApiError } from '@/shared/api/apiClient';
 import { useCandado } from '@/shared/ui/useCandado';
 
 import {
-  esSinExistencias,
   itemConProblema,
   obtenerCarrito,
   totalCarrito,
@@ -18,6 +17,7 @@ import {
   buscarPedidoRecienCreado,
   crearPedido,
   mensajeCrearPedido,
+  pideRevisarCarrito,
   type MetodoPago,
   type Pedido,
 } from '../models/pedidoModel';
@@ -48,7 +48,7 @@ export interface CheckoutViewModel {
   enviando: boolean;
   /** Mensaje propio del último intento de crear el pedido, o null. */
   errorEnvio: string | null;
-  /** El error pide revisar el carrito (sin existencias o producto retirado). */
+  /** El error pide revisar el carrito (sin existencias, producto retirado o sin precio). */
   revisarCarrito: boolean;
   irAlCarrito: () => void;
   confirmar: () => void;
@@ -225,9 +225,7 @@ export function useCheckoutViewModel(): CheckoutViewModel {
           return;
         }
         setErrorEnvio(mensajeCrearPedido(error));
-        setRevisarCarrito(
-          esSinExistencias(error) || (error instanceof ApiError && error.status === 404),
-        );
+        setRevisarCarrito(pideRevisarCarrito(error));
         setEnviando(false);
       }
     });

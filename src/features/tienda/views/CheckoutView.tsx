@@ -27,8 +27,7 @@ import { useTheme } from '@/shared/ui/useTheme';
 import { DatosRecogerSalon } from '../components/DatosRecogerSalon';
 import { OpcionPago } from '../components/OpcionPago';
 import { DatoCompra, ResumenCompra } from '../components/ResumenCompra';
-import { SALON_RECOGER, etiquetaMetodoPago } from '../models/pedidoModel';
-import { formatoPrecio } from '../models/productoModel';
+import { SALON_RECOGER, etiquetaMetodoPago, formatoPrecio } from '../viewmodels/presentacionTienda';
 import {
   PASOS_CHECKOUT,
   useCheckoutViewModel,

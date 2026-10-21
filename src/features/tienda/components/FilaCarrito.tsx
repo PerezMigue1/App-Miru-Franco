@@ -21,8 +21,7 @@ import {
 } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
-import { itemConProblema, type ItemCarrito } from '../models/carritoModel';
-import { formatoPrecio } from '../models/productoModel';
+import { formatoPrecio, itemConProblema, type ItemCarrito } from '../viewmodels/presentacionTienda';
 import { FotoProducto } from './FotoProducto';
 import { SelectorCantidad } from './SelectorCantidad';
 

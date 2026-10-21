@@ -23,7 +23,7 @@ import {
   precioDesdeCentavos,
   tienePreciosDistintos,
   type ProductoCatalogo,
-} from '../models/productoModel';
+} from '../viewmodels/presentacionTienda';
 import { FotoProducto } from './FotoProducto';
 
 const SIN_PRECIO = 'Consulta el precio en el salón';

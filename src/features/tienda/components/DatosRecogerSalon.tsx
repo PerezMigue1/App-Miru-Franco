@@ -6,7 +6,7 @@ import { usePresion } from '@/shared/ui/movimiento';
 import { espacio, fuente, icono, radio, tipo, toqueMinimo } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
-import { SALON_RECOGER } from '../models/pedidoModel';
+import { SALON_RECOGER } from '../viewmodels/presentacionTienda';
 
 interface DatosRecogerSalonProps {
   /** Muestra el aviso de cuánto tarda en estar listo (checkout). */

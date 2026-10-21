@@ -18,6 +18,9 @@ import {
 
 import { avisarCambioCarrito } from './usePiezasCarrito';
 
+// La vista no importa de models/: recibe estos tipos del viewmodel.
+export type { Presentacion, ProductoCatalogo } from '../models/productoModel';
+
 export type EstadoDetalleProducto = 'cargando' | 'listo' | 'error' | 'noEncontrado';
 
 /**

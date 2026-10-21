@@ -30,10 +30,10 @@ import { useTheme } from '@/shared/ui/useTheme';
 import { BadgePedido } from '../components/BadgePedido';
 import { DatosRecogerSalon } from '../components/DatosRecogerSalon';
 import { DatoCompra, ResumenCompra } from '../components/ResumenCompra';
-import { esPagoEnSalon, etiquetaMetodoPago, fechaPedido, type Pedido } from '../models/pedidoModel';
-import { formatoPrecio } from '../models/productoModel';
+import { esPagoEnSalon, etiquetaMetodoPago, fechaPedido, formatoPrecio } from '../viewmodels/presentacionTienda';
 import {
   usePedidoConfirmadoViewModel,
+  type Pedido,
   type PedidoConfirmadoViewModel,
 } from '../viewmodels/usePedidoConfirmadoViewModel';
 
@@ -187,7 +187,7 @@ function Contenido({ vm, pedido }: { vm: PedidoConfirmadoViewModel; pedido: Pedi
           subtotalCentavos: item.subtotalCentavos,
         }))}
         totalCentavos={pedido.totalCentavos}
-        encabezado={<EncabezadoPedido pedido={pedido} />}
+        encabezado={<EncabezadoPedido pedido={pedido} pagoEnProceso={vm.pagoEnProceso} />}
       >
         <DatosPago pedido={pedido} limite={vm.limite} />
       </ResumenCompra>
@@ -267,14 +267,14 @@ function AvisosPago({
   );
 }
 
-function EncabezadoPedido({ pedido }: { pedido: Pedido }) {
+function EncabezadoPedido({ pedido, pagoEnProceso }: { pedido: Pedido; pagoEnProceso: boolean }) {
   const { colores } = useTheme();
   const fecha = conMayuscula(fechaPedido(pedido));
   return (
     <View style={styles.encabezadoPedido}>
       <View style={styles.filaPedido}>
         <Text style={[styles.numeroPedido, { color: colores.texto }]}>Pedido #{pedido.id}</Text>
-        <BadgePedido pedido={pedido} />
+        <BadgePedido pedido={pedido} pagoEnProceso={pagoEnProceso} />
       </View>
       {fecha ? <Text style={[styles.fecha, { color: colores.textoSuave }]}>{fecha}</Text> : null}
     </View>

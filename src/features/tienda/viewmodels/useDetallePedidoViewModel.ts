@@ -9,11 +9,16 @@ import {
   cancelarPedido,
   esPedidoNoEncontrado,
   mensajeCancelarPedido,
+  obtenerEstadoPagoPedido,
   obtenerPedido,
+  pidePagoEnLinea,
   type Pedido,
   type ReembolsoCancelacion,
 } from '../models/pedidoModel';
 import { formatoPrecio } from '../models/productoModel';
+
+// La vista no importa de models/: recibe este tipo del viewmodel.
+export type { Pedido } from '../models/pedidoModel';
 
 export type EstadoDetallePedido = 'cargando' | 'listo' | 'error' | 'noEncontrado';
 
@@ -37,6 +42,13 @@ export interface DetallePedidoViewModel {
   verMisPedidos: () => void;
   /** Abre la confirmación del pedido con el pago de Mercado Pago. */
   completarPago: () => void;
+  /**
+   * Mercado Pago procesa o revisa el pago en línea de este pedido (se consulta al cargarlo): no se
+   * pide pagar otra vez, solo revisar el pago.
+   */
+  pagoEnProceso: boolean;
+  /** Abre la confirmación del pedido solo para consultar su pago (sin abrir Mercado Pago). */
+  revisarPago: () => void;
   hojaCancelarVisible: boolean;
   abrirCancelar: () => void;
   /** Cierra la hoja; mientras cancela no hace nada para no perder el resultado. */
@@ -89,6 +101,7 @@ export function useDetallePedidoViewModel(pedidoId: string | undefined): Detalle
   const [cancelando, setCancelando] = useState(false);
   const [errorCancelacion, setErrorCancelacion] = useState<string | null>(null);
   const [aviso, setAviso] = useState<AvisoPedido | null>(null);
+  const [pagoEnProceso, setPagoEnProceso] = useState(false);
   // Solo la última solicitud escribe el estado (recargas al enfocar, reintentos o pantalla desmontada).
   const solicitud = useRef(0);
   const montada = useRef(true);
@@ -97,6 +110,36 @@ export function useDetallePedidoViewModel(pedidoId: string | undefined): Detalle
   const navegando = useRef(false);
 
   const numero = numeroValido(pedidoId);
+
+  /**
+   * Con el pedido en línea por pagar y dentro de su plazo, pregunta una vez y en silencio si
+   * Mercado Pago ya procesa un pago. Si la consulta falla, el detalle queda como estaba. Solo
+   * escribe si sigue siendo la última solicitud (y la pantalla está montada).
+   */
+  const consultarPago = useCallback((cargado: Pedido, actual: number) => {
+    if (!pidePagoEnLinea(cargado)) {
+      setPagoEnProceso(false);
+      return;
+    }
+    obtenerEstadoPagoPedido(cargado.id)
+      .then(({ estado: estadoPago, pedidoEstado }) => {
+        if (actual !== solicitud.current) {
+          return;
+        }
+        setPagoEnProceso(estadoPago === 'pendiente' || estadoPago === 'revision');
+        // Pagado o cancelado del lado del servidor: se muestra el estado real del pedido.
+        if ((estadoPago === 'aprobado' || estadoPago === 'cancelado') && pedidoEstado) {
+          setPedido((previo) =>
+            previo && previo.id === cargado.id && previo.estado !== pedidoEstado
+              ? { ...previo, estado: pedidoEstado }
+              : previo,
+          );
+        }
+      })
+      .catch(() => {
+        // En silencio: sin respuesta, el detalle sigue como lo mandó el pedido.
+      });
+  }, []);
 
   const cargar = useCallback(
     (silenciosa: boolean) => {
@@ -119,6 +162,7 @@ export function useDetallePedidoViewModel(pedidoId: string | undefined): Detalle
           hayDatos.current = true;
           setPedido(respuesta);
           setEstado('listo');
+          consultarPago(respuesta, actual);
         })
         .catch((error: unknown) => {
           if (actual !== solicitud.current) {
@@ -135,7 +179,7 @@ export function useDetallePedidoViewModel(pedidoId: string | undefined): Detalle
           setEstado(noEncontrado ? 'noEncontrado' : 'error');
         });
     },
-    [numero],
+    [numero, consultarPago],
   );
 
   const recargar = useCallback(() => cargar(false), [cargar]);
@@ -171,13 +215,22 @@ export function useDetallePedidoViewModel(pedidoId: string | undefined): Detalle
 
   const idPedido = pedido ? encodeURIComponent(String(pedido.id)) : null;
 
-  const completarPago = useCallback(() => {
-    if (!idPedido || navegando.current) {
-      return;
-    }
-    navegando.current = true;
-    router.push(`/pedido-confirmado/${idPedido}?pagar=1&origen=pedido` as Href);
-  }, [idPedido, router]);
+  /** Abre la confirmación del pedido una sola vez (un doble toque no apila dos pantallas). */
+  const abrirConfirmacion = useCallback(
+    (consulta: string) => {
+      if (!idPedido || navegando.current) {
+        return;
+      }
+      navegando.current = true;
+      router.push(`/pedido-confirmado/${idPedido}?${consulta}` as Href);
+    },
+    [idPedido, router],
+  );
+
+  const completarPago = useCallback(() => abrirConfirmacion('pagar=1&origen=pedido'), [abrirConfirmacion]);
+
+  // Sin pagar=1: la confirmación solo consulta el pago, nunca abre otro (evita un cobro doble).
+  const revisarPago = useCallback(() => abrirConfirmacion('origen=pedido'), [abrirConfirmacion]);
 
   const abrirCancelar = useCallback(() => {
     setErrorCancelacion(null);
@@ -287,6 +340,8 @@ export function useDetallePedidoViewModel(pedidoId: string | undefined): Detalle
     regresar,
     verMisPedidos,
     completarPago,
+    pagoEnProceso,
+    revisarPago,
     hojaCancelarVisible,
     abrirCancelar,
     cerrarCancelar,

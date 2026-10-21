@@ -34,16 +34,19 @@ import { HojaCancelarPedido } from '../components/HojaCancelarPedido';
 import {
   etiquetaMetodoPago,
   fechaPedido,
+  formatoPrecio,
   limitePagoPedido,
   pidePagoEnLinea,
   puedeCancelar,
   textoCancelarPedido,
-  textoQueSigue,
+  textoPiezas,
+  textoQueSigueConPago,
+} from '../viewmodels/presentacionTienda';
+import {
+  useDetallePedidoViewModel,
+  type AvisoPedido,
   type Pedido,
-} from '../models/pedidoModel';
-import { formatoPrecio } from '../models/productoModel';
-import { textoPiezas } from '../models/productoModel';
-import { useDetallePedidoViewModel, type AvisoPedido } from '../viewmodels/useDetallePedidoViewModel';
+} from '../viewmodels/useDetallePedidoViewModel';
 
 /** Estados en los que ya no hay nada que recoger en el salón. */
 const SIN_RECOGER: readonly string[] = ['cancelado', 'entregado', 'enviado'];
@@ -67,7 +70,9 @@ export default function DetallePedidoView() {
           <Contenido
             pedido={vm.pedido}
             aviso={vm.aviso}
+            pagoEnProceso={vm.pagoEnProceso}
             onPagar={vm.completarPago}
+            onRevisarPago={vm.revisarPago}
             onCancelar={vm.abrirCancelar}
           />
         </ScrollView>
@@ -112,12 +117,17 @@ export default function DetallePedidoView() {
 function Contenido({
   pedido,
   aviso,
+  pagoEnProceso,
   onPagar,
+  onRevisarPago,
   onCancelar,
 }: {
   pedido: Pedido;
   aviso: AvisoPedido | null;
+  /** Mercado Pago procesa o revisa el pago: sin plazo y solo revisar el pago, nunca pagar otra vez. */
+  pagoEnProceso: boolean;
   onPagar: () => void;
+  onRevisarPago: () => void;
   onCancelar: () => void;
 }) {
   const { colores } = useTheme();
@@ -125,9 +135,9 @@ function Contenido({
   const entrada = useEntradaContenido();
 
   const fecha = fechaPedido(pedido);
-  const queSigue = textoQueSigue(pedido);
+  const queSigue = textoQueSigueConPago(pedido, pagoEnProceso);
   const pagar = pidePagoEnLinea(pedido);
-  const limite = pagar ? limitePagoPedido(pedido) : null;
+  const limite = pagar && !pagoEnProceso ? limitePagoPedido(pedido) : null;
   const total = formatoPrecio(pedido.totalCentavos);
   const recoger = !SIN_RECOGER.includes(pedido.estado);
 
@@ -140,7 +150,7 @@ function Contenido({
 
       <View style={styles.resumen}>
         <View style={styles.insignias}>
-          <BadgePedido pedido={pedido} />
+          <BadgePedido pedido={pedido} pagoEnProceso={pagoEnProceso} />
         </View>
         {fecha ? (
           <View style={styles.filaIcono} accessible accessibilityLabel={`Pedido hecho el ${fecha}`}>
@@ -169,7 +179,11 @@ function Contenido({
                   <Text style={[styles.textoFuerte, { color: colores.texto }]}>Paga antes del {limite}.</Text>
                 </View>
               ) : null}
-              <Button titulo="Completar el pago" onPress={onPagar} />
+              {pagoEnProceso ? (
+                <Button titulo="Revisar mi pago" onPress={onRevisarPago} />
+              ) : (
+                <Button titulo="Completar el pago" onPress={onPagar} />
+              )}
             </>
           ) : null}
         </Tarjeta>

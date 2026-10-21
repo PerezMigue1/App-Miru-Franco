@@ -3,7 +3,7 @@ import type { EtiquetaEstado } from '@/features/citas/models/citaModel';
 import { fechaLegible, horaLegible } from '@/features/citas/models/citaModel';
 import { esObjeto, listaDe, primeraImagen, texto, urlHttps, type Crudo } from '@/features/inicio/models/inicioService';
 
-import { mensajeComunTienda } from './carritoModel';
+import { esSinExistencias, mensajeComunTienda } from './carritoModel';
 import { aCentavos } from './productoModel';
 
 /** Cómo paga la clienta su pedido. Los dos se recogen en el salón: no hay envío a domicilio. */
@@ -410,12 +410,23 @@ const ETIQUETAS_PEDIDO: Record<string, EtiquetaEstado> = {
 };
 
 const ETIQUETA_APARTADO: EtiquetaEstado = { texto: 'Apartado, pagas al recoger', tono: 'aviso' };
+const ETIQUETA_PAGO_EN_PROCESO: EtiquetaEstado = { texto: 'Pago en proceso', tono: 'aviso' };
 const ETIQUETA_DESCONOCIDA: EtiquetaEstado = { texto: 'Sin estado', tono: 'neutro' };
 
-/** Insignia del estado (textos de la web); el apartado pendiente dice que se paga al recoger. */
-export function etiquetaEstadoPedido(pedido: Pick<Pedido, 'estado' | 'metodoPago'>): EtiquetaEstado {
+/**
+ * Insignia del estado (textos de la web); el apartado pendiente dice que se paga al recoger. Con
+ * `pagoEnProceso` (Mercado Pago procesa o revisa el pago), el pedido en línea pendiente dice
+ * "Pago en proceso" en lugar de "Pendiente de pago".
+ */
+export function etiquetaEstadoPedido(
+  pedido: Pick<Pedido, 'estado' | 'metodoPago'>,
+  pagoEnProceso = false,
+): EtiquetaEstado {
   if (pedido.estado === 'pendiente_pago' && esPagoEnSalon(pedido)) {
     return ETIQUETA_APARTADO;
+  }
+  if (pagoEnProceso && pedido.estado === 'pendiente_pago' && esPagoEnLinea(pedido)) {
+    return ETIQUETA_PAGO_EN_PROCESO;
   }
   return Object.prototype.hasOwnProperty.call(ETIQUETAS_PEDIDO, pedido.estado)
     ? ETIQUETAS_PEDIDO[pedido.estado]
@@ -488,6 +499,24 @@ export function textoQueSigue(
   }
 }
 
+/** Qué sigue con el pago en línea en proceso: ya pagó o está pagando, no se le pide pagar otra vez. */
+export const TEXTO_PAGO_EN_PROCESO =
+  'Tu pago se está procesando en Mercado Pago. No pagues de nuevo: te avisamos en la app y por correo cuando se acredite.';
+
+/**
+ * Qué sigue del detalle del pedido: textoQueSigue, salvo con el pago en línea en proceso en
+ * Mercado Pago (pendiente o en revisión), que no pide completar el pago.
+ */
+export function textoQueSigueConPago(
+  pedido: Pick<Pedido, 'estado' | 'metodoPago' | 'creadoEn'>,
+  pagoEnProceso: boolean,
+  ahora: number = Date.now(),
+): string | null {
+  return pagoEnProceso && pedido.estado === 'pendiente_pago' && esPagoEnLinea(pedido)
+    ? TEXTO_PAGO_EN_PROCESO
+    : textoQueSigue(pedido, ahora);
+}
+
 /**
  * Texto de la confirmación para cancelar. Un pedido pagado en línea se reembolsa completo con
  * Mercado Pago al cancelarlo (el backend lo pide en la misma cancelación).
@@ -513,24 +542,65 @@ export function esPedidoNoEncontrado(error: unknown): boolean {
   return error instanceof ApiError && error.status === 404;
 }
 
+/** Por qué el backend no creó el pedido (400 o 404 de validarItems y crear). */
+type MotivoCrearPedido = 'sinExistencias' | 'retirado' | 'enLineaApagado' | 'enSalonApagado';
+
+/**
+ * Motivo de un error de crearPedido: 400 "Este producto ya no está a la venta (X)" o "Este
+ * producto no tiene precio válido (X)" y 404 "Presentación N no encontrada" (retirado), 400 "Stock
+ * insuficiente…" (sinExistencias) y los 400 de la forma de pago apagada. null si no es ninguno.
+ */
+function motivoCrearPedido(error: unknown): MotivoCrearPedido | null {
+  if (!(error instanceof ApiError)) {
+    return null;
+  }
+  if (error.status === 404) {
+    return 'retirado';
+  }
+  if (error.status !== 400) {
+    return null;
+  }
+  const mensaje = error.message.toLowerCase();
+  // Antes que "stock": el nombre del producto (entre paréntesis) podría contener esa palabra.
+  if (/a la venta|precio v[aá]lido/.test(mensaje)) {
+    return 'retirado';
+  }
+  if (mensaje.includes('stock')) {
+    return 'sinExistencias';
+  }
+  if (/pago en l[ií]nea no est[aá] disponible/.test(mensaje)) {
+    return 'enLineaApagado';
+  }
+  if (/pago al recoger no est[aá] disponible/.test(mensaje)) {
+    return 'enSalonApagado';
+  }
+  return null;
+}
+
+const MENSAJES_CREAR_PEDIDO: Record<MotivoCrearPedido, string> = {
+  sinExistencias: 'Uno de tus productos ya no tiene piezas suficientes. Revisa tu carrito.',
+  retirado: 'Uno de tus productos ya no está en la tienda. Revisa tu carrito.',
+  enLineaApagado: 'El pago en línea no está disponible por ahora. Elige pagar al recoger en el salón.',
+  enSalonApagado: 'El pago al recoger no está disponible por ahora. Elige pagar en línea.',
+};
+
 /** Mensaje para la clienta al fallar crearPedido. Nunca el texto técnico del servidor. */
 export function mensajeCrearPedido(error: unknown): string {
   const comun = mensajeComunTienda(error);
   if (comun) {
     return comun;
   }
-  if (error instanceof ApiError) {
-    const mensaje = error.message.toLowerCase();
-    // 400 "Stock insuficiente o presentación no disponible (producto X)" o "Stock insuficiente".
-    if (error.status === 400 && mensaje.includes('stock')) {
-      return 'Uno de tus productos ya no tiene piezas suficientes. Revisa tu carrito.';
-    }
-    // 404 "Presentación N no encontrada".
-    if (error.status === 404) {
-      return 'Uno de tus productos ya no está en la tienda. Revisa tu carrito.';
-    }
-  }
-  return 'No pudimos crear tu pedido. Intenta de nuevo en un momento.';
+  const motivo = motivoCrearPedido(error);
+  return motivo ? MENSAJES_CREAR_PEDIDO[motivo] : 'No pudimos crear tu pedido. Intenta de nuevo en un momento.';
+}
+
+/**
+ * El error de crearPedido se arregla en el carrito: sin existencias o un producto que ya no está
+ * en la tienda (retirado, sin precio o sin la presentación). La forma de pago apagada no.
+ */
+export function pideRevisarCarrito(error: unknown): boolean {
+  const motivo = motivoCrearPedido(error);
+  return motivo === 'sinExistencias' || motivo === 'retirado' || esSinExistencias(error);
 }
 
 /**

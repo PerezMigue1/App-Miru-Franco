@@ -113,3 +113,30 @@ export function importacionesProhibidas(ruta: string, prohibida: (importacion: I
     .filter(prohibida)
     .map(({ linea, modulo }) => `${nombre(ruta)}:${linea} importa '${modulo}'`);
 }
+
+// ── Importaciones y re-exportaciones por nombre ──────────────────────────────────────────────
+
+export interface Piezas {
+  valores: string[];
+  tipos: string[];
+}
+
+/**
+ * Nombres entre llaves de los `import` o `export` que vienen de `modulo`, separados en valores y
+ * tipos (los de `import type { }` o los marcados con type). La usan reglas-mis-citas (GP-06.3) y
+ * reglas-tienda (GP-06.4).
+ */
+export function piezasDe(texto: string, palabra: 'import' | 'export', modulo: string): Piezas {
+  const patron = new RegExp(String.raw`\b${palabra}\s+(type\s+)?\{([^}]*)\}\s*from\s*'([^']+)'`, 'g');
+  const piezas: Piezas = { valores: [], tipos: [] };
+  for (const m of sinComentarios(texto).matchAll(patron)) {
+    if (m[3] !== modulo) {
+      continue;
+    }
+    for (const pieza of m[2].split(',').map((p) => p.trim()).filter(Boolean)) {
+      const esTipo = Boolean(m[1]) || pieza.startsWith('type ');
+      (esTipo ? piezas.tipos : piezas.valores).push(pieza.replace(/^type\s+/, ''));
+    }
+  }
+  return piezas;
+}

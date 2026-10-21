@@ -4,9 +4,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { espacio, fuente, radio, tienda, tipo } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
-import type { ItemPedido } from '../models/pedidoModel';
-import { formatoPrecio } from '../models/productoModel';
-import { textoPiezas } from '../models/productoModel';
+import { formatoPrecio, textoPiezas, type ItemPedido } from '../viewmodels/presentacionTienda';
 import { FotoProducto } from './FotoProducto';
 
 /**

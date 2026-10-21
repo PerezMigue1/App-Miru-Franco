@@ -34,8 +34,7 @@ import { BuscadorProductos } from '../components/BuscadorProductos';
 import { FiltroCategorias } from '../components/FiltroCategorias';
 import { HojaFiltrosTienda } from '../components/HojaFiltrosTienda';
 import { TarjetaProducto, TarjetaProductoEsqueleto } from '../components/TarjetaProducto';
-import type { ProductoCatalogo } from '../models/productoModel';
-import { useCatalogoViewModel } from '../viewmodels/useCatalogoViewModel';
+import { useCatalogoViewModel, type ProductoCatalogo } from '../viewmodels/useCatalogoViewModel';
 
 /** Filas del skeleton: tarjetasEsqueleto repartidas en las columnas de la cuadrícula. */
 const FILAS_ESQUELETO = Array.from(
