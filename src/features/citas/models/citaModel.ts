@@ -387,7 +387,9 @@ export function esHorarioOcupado(error: unknown): boolean {
 
 /**
  * 400 de crearCita por el anticipo, con mensajes del backend ya escritos para la clienta. Solo estos
- * se muestran tal cual; cualquier otro mensaje del servidor nunca llega a la pantalla.
+ * (y la variante de MENSAJE_VARIAS_CITAS_POR_PAGAR_EN_SALON) se muestran tal cual; cualquier otro
+ * mensaje del servidor nunca llega a la pantalla. "El anticipo se paga en línea." llega cuando el
+ * salón apagó la regla permitirAnticipoEnSalon.
  */
 export const MENSAJES_ANTICIPO_PARA_CLIENTA: readonly string[] = [
   'Ya no da tiempo de pagar en el salón. Paga el anticipo en línea.',
@@ -395,15 +397,30 @@ export const MENSAJES_ANTICIPO_PARA_CLIENTA: readonly string[] = [
   'Para esta cita, el anticipo se paga en línea.',
   'Ya no da tiempo de pagar el anticipo antes de tu cita.',
   'El pago del anticipo en línea no está disponible por ahora. Elige pagarlo en el salón.',
+  'El anticipo se paga en línea.',
 ];
 
-/** El mensaje del 400 de crearCita si es uno de MENSAJES_ANTICIPO_PARA_CLIENTA; null si no. */
+/**
+ * 400 de crearCita cuando la regla maxCitasPorPagarEnSalon vale N distinto de 1: el backend pone el
+ * número en el texto, así que no cabe en la lista. Anclada para que solo pase ese texto con dígitos;
+ * con N = 1 el backend manda el texto en singular, que sí está en la lista.
+ */
+const MENSAJE_VARIAS_CITAS_POR_PAGAR_EN_SALON =
+  /^Ya tienes \d+ citas por pagar en el salón\. Paga su anticipo o elige pagar en línea\.$/;
+
+/**
+ * El mensaje del 400 de crearCita (recortado) si es uno de MENSAJES_ANTICIPO_PARA_CLIENTA o la
+ * variante con N citas por pagar en el salón; null si no.
+ */
 export function mensajeAnticipoParaClienta(error: unknown): string | null {
   if (!(error instanceof ApiError) || error.status !== 400) {
     return null;
   }
   const mensaje = error.message.trim();
-  return MENSAJES_ANTICIPO_PARA_CLIENTA.includes(mensaje) ? mensaje : null;
+  if (MENSAJES_ANTICIPO_PARA_CLIENTA.includes(mensaje) || MENSAJE_VARIAS_CITAS_POR_PAGAR_EN_SALON.test(mensaje)) {
+    return mensaje;
+  }
+  return null;
 }
 
 /**
@@ -549,14 +566,18 @@ export function etiquetaEstadoCita(estado: string): EtiquetaEstado {
 /**
  * Lo pagado del anticipo, para el aviso de cancelación: la suma de los pagos aprobados (en centavos
  * para no arrastrar decimales) o, si no hay pagos aprobados pero la cita lo marca pagado,
- * anticipoRequerido. 0 si no se ha pagado nada.
+ * anticipoRequerido. 0 si no se ha pagado nada o si el anticipo se reembolsó: al reembolsar, el pago
+ * pasa a 'reembolsado' y la cita conserva anticipoPagadoEn, así que esa marca ya no cuenta.
  */
 export function montoPagadoAnticipo(cita: Cita): number {
   const centavos = pagosAprobados(cita).reduce((suma, pago) => suma + Math.round(pago.monto * 100), 0);
   if (centavos > 0) {
     return centavos / 100;
   }
-  return cita.anticipoPagadoEn ? cita.anticipoRequerido : 0;
+  if (!cita.anticipoPagadoEn || cita.pagos.some((pago) => pago.estado === 'reembolsado')) {
+    return 0;
+  }
+  return cita.anticipoRequerido;
 }
 
 // ── Reglas de la lista de Mis citas ────────────────────────────────────────────────────────
