@@ -15,8 +15,8 @@ import {
   importacionesProhibidas,
   leer,
   nombre,
+  piezasDe,
   prohibidoEnModels,
-  sinComentarios,
   src,
   usosDeConsola,
   type Importacion,
@@ -64,32 +64,6 @@ const TODOS = [...RUTAS, ...VISTAS, ...VIEWMODELS, CITA_MODEL, ...COMPONENTES];
 
 const MODULO_CITA = '../models/citaModel';
 const MODULO_PRESENTACION = '../viewmodels/presentacionCita';
-
-// ── Lectura de importaciones y re-exportaciones por nombre ───────────────────────────────────
-
-interface Piezas {
-  valores: string[];
-  tipos: string[];
-}
-
-/**
- * Nombres entre llaves de los `import` o `export` que vienen de `modulo`, separados en valores y
- * tipos (los de `import type { }` o los marcados con type).
- */
-function piezasDe(texto: string, palabra: 'import' | 'export', modulo: string): Piezas {
-  const patron = new RegExp(String.raw`\b${palabra}\s+(type\s+)?\{([^}]*)\}\s*from\s*'([^']+)'`, 'g');
-  const piezas: Piezas = { valores: [], tipos: [] };
-  for (const m of sinComentarios(texto).matchAll(patron)) {
-    if (m[3] !== modulo) {
-      continue;
-    }
-    for (const pieza of m[2].split(',').map((p) => p.trim()).filter(Boolean)) {
-      const esTipo = Boolean(m[1]) || pieza.startsWith('type ');
-      (esTipo ? piezas.tipos : piezas.valores).push(pieza.replace(/^type\s+/, ''));
-    }
-  }
-  return piezas;
-}
 
 const soloModels = ({ modulo }: Importacion) => deModels(modulo);
 const valorDeModels = ({ modulo, soloTipos }: Importacion) => deModels(modulo) && !soloTipos;

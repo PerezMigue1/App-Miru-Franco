@@ -13,6 +13,9 @@ import {
   type ProductoCatalogo,
 } from '../models/productoModel';
 
+// La vista no importa de models/: recibe este tipo del viewmodel.
+export type { ProductoCatalogo } from '../models/productoModel';
+
 export type EstadoCatalogoTienda = 'cargando' | 'listo' | 'error';
 
 // ── Filtros del panel (como tienda-online/page.tsx de la web) ──────────────────────────────

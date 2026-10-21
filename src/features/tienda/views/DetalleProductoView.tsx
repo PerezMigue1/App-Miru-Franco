@@ -29,16 +29,13 @@ import { useTheme } from '@/shared/ui/useTheme';
 
 import { GaleriaProducto } from '../components/GaleriaProducto';
 import { SelectorCantidad } from '../components/SelectorCantidad';
-import {
-  formatoPrecio,
-  presentacionComprable,
-  type Presentacion,
-  type ProductoCatalogo,
-} from '../models/productoModel';
+import { formatoPrecio, presentacionComprable } from '../viewmodels/presentacionTienda';
 import {
   useDetalleProductoViewModel,
   type ConfirmacionCarrito,
   type DetalleProductoViewModel,
+  type Presentacion,
+  type ProductoCatalogo,
 } from '../viewmodels/useDetalleProductoViewModel';
 
 /** Detalle público de un producto: fotos, precio, presentación, cantidad y agregar al carrito. */

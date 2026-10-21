@@ -22,6 +22,9 @@ import {
 } from '../models/pedidoModel';
 import { MENSAJE_SIN_NAVEGADOR, abrirPagoEnNavegador } from './pagoPedido';
 
+// La vista no importa de models/: recibe este tipo del viewmodel.
+export type { Pedido } from '../models/pedidoModel';
+
 export type EstadoCargaPedido = 'cargando' | 'listo' | 'error' | 'noEncontrado';
 
 /**
@@ -49,6 +52,8 @@ export interface PedidoConfirmadoViewModel {
   vista: VistaPedido;
   /** Mercado Pago rechazó el pago (en noCompletado): cambia el motivo del texto. */
   rechazado: boolean;
+  /** Mercado Pago procesa o revisa el pago (vista pendiente o revision): no se pide pagar otra vez. */
+  pagoEnProceso: boolean;
   /** Hay consultas del pago en curso (se actualiza sola). */
   consultando: boolean;
   /** Se pide la preferencia o el navegador está abierto. */
@@ -499,7 +504,9 @@ export function usePedidoConfirmadoViewModel(
   }, [pedido, abriendo, iniciarConsultas]);
 
   // ── Lo que se muestra ──────────────────────────────────────────────────────────────────
-  const vista = calcularVista(pedido, estadoPago, consultando, trasRegreso);
+  const calculada = calcularVista(pedido, estadoPago, consultando, trasRegreso);
+  // Con el plazo vencido ya no se invita a pagar: la pantalla dice que el pago no se completó.
+  const vista = pagoCerrado && calculada === 'porPagar' ? 'noCompletado' : calculada;
 
   const sePuedePagar = pedido != null && pidePagoEnLinea(pedido) && !pagoCerrado;
   const puedePagar =
@@ -509,14 +516,16 @@ export function usePedidoConfirmadoViewModel(
     (vista === 'porPagar' || vista === 'noCompletado');
   const pagoPorConfirmar =
     vista === 'noCompletado' && estadoPago === 'sin_pago' && trasRegreso && !consultando;
-  const muestraPlazo =
-    sePuedePagar && vista !== 'aprobado' && vista !== 'revision' && vista !== 'cancelado';
+  const pagoEnProceso = vista === 'pendiente' || vista === 'revision';
+  // Con el pago en proceso no se pide pagar antes de un plazo: ya pagó o está pagando.
+  const muestraPlazo = sePuedePagar && !pagoEnProceso && vista !== 'aprobado' && vista !== 'cancelado';
 
   return {
     estado,
     pedido,
     vista,
     rechazado: estadoPago === 'rechazado',
+    pagoEnProceso,
     consultando,
     abriendo,
     limite: muestraPlazo && pedido ? limitePagoPedido(pedido) : null,

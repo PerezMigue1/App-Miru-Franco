@@ -4,7 +4,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { borde, espacio, fuente, radio, sombra, tipo } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
-import { formatoPrecio, textoPiezas } from '../models/productoModel';
+import { formatoPrecio, textoPiezas } from '../viewmodels/presentacionTienda';
 
 export interface LineaResumen {
   clave: string | number;

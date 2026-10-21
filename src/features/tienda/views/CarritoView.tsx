@@ -13,9 +13,8 @@ import { borde, espacio, fuente, pantalla, tipo } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
 import { FilaCarrito, FilaCarritoEsqueleto } from '../components/FilaCarrito';
-import type { ItemCarrito } from '../models/carritoModel';
-import { formatoPrecio } from '../models/productoModel';
-import { useCarritoViewModel } from '../viewmodels/useCarritoViewModel';
+import { formatoPrecio } from '../viewmodels/presentacionTienda';
+import { useCarritoViewModel, type ItemCarrito } from '../viewmodels/useCarritoViewModel';
 
 const ESQUELETOS = [0, 1, 2];
 const TITULO = 'Carrito';

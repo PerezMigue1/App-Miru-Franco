@@ -6,6 +6,9 @@ import { useAuth } from '@/features/auth/viewmodels/useAuth';
 import { mensajeComunTienda } from '../models/carritoModel';
 import { listarMisPedidos, type Pedido } from '../models/pedidoModel';
 
+// La vista no importa de models/: recibe este tipo del viewmodel.
+export type { Pedido } from '../models/pedidoModel';
+
 export type EstadoMisPedidos = 'cargando' | 'listo' | 'error';
 
 export interface MisPedidosViewModel {

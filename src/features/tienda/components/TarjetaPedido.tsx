@@ -20,10 +20,14 @@ import {
 } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
-import { etiquetaEstadoPedido, fechaPedido, type Pedido } from '../models/pedidoModel';
-import { formatoPrecio } from '../models/productoModel';
-import { formaPagoCorta } from '../models/pedidoModel';
-import { textoPiezas } from '../models/productoModel';
+import {
+  etiquetaEstadoPedido,
+  fechaPedido,
+  formaPagoCorta,
+  formatoPrecio,
+  textoPiezas,
+  type Pedido,
+} from '../viewmodels/presentacionTienda';
 import { BadgePedido } from './BadgePedido';
 
 interface TarjetaPedidoProps {

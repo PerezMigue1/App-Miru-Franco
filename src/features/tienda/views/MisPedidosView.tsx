@@ -13,8 +13,11 @@ import { espacio, fuente, pantalla, tipo } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
 import { TarjetaPedido, TarjetaPedidoEsqueleto } from '../components/TarjetaPedido';
-import type { Pedido } from '../models/pedidoModel';
-import { useMisPedidosViewModel, type MisPedidosViewModel } from '../viewmodels/useMisPedidosViewModel';
+import {
+  useMisPedidosViewModel,
+  type MisPedidosViewModel,
+  type Pedido,
+} from '../viewmodels/useMisPedidosViewModel';
 
 /** Tarjetas que dibuja el skeleton mientras carga la lista. */
 const ESQUELETOS = [0, 1, 2];

@@ -183,6 +183,10 @@ export function mensajeErrorCarrito(error: unknown): string {
   }
   if (error instanceof ApiError) {
     const mensaje = error.message.toLowerCase();
+    // 400 "Este producto ya no está disponible": el producto se desactivó (POST y PUT).
+    if (error.status === 400 && mensaje.includes('producto ya no est')) {
+      return 'Este producto ya no está disponible.';
+    }
     // 400 "Presentación no encontrada" o "Presentación no disponible".
     if (error.status === 400 && mensaje.includes('presentaci')) {
       return 'Esta presentación ya no está disponible.';

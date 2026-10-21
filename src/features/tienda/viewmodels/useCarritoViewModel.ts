@@ -17,6 +17,9 @@ import {
 
 import { avisarCambioCarrito, publicarPiezasCarrito } from './usePiezasCarrito';
 
+// La vista no importa de models/: recibe este tipo del viewmodel.
+export type { ItemCarrito } from '../models/carritoModel';
+
 export type EstadoCarrito = 'cargando' | 'listo' | 'error';
 
 export interface CarritoViewModel {
