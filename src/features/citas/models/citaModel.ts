@@ -9,7 +9,8 @@ import {
   urlHttps,
   type Crudo,
 } from '@/features/inicio/models/inicioService';
-import type { Especialista as EspecialistaDeServicio } from './servicioModel';
+import type { ConfiguracionPublica, DiaSemana } from '@/shared/api/configuracionPublica';
+import { especialistaOculta, type Especialista as EspecialistaDeServicio } from './servicioModel';
 
 /** Tono de una insignia (BadgeEstado); vive aquí para que el model no importe componentes. */
 export type TonoBadge = 'aviso' | 'exito' | 'neutro' | 'peligro' | 'info';
@@ -141,10 +142,11 @@ function listaDeTextos(valor: unknown): string[] {
   return valor.map((elemento) => (typeof elemento === 'string' ? elemento.trim() : '')).filter(Boolean);
 }
 
+/** Especialista de la agenda; las que vienen ocultas (visible, disponible o activo en false) se descartan. */
 function normalizarEspecialista(crudo: Crudo): Especialista | null {
   const id = idDe(crudo);
   const nombre = texto(crudo.nombre);
-  if (id === '' || !nombre) {
+  if (id === '' || !nombre || especialistaOculta(crudo)) {
     return null;
   }
   return {
@@ -851,6 +853,94 @@ export function semanasDelMes(mes: MesCalendario): (DiaCalendario | null)[][] {
     semanas.push(celdas.slice(i, i + DIAS.length));
   }
   return semanas;
+}
+
+// ── Días sin citas (horario e inhábiles de la configuración pública) ───────────────────────
+
+/** Por qué un día no tiene citas: el salón no abre ese día de la semana, o es un día inhábil. */
+export type TipoBloqueo = 'cerrado' | 'inhabil';
+
+/** Día del calendario que no se puede elegir. */
+export interface DiaBloqueado {
+  /** 'YYYY-MM-DD' local. */
+  fecha: string;
+  tipo: TipoBloqueo;
+  /** Motivo del día inhábil tal como lo escribió el salón ('' si no trae o si es 'cerrado'). */
+  motivo: string;
+}
+
+/** Lo que se necesita de la configuración pública para saber qué días no tienen citas. */
+export interface CalendarioSalon {
+  horario: ConfiguracionPublica['horario'];
+  reglas: Pick<ConfiguracionPublica['reglas'], 'diasInhabiles'>;
+}
+
+/** Día de la semana de la configuración (sin acentos) por getDay(): 0 es domingo. */
+const DIAS_CONFIGURACION: readonly DiaSemana[] = [
+  'domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado',
+];
+
+/** El 'YYYY-MM-DD' es una fecha real del calendario (sin 31 de febrero ni meses 13). */
+function esFechaDeCalendario(fecha: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(fecha) && fechaLocal(aFecha(fecha)) === fecha;
+}
+
+/**
+ * Si el día ('YYYY-MM-DD' local) no tiene citas y por qué: inhábil si está en diasInhabiles (gana
+ * aunque además caiga en un día cerrado, y lleva su motivo) o cerrado si su día de la semana está
+ * cerrado en el horario. El día de la semana se arma en hora local, sin depender de la zona. null
+ * si se puede elegir o si la fecha no es válida.
+ */
+export function bloqueoDelDia(fecha: string, calendario: CalendarioSalon): DiaBloqueado | null {
+  if (!esFechaDeCalendario(fecha)) {
+    return null;
+  }
+  const inhabil = calendario.reglas.diasInhabiles.find((dia) => dia.fecha === fecha);
+  if (inhabil) {
+    return { fecha, tipo: 'inhabil', motivo: inhabil.motivo.trim() };
+  }
+  const nombre = DIAS_CONFIGURACION[aFecha(fecha).getDay()];
+  const horario = calendario.horario.dias.find((dia) => dia.dia === nombre);
+  return horario?.cerrado ? { fecha, tipo: 'cerrado', motivo: '' } : null;
+}
+
+/** Los días bloqueados del mes, del primero al último. */
+export function bloqueosDelMes(mes: MesCalendario, calendario: CalendarioSalon): DiaBloqueado[] {
+  const diasDelMes = new Date(mes.anio, mes.mes + 1, 0).getDate();
+  const bloqueos: DiaBloqueado[] = [];
+  for (let dia = 1; dia <= diasDelMes; dia++) {
+    const bloqueo = bloqueoDelDia(fechaLocal(new Date(mes.anio, mes.mes, dia)), calendario);
+    if (bloqueo) {
+      bloqueos.push(bloqueo);
+    }
+  }
+  return bloqueos;
+}
+
+/** Lo más lejos que se busca un día libre (un año): con todo cerrado no se busca para siempre. */
+export const DIAS_BUSQUEDA_LIBRE = 366;
+
+/**
+ * El primer día sin bloqueo desde `desde` ('YYYY-MM-DD' local, incluido), o null si no hay ninguno
+ * en DIAS_BUSQUEDA_LIBRE días o si `desde` no es una fecha válida.
+ */
+export function primerDiaLibre(desde: string, calendario: CalendarioSalon): string | null {
+  if (!esFechaDeCalendario(desde)) {
+    return null;
+  }
+  const inicio = aFecha(desde);
+  for (let i = 0; i < DIAS_BUSQUEDA_LIBRE; i++) {
+    const fecha = fechaLocal(new Date(inicio.getFullYear(), inicio.getMonth(), inicio.getDate() + i));
+    if (!bloqueoDelDia(fecha, calendario)) {
+      return fecha;
+    }
+  }
+  return null;
+}
+
+/** Mes local de un 'YYYY-MM-DD' (sin pasar por UTC). */
+export function mesDeFecha(fecha: string): MesCalendario {
+  return mesDe(aFecha(fecha));
 }
 
 /** 'sábado 18 de octubre'; '' si la fecha no es válida. */

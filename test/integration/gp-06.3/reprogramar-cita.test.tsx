@@ -5,6 +5,8 @@ import '../../helpers/mocksPantallas';
 
 import { fireEvent, screen, waitFor } from 'expo-router/testing-library';
 
+import { reiniciarConfiguracionPublica } from '@/shared/api/configuracionPublica';
+
 import {
   conError,
   DIA_CITA,
@@ -28,6 +30,12 @@ import {
   TEXTOS_MIS_CITAS,
   type DisponibilidadCruda,
 } from '../../helpers/citasFicticias';
+import {
+  rutaCalendario,
+  SALON_ABRE_DIARIO,
+  TEXTO_CERRADO,
+  type OpcionesCalendario,
+} from '../../helpers/calendarioFicticio';
 import { LIMITE_MS, ultimoBoton, type App } from '../../helpers/pantallas';
 import {
   abrirConCitas,
@@ -121,10 +129,15 @@ async function revisarDetalleEn(app: App, fecha: string, hora: string): Promise<
   expect(screen.queryByRole('header', { name: 'Reprogramar cita' })).not.toBeOnTheScreen();
 }
 
-/** Abre la reprogramación de la cita 501 y, con los horarios del martes ya a la vista, elige ese día. */
-async function elegirDiaCon(fecha: string, horarios?: Manejador): Promise<void> {
+/**
+ * Abre la reprogramación de la cita 501 (con la configuración indicada, si la hay) y, con los
+ * horarios del martes ya a la vista, elige ese día.
+ */
+async function elegirDiaCon(fecha: string, horarios?: Manejador, configuracion?: OpcionesCalendario): Promise<void> {
   const ruta = rutaDisponibilidad(ESPECIALISTA_UNO.usuarioId, fecha, SERVICIO_CON_ANTICIPO.id);
-  await abrirConCitas(`/cita/${ID_CITA}/reprogramar`, { rutas: horarios ? { [ruta]: horarios } : {} });
+  await abrirConCitas(`/cita/${ID_CITA}/reprogramar`, {
+    rutas: { ...(configuracion ? rutaCalendario(configuracion) : {}), ...(horarios ? { [ruta]: horarios } : {}) },
+  });
   expect(await screen.findByRole('button', { name: horaDelServidor(DIA_CITA, '09:30') })).toBeOnTheScreen();
   await elegirDia(fecha);
 }
@@ -136,6 +149,8 @@ function sinHorarios(): void {
 }
 
 describe('Reprogramar una cita con las pantallas reales (GP-06.3)', () => {
+  // La configuración que siembra una prueba se queda en memoria: cada prueba empieza con el respaldo.
+  beforeEach(reiniciarConfiguracionPublica);
   const esperarConsolaLimpia = prepararPruebasReserva();
 
   it(
@@ -267,14 +282,25 @@ describe('Reprogramar una cita con las pantallas reales (GP-06.3)', () => {
     LIMITE_MS,
   );
 
-  it.each<[string, string, Manejador | undefined, string, string]>([
-    ['el domingo, con el salón cerrado', DIA_DOMINGO, undefined, MOTIVO_SALON_CERRADO, 'Elige otro día.'],
+  // GP-07.3: con la configuración del respaldo el domingo ya no se puede elegir (lo prueban
+  // test/unit/gp-07.3/calendario-*); para seguir probando el motivo que manda el backend de un día
+  // cerrado, esa fila siembra una configuración con el salón abierto los siete días.
+  it.each<[string, string, Manejador | undefined, string, string, OpcionesCalendario | undefined]>([
+    [
+      'el domingo, con el salón cerrado',
+      DIA_DOMINGO,
+      undefined,
+      MOTIVO_SALON_CERRADO,
+      'Elige otro día.',
+      SALON_ABRE_DIARIO,
+    ],
     [
       'un día cerrado sin motivo',
       MIERCOLES,
       conHorarios(disponibilidadCerrada({ ...horariosDel(MIERCOLES), abierto: false, motivo: null, slots: [] })),
-      'El salón no abre este día',
+      TEXTO_CERRADO,
       'Elige otro día.',
+      undefined,
     ],
     [
       'un día sin horarios libres',
@@ -282,11 +308,12 @@ describe('Reprogramar una cita con las pantallas reales (GP-06.3)', () => {
       conHorarios(disponibilidadCruda({ ...horariosDel(MIERCOLES), slots: [] })),
       'No hay horarios libres este día',
       'Prueba con otro día.',
+      undefined,
     ],
   ])(
     '%s lo dice, sugiere otro día y no ofrece horarios',
-    async (_caso, fecha, horarios, mensaje, sugerencia) => {
-      await elegirDiaCon(fecha, horarios);
+    async (_caso, fecha, horarios, mensaje, sugerencia, configuracion) => {
+      await elegirDiaCon(fecha, horarios, configuracion);
       expect(await screen.findByText(mensaje)).toBeOnTheScreen();
       expect(screen.getByText(sugerencia)).toBeOnTheScreen();
       sinHorarios();

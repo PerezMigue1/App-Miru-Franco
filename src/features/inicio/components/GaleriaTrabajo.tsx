@@ -3,7 +3,6 @@ import { memo, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import Animated from 'react-native-reanimated';
 
-import { EmptyState } from '@/shared/ui/EmptyState';
 import { Monograma } from '@/shared/ui/Monograma';
 import { useEntradaContenido, usePresion } from '@/shared/ui/movimiento';
 import { Skeleton } from '@/shared/ui/Skeleton';
@@ -60,24 +59,16 @@ function posicionesDe(total: number, ancho: number): { lista: Posicion[]; alto: 
 }
 
 /**
- * Galería del salón (DESIGN.md, piezas de marca): solo fotos reales de los servicios activos, en
- * mosaico editorial, con visor a pantalla completa. Sin fotos, estado vacío con monograma.
+ * Galería del salón (DESIGN.md, piezas de marca): solo fotos reales publicadas en Admin > Galería, en
+ * su orden y en mosaico editorial, con visor a pantalla completa. La pantalla decide qué mostrar sin
+ * fotos (estado vacío con monograma); aquí siempre llega al menos una.
  */
-export function GaleriaTrabajo({ fotos }: { fotos: FotoGaleria[] }) {
+export function GaleriaTrabajo({ fotos, verServicio }: { fotos: FotoGaleria[]; verServicio: string }) {
   const [ancho, setAncho] = useState(0);
   const [abierta, setAbierta] = useState<number | null>(null);
   const entrada = useEntradaContenido();
   // Posiciones estables entre renders: así las celdas memoizadas no se repintan al abrir el visor.
   const { lista, alto } = useMemo(() => posicionesDe(fotos.length, ancho), [fotos.length, ancho]);
-
-  if (fotos.length === 0) {
-    return (
-      <EmptyState
-        titulo="Aún no hay fotos publicadas"
-        mensaje="Cuando el salón publique fotos de sus servicios, las verás aquí."
-      />
-    );
-  }
 
   const medir = (e: LayoutChangeEvent) => setAncho(e.nativeEvent.layout.width);
 
@@ -88,7 +79,7 @@ export function GaleriaTrabajo({ fotos }: { fotos: FotoGaleria[] }) {
         {ancho > 0
           ? lista.map((posicion, i) => (
               <Celda
-                key={fotos[i].url}
+                key={fotos[i].id}
                 foto={fotos[i]}
                 posicion={posicion}
                 indice={i}
@@ -97,7 +88,12 @@ export function GaleriaTrabajo({ fotos }: { fotos: FotoGaleria[] }) {
             ))
           : null}
       </Animated.View>
-      <VisorFoto fotos={fotos} indice={abierta} onCerrar={() => setAbierta(null)} />
+      <VisorFoto
+        fotos={fotos}
+        indice={abierta}
+        verServicio={verServicio}
+        onCerrar={() => setAbierta(null)}
+      />
     </>
   );
 }
@@ -120,7 +116,9 @@ const Celda = memo(function Celda({
   return (
     <Pressable
       accessibilityRole="imagebutton"
-      accessibilityLabel={`Ver foto de ${foto.servicio} en grande`}
+      // El texto alternativo de Admin > Galería; la pista dice qué hace el toque.
+      accessibilityLabel={foto.alt}
+      accessibilityHint="Abre la foto en grande"
       onPress={() => onAbrir(indice)}
       onPressIn={hundir}
       onPressOut={soltar}

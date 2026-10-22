@@ -4,7 +4,8 @@ import { apiGet, ApiError, crearErrorApi, ErrorDeRed } from './apiClient';
 
 /**
  * Configuración pública del salón (GET /api/configuracion-publica, sin sesión): datos de contacto,
- * horario, reglas de citas y tienda, métodos de pago, días inhábiles y textos del sitio.
+ * horario, reglas de citas y tienda, métodos de pago, días inhábiles, contenido editable (inicio,
+ * sobre nosotros y contacto) y textos del sitio (los lee textosSitio.ts sin pedir nada más).
  *
  * Patrón Repository: las pantallas piden la configuración aquí y no saben si llegó de la red, del
  * archivo guardado o del respaldo. Patrón Singleton: hay un solo estado en memoria para toda la app.
@@ -68,10 +69,48 @@ export interface PagosPublicos {
   metodosSalon: MetodoPagoSalon[];
 }
 
+/** Textos de la portada (Admin > Configuración del sitio > Inicio). Las imágenes son URL https:// o ''. */
+export interface ContenidoInicio {
+  heroTexto: string;
+  heroDestacado: string;
+  productosDescripcion: string;
+  serviciosDescripcion: string;
+  trabajoDescripcion: string;
+  sobreNosotrosParrafos: string[];
+  sobreNosotrosImagen: string;
+  cierreTitulo: string;
+  cierreTexto: string;
+}
+
+export interface ValorSalon {
+  titulo: string;
+  descripcion: string;
+}
+
+export interface ContenidoSobreNosotros {
+  titulo: string;
+  parrafos: string[];
+  imagen: string;
+  /** Hasta MAXIMO_VALORES. */
+  valores: ValorSalon[];
+}
+
+export interface ContenidoContacto {
+  introduccion: string;
+  agendaTexto: string;
+}
+
+export interface ContenidoPublico {
+  inicio: ContenidoInicio;
+  sobreNosotros: ContenidoSobreNosotros;
+  contacto: ContenidoContacto;
+}
+
 /** Solo lo que la app usa: sin responsable, correo de privacidad, datos de transferencia ni redes. */
 export interface ConfiguracionPublica {
   salon: SalonPublico;
   horario: { dias: DiaHorario[] };
+  contenido: ContenidoPublico;
   anticiposActivos: boolean;
   reglas: {
     citas: ReglasCitasPublicas;
@@ -116,6 +155,14 @@ const DIAS: readonly DiaSemana[] = ['lunes', 'martes', 'miercoles', 'jueves', 'v
 const METODOS: readonly MetodoPagoSalon[] = ['efectivo', 'tarjeta', 'transferencia'];
 const HORA = /^([01]\d|2[0-3]):[0-5]\d$/;
 const FECHA = /^\d{4}-\d{2}-\d{2}$/;
+const URL_HTTPS = /^https:\/\/\S+$/;
+/** Lo más que acepta el backend en "Lo que nos distingue" (validarSeccion, contenido_sobre_nosotros). */
+export const MAXIMO_VALORES = 6;
+
+const PARRAFO_EQUIPO =
+  'En Mirú Franco, nos dedicamos a realzar tu belleza natural con productos y servicios de la más alta calidad. Nuestro equipo de profesionales está comprometido a brindarte una experiencia excepcional en cada visita.';
+const PARRAFO_UBICACION =
+  'Estamos en Huejutla de Reyes, Hidalgo. Aquí puedes agendar tus servicios en línea, comprar productos profesionales para el cuidado de tu cabello y recogerlos en el salón.';
 
 /** Congela un objeto y todo lo que contiene: la configuración en memoria no se puede modificar. */
 function congelar<T>(valor: T): T {
@@ -130,20 +177,23 @@ const abierto = (dia: DiaSemana, abre: string, cierra: string): DiaHorario => ({
 
 /**
  * Valores que la app tenía fijos antes de leer la configuración, para que sin red ni archivo nada
- * cambie de comportamiento. Salón y horario: SALON_RECOGER de tienda/models/pedidoModel. Citas:
+ * cambie de comportamiento. Salón: nombre, dirección, ciudad, teléfono, WhatsApp y correo de contacto
+ * tal como los publica GET /api/configuracion-publica (datos públicos; el enlace del mapa viene vacío).
+ * Horario: SALON_RECOGER de tienda/models/pedidoModel. Citas:
  * textos de citas/views/ReservarCitaView y límites de citas/models/citaModel (2 horas en línea, 15
  * minutos antes en el salón, llegar 20 minutos antes, horarios cada 30). Tienda, pagos y lo demás:
- * valores por omisión del backend (reglas-negocio.ts).
+ * valores por omisión del backend (reglas-negocio.ts). Contenido: los que publica hoy el sitio web
+ * (CONFIGURACION_POR_OMISION.contenido de miru-franco-web).
  */
 export const RESPALDO_CONFIGURACION: ConfiguracionPublica = congelar({
   salon: {
-    nombre: 'Mirú Franco Beauty Salón',
-    direccion: '',
+    nombre: 'Mirú Franco Salón Beauty',
+    direccion: 'Segunda Cerrada de Allende No. 15, Col. Juárez',
     ciudad: 'Huejutla de Reyes, Hidalgo',
     telefono: '+52 771 268 1432',
-    whatsapp: '',
+    whatsapp: '+52 771 186 7645',
     mapaUrl: '',
-    correoContacto: '',
+    correoContacto: 'contacto@mirufranco.com',
   },
   horario: {
     dias: [
@@ -151,6 +201,38 @@ export const RESPALDO_CONFIGURACION: ConfiguracionPublica = congelar({
       abierto('sabado', '09:30', '19:00'),
       { dia: 'domingo', cerrado: true, abre: '', cierra: '' },
     ],
+  },
+  contenido: {
+    inicio: {
+      heroTexto: 'Realza tu belleza natural con productos y servicios profesionales. Agenda tu cita y descubre la experiencia Mirú Franco.',
+      heroDestacado: 'Brillo que se nota',
+      productosDescripcion: 'Lo que usamos en el salón, para que lo sigas en casa.',
+      serviciosDescripcion: 'Nuestra carta: elige un servicio para ver qué incluye y reservar tu horario.',
+      trabajoDescripcion: 'Fotos de servicios hechos en el salón. Tócalas para verlas en grande.',
+      sobreNosotrosParrafos: [PARRAFO_EQUIPO, PARRAFO_UBICACION],
+      sobreNosotrosImagen: '',
+      cierreTitulo: '¿Lista para tu cambio de look?',
+      cierreTexto: 'Agenda una cita con nosotros y descubre la diferencia que hace la calidad profesional.',
+    },
+    sobreNosotros: {
+      titulo: 'Pasión por la belleza natural',
+      parrafos: [
+        PARRAFO_EQUIPO,
+        PARRAFO_UBICACION,
+        'Cada cliente es único, y por eso diseñamos un plan de cuidado personalizado para adaptarnos a tus necesidades específicas, tu tipo de cabello y tus preferencias de estilo.',
+      ],
+      imagen: '',
+      valores: [
+        { titulo: 'Profesionalismo', descripcion: 'Cada servicio se ejecuta con técnica depurada y productos de primera calidad.' },
+        { titulo: 'Calidez', descripcion: 'Te recibimos con atención personalizada desde el primer momento.' },
+        { titulo: 'Innovación', descripcion: 'Combinamos técnicas tradicionales con las últimas tendencias del mundo capilar.' },
+        { titulo: 'Confianza', descripcion: 'Construimos relaciones duraderas basadas en resultados reales y honestos.' },
+      ],
+    },
+    contacto: {
+      introduccion: 'Agenda una cita, resuelve tus dudas o simplemente escríbenos. Estaremos encantados de atenderte.',
+      agendaTexto: 'Elige el servicio, la fecha y la hora que prefieras. Si el servicio pide anticipo, tu cita se confirma al pagarlo.',
+    },
   },
   anticiposActivos: true,
   reglas: {
@@ -199,14 +281,24 @@ function campo<V extends Primitivo>(valor: unknown, respaldo: V): V {
   return (typeof valor === 'string' ? valor.trim() : respaldo) as V;
 }
 
-/** Solo las claves del respaldo, cada una con `campo`: lo que sobra en el servidor no entra. */
-function porCampos<T extends { [K in keyof T]: Primitivo }>(crudo: unknown, respaldo: T): T {
+/** Normaliza un campo a partir de lo que trae el servidor y su respaldo. */
+type Normalizador<V> = (valor: unknown, respaldo: V) => V;
+type Normalizadores<T> = { [K in keyof T]: Normalizador<T[K]> };
+
+/** Solo las claves del respaldo, cada una con su normalizador: lo que sobra en el servidor no entra. */
+function seccion<T extends object>(crudo: unknown, respaldo: T, normalizadores: Normalizadores<T>): T {
   const fuente = objeto(crudo);
   const limpio = { ...respaldo };
   for (const clave of Object.keys(respaldo) as (keyof T & string)[]) {
-    limpio[clave] = campo(fuente[clave], respaldo[clave]);
+    limpio[clave] = normalizadores[clave](fuente[clave], respaldo[clave]);
   }
   return limpio;
+}
+
+/** `seccion` con `campo` en cada clave (secciones de puros números, booleanos y textos). */
+function porCampos<T extends { [K in keyof T]: Primitivo }>(crudo: unknown, respaldo: T): T {
+  const normalizadores = Object.fromEntries(Object.keys(respaldo).map((clave) => [clave, campo]));
+  return seccion(crudo, respaldo, normalizadores as Normalizadores<T>);
 }
 
 function diaHorario(crudo: unknown, dia: DiaSemana): DiaHorario | null {
@@ -249,6 +341,53 @@ function textos(crudo: unknown): Record<string, string> {
   );
 }
 
+/** Texto recortado no vacío (lo que el backend marca obligatorio); vacío o con otro tipo, el respaldo. */
+const obligatorio: Normalizador<string> = (valor, respaldo) => campo(valor, respaldo) || respaldo;
+
+/** Solo URL https:// recortada; cualquier otra cosa (ruta relativa, http, otro tipo) queda ''. */
+const imagen: Normalizador<string> = (valor) =>
+  typeof valor === 'string' && URL_HTTPS.test(valor.trim()) ? valor.trim() : '';
+
+/** Textos no vacíos y recortados de la lista; si no queda ninguno (o no es lista), el respaldo. */
+const parrafos: Normalizador<string[]> = (valor, respaldo) => {
+  const lista = (Array.isArray(valor) ? valor : []).map((p) => obligatorio(p, '')).filter(Boolean);
+  return lista.length > 0 ? lista : respaldo;
+};
+
+/**
+ * Solo los pares con título y descripción de texto no vacío, hasta MAXIMO_VALORES. Una lista vacía
+ * vale (la dueña pudo quitarlos todos); si no es lista, el respaldo.
+ */
+const valores: Normalizador<ValorSalon[]> = (valor, respaldo) =>
+  Array.isArray(valor)
+    ? valor
+        .map(objeto)
+        .map((v) => ({ titulo: obligatorio(v.titulo, ''), descripcion: obligatorio(v.descripcion, '') }))
+        .filter((v) => v.titulo && v.descripcion)
+        .slice(0, MAXIMO_VALORES)
+    : respaldo;
+
+/** Contenido de inicio, sobre nosotros y contacto; una sección en null (sin guardar) toma el respaldo. */
+function contenido(crudo: unknown): ContenidoPublico {
+  const fuente = objeto(crudo);
+  const respaldo = RESPALDO_CONFIGURACION.contenido;
+  return {
+    inicio: seccion(fuente.inicio, respaldo.inicio, {
+      heroTexto: obligatorio,
+      heroDestacado: obligatorio,
+      productosDescripcion: campo,
+      serviciosDescripcion: campo,
+      trabajoDescripcion: campo,
+      sobreNosotrosParrafos: parrafos,
+      sobreNosotrosImagen: imagen,
+      cierreTitulo: obligatorio,
+      cierreTexto: campo,
+    }),
+    sobreNosotros: seccion(fuente.sobreNosotros, respaldo.sobreNosotros, { titulo: obligatorio, parrafos, imagen, valores }),
+    contacto: seccion(fuente.contacto, respaldo.contacto, { introduccion: obligatorio, agendaTexto: obligatorio }),
+  };
+}
+
 /**
  * Convierte la respuesta del servidor (o lo guardado en el archivo) en una ConfiguracionPublica,
  * campo por campo: lo que falte o venga con otro tipo toma el valor del respaldo sin romper el resto.
@@ -264,6 +403,7 @@ export function normalizarConfiguracion(cuerpo: unknown): ConfiguracionPublica {
   return congelar({
     salon: porCampos(cuerpo.salon, RESPALDO_CONFIGURACION.salon),
     horario: horario(cuerpo.horario),
+    contenido: contenido(cuerpo.contenido),
     anticiposActivos: campo(cuerpo.anticiposActivos, RESPALDO_CONFIGURACION.anticiposActivos),
     reglas: {
       citas: porCampos(reglas.citas, respaldo.citas),

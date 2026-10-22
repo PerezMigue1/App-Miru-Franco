@@ -19,6 +19,7 @@ import {
 import { useTheme } from '@/shared/ui/useTheme';
 
 import type { DiaCalendario, MesCalendario } from '../models/citaModel';
+import type { BloqueosCalendario } from '../viewmodels/useCalendarioCitas';
 import {
   compararMeses,
   ENCABEZADOS_SEMANA,
@@ -37,14 +38,28 @@ interface CalendarioMensualProps {
   onElegir: (fecha: string) => void;
   /** -1 para el mes anterior y 1 para el siguiente. */
   onCambiarMes: (delta: 1 | -1) => void;
+  /**
+   * Días del mes sin citas por la configuración del salón (cerrados o inhábiles), con su motivo, la
+   * leyenda y la lista de inhábiles. Sin esta prop solo se bloquean los días pasados.
+   */
+  bloqueos?: BloqueosCalendario;
 }
 
+const SIN_BLOQUEOS: BloqueosCalendario = { dias: {}, leyenda: '', inhabiles: [] };
+
 /**
- * Calendario de un mes, de domingo a sábado. Los días pasados no se pueden tocar, hoy lleva un
- * anillo y el día elegido va relleno con el color de selección. No deja regresar a meses
- * anteriores al actual.
+ * Calendario de un mes, de domingo a sábado. Los días pasados y los bloqueados no se pueden tocar,
+ * hoy lleva un anillo y el día elegido va relleno con el color de selección. Un día bloqueado se ve
+ * atenuado y tachado, y TalkBack lo anuncia deshabilitado con su motivo. Debajo va la leyenda y los
+ * días inhábiles del mes, si los hay. No deja regresar a meses anteriores al actual.
  */
-export function CalendarioMensual({ mes, seleccionada, onElegir, onCambiarMes }: CalendarioMensualProps) {
+export function CalendarioMensual({
+  mes,
+  seleccionada,
+  onElegir,
+  onCambiarMes,
+  bloqueos = SIN_BLOQUEOS,
+}: CalendarioMensualProps) {
   const { colores } = useTheme();
   const ahora = new Date();
   const hoy = fechaLocal(ahora);
@@ -91,6 +106,7 @@ export function CalendarioMensual({ mes, seleccionada, onElegir, onCambiarMes }:
                 dia={dia}
                 esHoy={dia.fecha === hoy}
                 pasado={dia.fecha < hoy}
+                motivoBloqueo={bloqueos.dias[dia.fecha]}
                 seleccionado={dia.fecha === seleccionada}
                 onElegir={onElegir}
               />
@@ -99,6 +115,26 @@ export function CalendarioMensual({ mes, seleccionada, onElegir, onCambiarMes }:
             ),
           )}
         </View>
+      ))}
+
+      <Leyenda bloqueos={bloqueos} />
+    </View>
+  );
+}
+
+/** Leyenda de los días atenuados y la lista corta de inhábiles del mes ("<fecha>: <motivo>"). */
+function Leyenda({ bloqueos }: { bloqueos: BloqueosCalendario }) {
+  const { colores } = useTheme();
+  if (!bloqueos.leyenda) {
+    return null;
+  }
+  return (
+    <View style={styles.leyenda}>
+      <Text style={[styles.textoLeyenda, { color: colores.textoSuave }]}>{bloqueos.leyenda}</Text>
+      {bloqueos.inhabiles.map(({ fecha, motivo }) => (
+        <Text key={fecha} style={[styles.textoLeyenda, { color: colores.texto }]}>
+          {`${fechaLegible(fecha)}: ${motivo}`}
+        </Text>
       ))}
     </View>
   );
@@ -137,6 +173,8 @@ interface DiaProps {
   dia: DiaCalendario;
   esHoy: boolean;
   pasado: boolean;
+  /** Por qué el día no tiene citas (texto del catálogo), o undefined si se puede elegir. */
+  motivoBloqueo?: string;
   seleccionado: boolean;
   onElegir: (fecha: string) => void;
 }
@@ -146,22 +184,24 @@ interface DiaProps {
  * lleva fondo y borde (del color de la tarjeta cuando no se ven) para que la transición no pase
  * por transparente.
  */
-const Dia = memo(function Dia({ dia, esHoy, pasado, seleccionado, onElegir }: DiaProps) {
+const Dia = memo(function Dia({ dia, esHoy, pasado, motivoBloqueo, seleccionado, onElegir }: DiaProps) {
   const { colores } = useTheme();
   const { estilo, hundir, soltar } = usePresion();
-  const legible = fechaLegible(dia.fecha);
+  const legible = esHoy ? `Hoy, ${fechaLegible(dia.fecha)}` : fechaLegible(dia.fecha);
+  const bloqueado = motivoBloqueo !== undefined;
+  const deshabilitado = pasado || bloqueado;
   const colorTexto = seleccionado
     ? colores.textoSobreSeleccion
-    : pasado
+    : deshabilitado
       ? colores.textoSuave
       : colores.texto;
 
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={esHoy ? `Hoy, ${legible}` : legible}
-      accessibilityState={{ selected: seleccionado, disabled: pasado }}
-      disabled={pasado}
+      accessibilityLabel={bloqueado ? `${legible}, ${motivoBloqueo}` : legible}
+      accessibilityState={{ selected: seleccionado, disabled: deshabilitado }}
+      disabled={deshabilitado}
       onPress={() => onElegir(dia.fecha)}
       onPressIn={hundir}
       onPressOut={soltar}
@@ -186,7 +226,9 @@ const Dia = memo(function Dia({ dia, esHoy, pasado, seleccionado, onElegir }: Di
           style={[
             styles.numero,
             seleccionado || esHoy ? styles.numeroFuerte : null,
-            { color: colorTexto, opacity: pasado ? opacidad.deshabilitado : 1 },
+            // Atenuado como un día pasado y, además, tachado para distinguirlo.
+            bloqueado ? styles.numeroBloqueado : null,
+            { color: colorTexto, opacity: deshabilitado ? opacidad.deshabilitado : 1 },
           ]}
         >
           {dia.dia}
@@ -265,5 +307,17 @@ const styles = StyleSheet.create({
   },
   numeroFuerte: {
     fontFamily: fuente.textoFuerte,
+  },
+  numeroBloqueado: {
+    textDecorationLine: 'line-through',
+  },
+  leyenda: {
+    gap: espacio.xs,
+    marginTop: espacio.xs,
+  },
+  textoLeyenda: {
+    fontFamily: fuente.texto,
+    fontSize: tipo.pequeno.tamano,
+    lineHeight: tipo.pequeno.linea,
   },
 });

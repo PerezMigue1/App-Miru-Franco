@@ -7,6 +7,7 @@ import {
   Package,
   Palette,
   ShieldCheck,
+  Store,
   UserPen,
 } from 'lucide-react-native';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -58,6 +59,13 @@ export default function PerfilView() {
       )}
 
       <SeccionFilas titulo="Configuración" estilo={styles.separacionSeccion}>
+        {/* Horario, ubicación y contacto del salón: con y sin sesión. */}
+        <FilaTarjeta
+          icono={Store}
+          titulo={perfil.filaSalon.titulo}
+          descripcion={perfil.filaSalon.descripcion}
+          onPress={perfil.abrirSalon}
+        />
         <FilaTarjeta
           icono={Palette}
           titulo="Apariencia"

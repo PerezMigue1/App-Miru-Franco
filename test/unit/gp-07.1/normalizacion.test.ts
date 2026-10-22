@@ -11,8 +11,9 @@ import { CONFIGURACION_COMPLETA, DATOS_EXCLUIDOS, respuestaCompleta } from '../.
 /**
  * GP-07.1: normalización de la configuración pública (normalizarConfiguracion, pura). Campo por
  * campo, lo que falte o venga con otro tipo toma el valor del respaldo sin romper el resto, y lo que
- * la app no usa (responsable, correo de privacidad, transferencia, redes, contenido, variables) no
- * entra. Sin red ni disco: no hace falta simular nada.
+ * la app no usa (responsable, correo de privacidad, transferencia, redes, variables) no entra. El
+ * contenido (GP-07.3) sí entra; su normalización se prueba en test/unit/gp-07.3. Sin red ni
+ * disco: no hace falta simular nada.
  */
 
 /** respuestaCompleta() con una parte de `reglas` reemplazada. */
@@ -44,10 +45,10 @@ describe('normalizarConfiguracion: respuesta completa', () => {
     expect(normalizarConfiguracion(respuestaCompleta())).toEqual(CONFIGURACION_COMPLETA);
   });
 
-  it('no deja pasar responsable, correo de privacidad, transferencia, redes, contenido ni variables', () => {
+  it('no deja pasar responsable, correo de privacidad, transferencia, redes, campos ajenos del contenido ni variables', () => {
     const configuracion = normalizarConfiguracion(respuestaCompleta());
 
-    expect(Object.keys(configuracion).sort()).toEqual(['anticiposActivos', 'horario', 'reglas', 'salon', 'textos']);
+    expect(Object.keys(configuracion).sort()).toEqual(['anticiposActivos', 'contenido', 'horario', 'reglas', 'salon', 'textos']);
     expect(Object.keys(configuracion.reglas).sort()).toEqual(['citas', 'diasInhabiles', 'pagos', 'tienda']);
     expect(Object.keys(configuracion.reglas.pagos).sort()).toEqual(['mercadoPagoAnticipos', 'mercadoPagoTienda', 'metodosSalon']);
     expect(configuracion.salon).not.toHaveProperty('responsable');

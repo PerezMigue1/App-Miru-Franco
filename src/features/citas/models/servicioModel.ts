@@ -68,11 +68,27 @@ function listaDeTextos(valor: unknown): string[] {
   return valor.map((elemento) => (typeof elemento === 'string' ? elemento.trim() : '')).filter(Boolean);
 }
 
-/** La forma de las especialistas aún no es fija: nombre propio o del usuario ligado. */
+/** Banderas con las que el backend podría ocultar a una especialista de la agenda. */
+const BANDERAS_OCULTA = ['visible', 'disponible', 'activo'] as const;
+
+/**
+ * true si la especialista (o el usuario ligado) trae visible, disponible o activo en false: no se
+ * ofrece para agendar. Defensivo: hoy el backend ya filtra las inactivas y no manda visible ni
+ * disponible; sin banderas (o con otro valor que no sea false) la especialista se queda.
+ */
+export function especialistaOculta(crudo: Crudo): boolean {
+  const usuario = esObjeto(crudo.usuario) ? crudo.usuario : undefined;
+  return BANDERAS_OCULTA.some((bandera) => crudo[bandera] === false || usuario?.[bandera] === false);
+}
+
+/**
+ * La forma de las especialistas aún no es fija: nombre propio o del usuario ligado. Las ocultas
+ * (especialistaOculta) se descartan.
+ */
 function normalizarEspecialista(crudo: Crudo): Especialista | null {
   const usuario = esObjeto(crudo.usuario) ? crudo.usuario : undefined;
   const nombre = texto(crudo.nombre) || texto(usuario?.nombre);
-  if (!nombre) {
+  if (!nombre || especialistaOculta(crudo)) {
     return null;
   }
   // En servicio_especialistas el id de la fila no es el de la persona: la agenda usa usuarioId.

@@ -43,13 +43,21 @@ function useAnchoTarjeta(visibles: number): number {
 
 interface CarruselProductosProps {
   cargando: boolean;
+  /** Párrafo bajo el título (contenido.inicio.productosDescripcion); null no lo pinta. */
+  descripcion: string | null;
   productos: ProductoCatalogo[];
   onAbrir: (id: number) => void;
   onVerTodos: () => void;
 }
 
 /** "Productos" de Inicio: tarjetas de la Tienda a ancho fijo en una fila horizontal. */
-export function CarruselProductos({ cargando, productos, onAbrir, onVerTodos }: CarruselProductosProps) {
+export function CarruselProductos({
+  cargando,
+  descripcion,
+  productos,
+  onAbrir,
+  onVerTodos,
+}: CarruselProductosProps) {
   const ancho = useAnchoTarjeta(carruselInicio.productosVisibles);
   const renderItem = useCallback<ListRenderItem<ProductoCatalogo>>(
     ({ item }) => <TarjetaProducto producto={item} ancho={ancho} onAbrir={onAbrir} />,
@@ -58,6 +66,7 @@ export function CarruselProductos({ cargando, productos, onAbrir, onVerTodos }: 
   return (
     <SeccionCarrusel
       titulo="Productos"
+      descripcion={descripcion}
       etiquetaVerTodos="Ver todos los productos"
       pistaVerTodos="Abre la tienda"
       etiquetaCargando="Cargando productos"
@@ -78,13 +87,21 @@ const claveProducto = (producto: ProductoCatalogo) => String(producto.id);
 
 interface CarruselServiciosProps {
   cargando: boolean;
+  /** Párrafo bajo el título (contenido.inicio.serviciosDescripcion); null no lo pinta. */
+  descripcion: string | null;
   servicios: Servicio[];
   onAbrir: (id: Servicio['id']) => void;
   onVerTodos: () => void;
 }
 
 /** "Servicios" de Inicio: tarjetas del catálogo de servicios dentro de un contenedor de ancho fijo. */
-export function CarruselServicios({ cargando, servicios, onAbrir, onVerTodos }: CarruselServiciosProps) {
+export function CarruselServicios({
+  cargando,
+  descripcion,
+  servicios,
+  onAbrir,
+  onVerTodos,
+}: CarruselServiciosProps) {
   const ancho = useAnchoTarjeta(carruselInicio.serviciosVisibles);
   const renderItem = useCallback<ListRenderItem<Servicio>>(
     ({ item }) => <CeldaServicio servicio={item} ancho={ancho} onAbrir={onAbrir} />,
@@ -93,6 +110,7 @@ export function CarruselServicios({ cargando, servicios, onAbrir, onVerTodos }: 
   return (
     <SeccionCarrusel
       titulo="Servicios"
+      descripcion={descripcion}
       etiquetaVerTodos="Ver todos los servicios"
       pistaVerTodos="Abre la pestaña Servicios"
       etiquetaCargando="Cargando servicios"
@@ -138,6 +156,7 @@ const CeldaServicio = memo(function CeldaServicio({
 
 interface SeccionCarruselProps<T> {
   titulo: string;
+  descripcion: string | null;
   etiquetaVerTodos: string;
   pistaVerTodos: string;
   etiquetaCargando: string;
@@ -157,6 +176,7 @@ interface SeccionCarruselProps<T> {
  */
 function SeccionCarrusel<T>({
   titulo,
+  descripcion,
   etiquetaVerTodos,
   pistaVerTodos,
   etiquetaCargando,
@@ -175,6 +195,7 @@ function SeccionCarrusel<T>({
     <View style={styles.seccion}>
       <Encabezado
         titulo={titulo}
+        descripcion={descripcion}
         etiqueta={etiquetaVerTodos}
         pista={pistaVerTodos}
         onPress={onVerTodos}
@@ -213,14 +234,19 @@ function Separador() {
   return <View style={styles.separador} />;
 }
 
-/** Título de sección como los de la home de la web, con su acción a la derecha (sin eyebrow). */
+/**
+ * Título de sección como los de la home de la web, con su acción a la derecha (sin eyebrow) y, si
+ * hay, la descripción debajo a todo el ancho.
+ */
 function Encabezado({
   titulo,
+  descripcion,
   etiqueta,
   pista,
   onPress,
 }: {
   titulo: string;
+  descripcion: string | null;
   etiqueta: string;
   pista: string;
   onPress: () => void;
@@ -228,34 +254,39 @@ function Encabezado({
   const { colores } = useTheme();
   const { estilo, hundir, soltar } = usePresion();
   return (
-    <View style={styles.encabezado}>
-      {/* --encabezados-alterno como la web: 8.8:1 sobre lino y 6.0:1 sobre carbón. */}
-      <Text accessibilityRole="header" style={[styles.titulo, { color: colores.textoSuave }]}>
-        {titulo}
-      </Text>
-      <Pressable
-        accessibilityRole="link"
-        accessibilityLabel={etiqueta}
-        accessibilityHint={pista}
-        onPress={onPress}
-        onPressIn={hundir}
-        onPressOut={soltar}
-        style={styles.toqueVerTodos}
-      >
-        {({ pressed }) => (
-          <Animated.View
-            style={[
-              styles.verTodos,
-              { backgroundColor: pressed ? colores.presionado : colores.transparente },
-              estilo,
-            ]}
-          >
-            {/* --menu-texto-principal como el enlace de la web: 8.6:1 sobre lino y 18:1 sobre carbón. */}
-            <Text style={[styles.textoVerTodos, { color: colores.texto }]}>Ver todos</Text>
-            <ArrowRight color={colores.texto} size={carruselInicio.iconoVerTodos} strokeWidth={icono.trazo} />
-          </Animated.View>
-        )}
-      </Pressable>
+    <View style={styles.cabeza}>
+      <View style={styles.encabezado}>
+        {/* --encabezados-alterno como la web: 8.8:1 sobre lino y 6.0:1 sobre carbón. */}
+        <Text accessibilityRole="header" style={[styles.titulo, { color: colores.textoSuave }]}>
+          {titulo}
+        </Text>
+        <Pressable
+          accessibilityRole="link"
+          accessibilityLabel={etiqueta}
+          accessibilityHint={pista}
+          onPress={onPress}
+          onPressIn={hundir}
+          onPressOut={soltar}
+          style={styles.toqueVerTodos}
+        >
+          {({ pressed }) => (
+            <Animated.View
+              style={[
+                styles.verTodos,
+                { backgroundColor: pressed ? colores.presionado : colores.transparente },
+                estilo,
+              ]}
+            >
+              {/* --menu-texto-principal como el enlace de la web: 8.6:1 sobre lino y 18:1 sobre carbón. */}
+              <Text style={[styles.textoVerTodos, { color: colores.texto }]}>Ver todos</Text>
+              <ArrowRight color={colores.texto} size={carruselInicio.iconoVerTodos} strokeWidth={icono.trazo} />
+            </Animated.View>
+          )}
+        </Pressable>
+      </View>
+      {descripcion ? (
+        <Text style={[styles.descripcion, { color: colores.textoSuave }]}>{descripcion}</Text>
+      ) : null}
     </View>
   );
 }
@@ -264,15 +295,23 @@ const styles = StyleSheet.create({
   seccion: {
     paddingTop: espacio.x5,
   },
+  cabeza: {
+    gap: espacio.s,
+    paddingHorizontal: pantalla.margen,
+    // Con el relleno de la fila (16) quedan 20 entre el título y las tarjetas, como en la galería.
+    marginBottom: espacio.xl - carruselInicio.rellenoSombra,
+  },
   encabezado: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'space-between',
     columnGap: espacio.l,
-    paddingHorizontal: pantalla.margen,
-    // Con el relleno de la fila (16) quedan 20 entre el título y las tarjetas, como en la galería.
-    marginBottom: espacio.xl - carruselInicio.rellenoSombra,
+  },
+  descripcion: {
+    fontFamily: fuente.texto,
+    fontSize: tipo.parrafo.tamano,
+    lineHeight: tipo.parrafo.linea,
   },
   titulo: {
     flexShrink: 1,

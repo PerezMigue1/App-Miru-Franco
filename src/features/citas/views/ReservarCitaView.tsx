@@ -216,6 +216,7 @@ function PasoDiaHora({ vm }: { vm: ReservarCitaViewModel }) {
         seleccionada={vm.fecha}
         onElegir={vm.elegirDia}
         onCambiarMes={vm.cambiarMes}
+        bloqueos={vm.bloqueos}
       />
 
       {/* Región en vivo siempre montada: el aviso se anuncia una vez al aparecer. */}
@@ -242,6 +243,15 @@ function Horarios({ vm }: { vm: ReservarCitaViewModel }) {
   // Los horarios aparecen una vez cada que terminan de cargar (al elegir otro día, otra vez).
   const entrada = useEntradaContenido();
 
+  // Sin día elegido: el que estaba quedó sin citas con la configuración nueva, o no hay uno libre.
+  if (vm.fecha === null) {
+    return (
+      <View style={styles.mensajeHorarios}>
+        <Text style={[styles.nota, { color: colores.textoSuave }]}>Elige otro día.</Text>
+      </View>
+    );
+  }
+
   if (vm.estadoHorarios === 'cargando' || vm.estadoHorarios === 'inactivo') {
     return <CuadriculaHorariosEsqueleto />;
   }
@@ -262,7 +272,7 @@ function Horarios({ vm }: { vm: ReservarCitaViewModel }) {
     return (
       <View style={styles.mensajeHorarios}>
         <Text style={[styles.cuerpo, { color: colores.texto }]}>
-          {disponibilidad?.motivo || 'El salón no abre este día'}
+          {disponibilidad?.motivo || vm.motivoCerrado}
         </Text>
         <Text style={[styles.nota, { color: colores.textoSuave }]}>Elige otro día.</Text>
       </View>

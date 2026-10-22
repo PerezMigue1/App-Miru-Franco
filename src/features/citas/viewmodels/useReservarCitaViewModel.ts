@@ -14,6 +14,7 @@ import {
   fechaLocal,
   mensajeAnticipoParaClienta,
   mesDe,
+  mesDeFecha,
   obtenerDisponibilidad,
   obtenerEspecialistas,
   pideAnticipo,
@@ -25,6 +26,7 @@ import {
   type Slot,
 } from '../models/citaModel';
 import { obtenerServicio, type Servicio } from '../models/servicioModel';
+import { useCalendarioCitas, type BloqueosCalendario } from './useCalendarioCitas';
 
 // La vista no importa de models/: recibe esta función del viewmodel.
 export { fechaLegible } from '../models/citaModel';
@@ -64,11 +66,19 @@ export interface ReservarCitaViewModel {
   mesVisible: MesCalendario;
   /** Mes anterior (-1) o siguiente (1); nunca antes del mes actual. */
   cambiarMes: (delta: 1 | -1) => void;
-  /** 'YYYY-MM-DD' local del día elegido, o null. */
+  /**
+   * 'YYYY-MM-DD' local del día elegido, o null (sin día libre, o el elegido quedó bloqueado por una
+   * configuración nueva y se limpió).
+   */
   fecha: string | null;
+  /** Días del mes visible sin citas por la configuración del salón, para CalendarioMensual. */
+  bloqueos: BloqueosCalendario;
+  /** No hace nada con un día pasado o bloqueado. */
   elegirDia: (fecha: string) => void;
   estadoHorarios: EstadoHorarios;
   disponibilidad: Disponibilidad | null;
+  /** Respaldo del catálogo cuando el backend dice que no abre y no manda su motivo. */
+  motivoCerrado: string;
   /** Mensaje propio cuando fallan los horarios ('' si no hay error). */
   errorHorarios: string;
   recargarHorarios: () => void;
@@ -182,22 +192,50 @@ export function useReservarCitaViewModel(
     [],
   );
 
+  /** Sin día elegido: se olvidan los horarios (y la respuesta pendiente) y el horario elegido. */
+  const sinDia = useCallback(() => {
+    solicitudHorarios.current += 1;
+    setFecha(null);
+    setSlot(null);
+    setHorarioOcupado(false);
+    setDisponibilidad(null);
+    setErrorHorarios('');
+    setEstadoHorarios('inactivo');
+  }, []);
+
+  /** Con una configuración nueva el día elegido quedó sin citas: se limpia y, si estaba en Confirmar, regresa. */
+  const alBloquearseDia = useCallback(() => {
+    sinDia();
+    if (paso === 3) {
+      setDireccion(-1);
+      setPaso(2);
+    }
+  }, [sinDia, paso]);
+
+  const calendario = useCalendarioCitas(mesVisible, fecha, alBloquearseDia);
+  const { estaBloqueado, primerDiaLibre } = calendario;
+
   /**
-   * Fija a la especialista y empieza día y hora por hoy, en el mes actual (día y hora anteriores se
-   * limpian). Lo usan elegir especialista y la especialista que llega en la ruta.
+   * Fija a la especialista y empieza día y hora por hoy o, si hoy no hay citas por la configuración,
+   * por el siguiente día libre, en su mes (día y hora anteriores se limpian). Lo usan elegir
+   * especialista y la especialista que llega en la ruta.
    */
   const empezarDiaHora = useCallback(
     (elegida: Especialista, idServicio: string | number) => {
       const ahora = new Date();
-      const hoy = fechaLocal(ahora);
+      const dia = primerDiaLibre(fechaLocal(ahora));
       setEspecialista(elegida);
-      setMesVisible(mesDe(ahora));
+      setMesVisible(dia ? mesDeFecha(dia) : mesDe(ahora));
+      if (!dia) {
+        sinDia();
+        return;
+      }
       setSlot(null);
       setHorarioOcupado(false);
-      setFecha(hoy);
-      cargarHorarios(elegida.id, hoy, idServicio);
+      setFecha(dia);
+      cargarHorarios(elegida.id, dia, idServicio);
     },
-    [cargarHorarios],
+    [cargarHorarios, primerDiaLibre, sinDia],
   );
 
   // La especialista de la ruta se aplica una sola vez, en la primera carga que sale bien.
@@ -294,7 +332,8 @@ export function useReservarCitaViewModel(
   const elegirDia = useCallback(
     (dia: string) => {
       // Un día pasado no tiene horarios; las fechas 'YYYY-MM-DD' locales se comparan como texto.
-      if (!servicio || !especialista || enviando || dia === fecha || dia < fechaLocal(new Date())) {
+      const pasado = dia < fechaLocal(new Date());
+      if (!servicio || !especialista || enviando || dia === fecha || pasado || estaBloqueado(dia)) {
         return;
       }
       setFecha(dia);
@@ -302,7 +341,7 @@ export function useReservarCitaViewModel(
       setHorarioOcupado(false);
       cargarHorarios(especialista.id, dia, servicio.id);
     },
-    [servicio, especialista, enviando, fecha, cargarHorarios],
+    [servicio, especialista, enviando, fecha, cargarHorarios, estaBloqueado],
   );
 
   const cambiarMes = useCallback((delta: 1 | -1) => {
@@ -447,9 +486,11 @@ export function useReservarCitaViewModel(
     mesVisible,
     cambiarMes,
     fecha,
+    bloqueos: calendario.bloqueos,
     elegirDia,
     estadoHorarios,
     disponibilidad,
+    motivoCerrado: calendario.motivoCerrado,
     errorHorarios,
     recargarHorarios,
     horarioOcupado,

@@ -8,7 +8,6 @@ import {
   type ProductoCatalogo,
 } from '@/features/tienda/models/productoModel';
 
-import { fotosDeServicios, type FotoGaleria } from '../models/FotoModel';
 import { seleccionarFluidos, type FluidoHero } from '../models/FluidoModel';
 
 export type EstadoInicio = 'cargando' | 'listo' | 'error';
@@ -19,17 +18,22 @@ const DESTACADOS = 6;
 export interface InicioViewModel {
   estado: EstadoInicio;
   fluidos: FluidoHero[];
-  fotos: FotoGaleria[];
   /**
    * Estado del catálogo (hero y carrusel de productos): va aparte para que un fallo del catálogo no
-   * tumbe la galería ni los servicios; sin catálogo, el hero queda sin nombre ni precio.
+   * tumbe los servicios; sin catálogo, el hero queda sin nombre ni precio.
    */
   estadoProductos: EstadoInicio;
   /** Hasta 6 productos con existencias, al azar en cada carga. */
   productosDestacados: ProductoCatalogo[];
   /** Hasta 6 servicios activos, al azar en cada carga (siguen al `estado` general). */
   serviciosDestacados: Servicio[];
+  /** Vuelve a pedir los dos catálogos pasando por 'cargando' (botón Reintentar). */
   recargar: () => void;
+  /**
+   * Vuelve a pedir los dos catálogos para el deslizar para actualizar: sin pasar por 'cargando' y,
+   * si una lectura falla con datos en pantalla, se conservan. Nunca rechaza.
+   */
+  refrescar: () => Promise<void>;
 }
 
 /**
@@ -49,67 +53,78 @@ function elegirAlAzar<T>(lista: T[], cantidad: number): T[] {
 }
 
 /**
- * Lecturas públicas del inicio: el catálogo de productos (una sola vez: de ahí salen el nombre y el
- * precio de los fluidos del hero y el carrusel de productos) y los servicios (fotos de la galería y
- * carrusel de servicios).
+ * Lecturas públicas de los catálogos de Inicio: el catálogo de productos (una sola vez: de ahí salen
+ * el nombre y el precio de los fluidos del hero y el carrusel de productos) y los servicios
+ * (carrusel de servicios). La galería ya no sale de aquí: viene de GET /api/galeria (useContenidoInicio).
  */
 export function useInicioViewModel(): InicioViewModel {
   const [estado, setEstado] = useState<EstadoInicio>('cargando');
   const [fluidos, setFluidos] = useState<FluidoHero[]>(() => seleccionarFluidos([]));
-  const [fotos, setFotos] = useState<FotoGaleria[]>([]);
   const [estadoProductos, setEstadoProductos] = useState<EstadoInicio>('cargando');
   const [productosDestacados, setProductosDestacados] = useState<ProductoCatalogo[]>([]);
   const [serviciosDestacados, setServiciosDestacados] = useState<Servicio[]>([]);
   // Solo la última solicitud escribe el estado (reintentos rápidos o pantalla desmontada).
   const solicitud = useRef(0);
 
-  // El sorteo ocurre aquí, una vez por carga (al montar y en cada Reintentar), nunca al pintar.
-  const recargar = useCallback(() => {
+  // El sorteo ocurre aquí, una vez por carga (al montar, en cada Reintentar y al deslizar para
+  // actualizar), nunca al pintar. Un fallo deja 'error' salvo que ya hubiera datos en pantalla.
+  const pedir = useCallback((mostrarCarga: boolean): Promise<void> => {
     solicitud.current += 1;
     const id = solicitud.current;
-    setEstado('cargando');
-    setEstadoProductos('cargando');
-    obtenerServicios()
-      .then((servicios) => {
-        if (id !== solicitud.current) {
+    const vigente = () => id === solicitud.current;
+    const conservarOError = (actual: EstadoInicio): EstadoInicio => (actual === 'listo' ? actual : 'error');
+    if (mostrarCarga) {
+      setEstado('cargando');
+      setEstadoProductos('cargando');
+    }
+    const servicios = obtenerServicios().then(
+      (lista) => {
+        if (!vigente()) {
           return;
         }
-        setFotos(fotosDeServicios(servicios));
         setServiciosDestacados(
           elegirAlAzar(
-            servicios.filter((servicio) => servicio.activo !== false),
+            lista.filter((servicio) => servicio.activo !== false),
             DESTACADOS,
           ),
         );
         setEstado('listo');
-      })
-      .catch(() => {
-        if (id === solicitud.current) {
-          setEstado('error');
+      },
+      () => {
+        if (vigente()) {
+          setEstado(conservarOError);
         }
-      });
+      },
+    );
     // Una sola lectura de /api/productos: el catálogo trae lo que piden el hero (nombre y precio de
     // los fluidos) y la tarjeta de producto (presentaciones, existencias y marca).
-    obtenerCatalogo()
-      .then((catalogo) => {
-        if (id !== solicitud.current) {
+    const catalogo = obtenerCatalogo().then(
+      (productos) => {
+        if (!vigente()) {
           return;
         }
-        setFluidos(seleccionarFluidos(catalogo));
+        setFluidos(seleccionarFluidos(productos));
         setProductosDestacados(
           elegirAlAzar(
-            catalogo.filter((producto) => !estaAgotado(producto)),
+            productos.filter((producto) => !estaAgotado(producto)),
             DESTACADOS,
           ),
         );
         setEstadoProductos('listo');
-      })
-      .catch(() => {
-        if (id === solicitud.current) {
-          setEstadoProductos('error');
+      },
+      () => {
+        if (vigente()) {
+          setEstadoProductos(conservarOError);
         }
-      });
+      },
+    );
+    return Promise.all([servicios, catalogo]).then(() => undefined);
   }, []);
+
+  const recargar = useCallback(() => {
+    void pedir(true);
+  }, [pedir]);
+  const refrescar = useCallback(() => pedir(false), [pedir]);
 
   useEffect(() => {
     recargar();
@@ -121,10 +136,10 @@ export function useInicioViewModel(): InicioViewModel {
   return {
     estado,
     fluidos,
-    fotos,
     estadoProductos,
     productosDestacados,
     serviciosDestacados,
     recargar,
+    refrescar,
   };
 }

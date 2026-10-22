@@ -13,6 +13,7 @@ import {
   fechaLocal,
   mensajeReprogramacion,
   mesDe,
+  mesDeFecha,
   obtenerCita,
   obtenerDisponibilidad,
   reprogramarCita,
@@ -22,6 +23,7 @@ import {
   type MesCalendario,
   type Slot,
 } from '../models/citaModel';
+import { useCalendarioCitas, type BloqueosCalendario } from './useCalendarioCitas';
 
 // La vista no importa de models/: recibe estas funciones del viewmodel.
 export { fechaLegible, horaLegible } from '../models/citaModel';
@@ -44,12 +46,20 @@ export interface ReprogramarCitaViewModel {
   mesVisible: MesCalendario;
   /** Mes anterior (-1) o siguiente (1); nunca antes del mes actual. */
   cambiarMes: (delta: 1 | -1) => void;
-  /** 'YYYY-MM-DD' local del día elegido, o null. */
+  /**
+   * 'YYYY-MM-DD' local del día elegido, o null (sin día libre, o el elegido quedó bloqueado por una
+   * configuración nueva y se limpió).
+   */
   fecha: string | null;
+  /** Días del mes visible sin citas por la configuración del salón, para CalendarioMensual. */
+  bloqueos: BloqueosCalendario;
+  /** No hace nada con un día pasado o bloqueado. */
   elegirDia: (fecha: string) => void;
   estadoHorarios: EstadoHorariosReprogramar;
   /** Disponibilidad del día sin el horario que la cita ya tiene. */
   disponibilidad: Disponibilidad | null;
+  /** Respaldo del catálogo cuando el backend dice que no abre y no manda su motivo. */
+  motivoCerrado: string;
   /** Mensaje propio cuando fallan los horarios ('' si no hay error). */
   errorHorarios: string;
   recargarHorarios: () => void;
@@ -86,7 +96,9 @@ function diaInicial(cita: Cita, ahora: Date): string {
 
 /**
  * Reprogramar una cita de la clienta (GP-06.3): misma especialista y mismo servicio, otro día u otra
- * hora. El calendario y la carga de horarios siguen las mismas reglas que la reserva.
+ * hora. El calendario y la carga de horarios siguen las mismas reglas que la reserva, también los
+ * días sin citas de la configuración (GP-07.3). La especialista nunca se cambia por otra: si ya no
+ * atiende, el backend responde con error a los horarios y la pantalla lo dice con Reintentar.
  */
 export function useReprogramarCitaViewModel(citaId: string | undefined): ReprogramarCitaViewModel {
   const router = useRouter();
@@ -120,6 +132,19 @@ export function useReprogramarCitaViewModel(citaId: string | undefined): Reprogr
   }, []);
 
   const idLimpio = citaId?.trim() ?? '';
+
+  /** Sin día elegido: se olvidan los horarios (y la respuesta pendiente) y el horario elegido. */
+  const sinDia = useCallback(() => {
+    solicitudHorarios.current += 1;
+    setFecha(null);
+    setSlot(null);
+    setDisponibilidadDia(null);
+    setErrorHorarios('');
+    setEstadoHorarios('inactivo');
+  }, []);
+
+  const calendario = useCalendarioCitas(mesVisible, fecha, sinDia);
+  const { estaBloqueado, primerDiaLibre } = calendario;
 
   const cargarHorarios = useCallback(
     (especialistaId: string | number, dia: string, servicioId: string | number) => {
@@ -174,12 +199,16 @@ export function useReprogramarCitaViewModel(citaId: string | undefined): Reprogr
           setEstado('sinCambios');
           return;
         }
-        const ahora = new Date();
-        const dia = diaInicial(respuesta, ahora);
-        const [anio, mes] = dia.split('-').map(Number);
-        setMesVisible({ anio, mes: mes - 1 });
-        setFecha(dia);
+        // Si el día de la cita (o hoy) ya no tiene citas por la configuración, el siguiente libre.
+        const inicial = diaInicial(respuesta, new Date());
+        const dia = primerDiaLibre(inicial);
+        setMesVisible(mesDeFecha(dia ?? inicial));
         setEstado('listo');
+        if (!dia) {
+          sinDia();
+          return;
+        }
+        setFecha(dia);
         cargarHorarios(respuesta.especialistaId, dia, respuesta.servicioId);
       })
       .catch((error: unknown) => {
@@ -189,7 +218,7 @@ export function useReprogramarCitaViewModel(citaId: string | undefined): Reprogr
         setCita(null);
         setEstado(error instanceof ApiError && error.status === 404 ? 'noEncontrado' : 'error');
       });
-  }, [idLimpio, cargarHorarios]);
+  }, [idLimpio, cargarHorarios, primerDiaLibre, sinDia]);
 
   useEffect(() => {
     recargar();
@@ -216,7 +245,8 @@ export function useReprogramarCitaViewModel(citaId: string | undefined): Reprogr
   const elegirDia = useCallback(
     (dia: string) => {
       // Un día pasado no tiene horarios; las fechas 'YYYY-MM-DD' locales se comparan como texto.
-      if (!cita || enviando || dia === fecha || dia < fechaLocal(new Date())) {
+      const pasado = dia < fechaLocal(new Date());
+      if (!cita || enviando || dia === fecha || pasado || estaBloqueado(dia)) {
         return;
       }
       setFecha(dia);
@@ -224,7 +254,7 @@ export function useReprogramarCitaViewModel(citaId: string | undefined): Reprogr
       setErrorEnvio(null);
       cargarHorarios(cita.especialistaId, dia, cita.servicioId);
     },
-    [cita, enviando, fecha, cargarHorarios],
+    [cita, enviando, fecha, cargarHorarios, estaBloqueado],
   );
 
   const cambiarMes = useCallback((delta: 1 | -1) => {
@@ -302,9 +332,11 @@ export function useReprogramarCitaViewModel(citaId: string | undefined): Reprogr
     mesVisible,
     cambiarMes,
     fecha,
+    bloqueos: calendario.bloqueos,
     elegirDia,
     estadoHorarios,
     disponibilidad,
+    motivoCerrado: calendario.motivoCerrado,
     errorHorarios,
     recargarHorarios,
     slot,

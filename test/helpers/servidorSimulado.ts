@@ -54,10 +54,21 @@ export function leerLlamada(entrada: unknown, init?: RequestInit): Llamada {
 
 export type Manejador = (cuerpo: unknown) => Response;
 
-/** Catálogos públicos vacíos que piden las pantallas de fondo. */
+/** Lista pública vacía con la forma del backend ({ success, data }). */
+const listaVacia: Manejador = () => respuesta({ success: true, data: [] });
+
+/**
+ * Catálogos públicos vacíos que piden las pantallas de fondo. Desde GP-07.3 Inicio también pide el
+ * contenido del salón (galería, promociones, equipo y preguntas frecuentes): vacío, cada sección se
+ * oculta y la galería muestra su estado vacío, sin errores de fondo.
+ */
 export const CATALOGOS_VACIOS: Record<string, Manejador> = {
-  'GET /api/servicios': () => respuesta({ success: true, data: [] }),
+  'GET /api/servicios': listaVacia,
   'GET /api/productos': () => respuesta({ success: true, count: 0, data: [] }),
+  'GET /api/galeria': listaVacia,
+  'GET /api/contenido/promociones': listaVacia,
+  'GET /api/contenido/equipo': listaVacia,
+  'GET /api/contenido/preguntas-frecuentes': listaVacia,
 };
 
 /**

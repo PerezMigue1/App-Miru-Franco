@@ -139,6 +139,7 @@ export default function ReprogramarCitaView() {
             seleccionada={vm.fecha}
             onElegir={vm.elegirDia}
             onCambiarMes={vm.cambiarMes}
+            bloqueos={vm.bloqueos}
           />
 
           <Horarios vm={vm} />
@@ -209,6 +210,15 @@ function DatosFijos({ vm }: { vm: ReprogramarCitaViewModel }) {
 function Horarios({ vm }: { vm: ReprogramarCitaViewModel }) {
   const { colores } = useTheme();
 
+  // Sin día elegido: el que estaba quedó sin citas con la configuración nueva, o no hay uno libre.
+  if (vm.fecha === null) {
+    return (
+      <View style={styles.mensajeHorarios}>
+        <Text style={[styles.nota, { color: colores.textoSuave }]}>Elige otro día.</Text>
+      </View>
+    );
+  }
+
   if (vm.estadoHorarios === 'cargando' || vm.estadoHorarios === 'inactivo') {
     return <CuadriculaHorariosEsqueleto />;
   }
@@ -229,7 +239,7 @@ function Horarios({ vm }: { vm: ReprogramarCitaViewModel }) {
     return (
       <View style={styles.mensajeHorarios}>
         <Text style={[styles.cuerpo, { color: colores.texto }]}>
-          {disponibilidad?.motivo || 'El salón no abre este día'}
+          {disponibilidad?.motivo || vm.motivoCerrado}
         </Text>
         <Text style={[styles.nota, { color: colores.textoSuave }]}>Elige otro día.</Text>
       </View>

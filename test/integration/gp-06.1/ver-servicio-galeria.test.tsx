@@ -12,43 +12,44 @@ import { LIMITE_MS, prepararPruebasDePantalla } from '../../helpers/pantallas';
 import {
   abrirEn,
   abrirFoto,
-  CATALOGO_PANTALLA,
   medir,
   medirGaleria,
   regresarA,
   respuestaRetenida,
 } from '../../helpers/pantallasServicios';
-import {
-  CATALOGO_CRUDO,
-  cuerpoLista,
-  imagenServicio,
-  servicioCrudo,
-} from '../../helpers/serviciosFicticios';
+import { cuerpoLista, imagenServicio } from '../../helpers/serviciosFicticios';
 import { respuesta } from '../../helpers/servidorSimulado';
 
 /**
  * GP-06.1: de la galería "Nuestro trabajo" de Inicio al detalle del servicio, con las pantallas
- * reales y solo el servidor simulado. Inicio pide GET /api/servicios (galería y carrusel) y
- * GET /api/productos (hero y carrusel de productos, vacío aquí). Las fotos salen de los servicios
- * activos con imagen, en orden: corte, alaciado, balayage, retoque, lavado y un maquillaje que llega
- * sin id.
+ * reales y solo el servidor simulado. Desde GP-07.3 las fotos salen de GET /api/galeria (Admin >
+ * Galería), en su orden y con su texto alternativo; el detalle sigue saliendo de GET /api/servicios/:id
+ * del catálogo de pantalla. Fotos: corte, alaciado, balayage, retoque, lavado (servicio sin
+ * categoría), un peinado sin servicio y una foto oculta que no se publica.
  */
 
-/** Servicio con foto pero sin id: su foto no puede abrir un detalle. */
-const SIN_ID = {
-  ...servicioCrudo({
-    nombre: 'Maquillaje social',
-    categoria: 'Maquillaje',
-    imagen: [imagenServicio('maquillaje')],
-  }),
-  id: null,
+/** Foto cruda de la galería ligada a un servicio del catálogo de pantalla. */
+function fotoDeServicio(id: number, servicio: { id: number; nombre: string; categoria: string }, imagen: string) {
+  return { id, url: imagenServicio(imagen), alt: `${servicio.nombre} terminado`, servicio };
+}
+
+const GALERIA = [
+  fotoDeServicio(101, { id: 1, nombre: 'Corte de dama', categoria: 'Cabello' }, 'corte'),
+  fotoDeServicio(102, { id: 2, nombre: 'Alaciado keratínico', categoria: 'Tratamientos' }, 'alaciado'),
+  fotoDeServicio(103, { id: 4, nombre: 'Balayage', categoria: 'Color' }, 'balayage'),
+  fotoDeServicio(104, { id: 7, nombre: 'Retoque de raíz', categoria: 'Color' }, 'retoque'),
+  fotoDeServicio(105, { id: 8, nombre: 'Lavado express', categoria: '' }, 'lavado'),
+  { id: 106, url: imagenServicio('peinado'), alt: 'Peinado de novia sin servicio', servicio: null },
+  // Oculta en Admin > Galería: no se publica.
+  { ...fotoDeServicio(107, { id: 5, nombre: 'Peinado de evento', categoria: 'Peinados' }, 'evento'), visible: false },
+];
+
+/** GET /api/galeria de Inicio. */
+const GALERIA_INICIO = {
+  'GET /api/galeria': () => respuesta(cuerpoLista(GALERIA)),
 };
 
-/** GET /api/servicios de Inicio: el catálogo de pantalla y el servicio sin id. */
-const SERVICIOS_INICIO = {
-  'GET /api/servicios': () => respuesta(cuerpoLista([...CATALOGO_PANTALLA, SIN_ID])),
-};
-
+const FOTO_CORTE = 'Corte de dama terminado';
 const VER_ALACIADO = 'Ver el servicio Alaciado keratínico';
 
 /** Lista horizontal del visor (la única con paginación). */
@@ -67,11 +68,11 @@ async function deslizarA(pagina: number): Promise<void> {
   });
 }
 
-/** Abre Inicio sin sesión con las fotos de los servicios y mide la galería. */
+/** Abre Inicio sin sesión con las fotos de la galería y mide el mosaico. */
 async function abrirInicioConFotos() {
-  const abierta = await abrirEn('/inicio', SERVICIOS_INICIO);
+  const abierta = await abrirEn('/inicio', GALERIA_INICIO);
   expect(abierta.app.getPathname()).toBe('/inicio');
-  await medirGaleria('Corte de dama');
+  await medirGaleria(FOTO_CORTE);
   return abierta;
 }
 
@@ -82,13 +83,11 @@ describe('Del visor de la galería de Inicio al detalle del servicio (GP-06.1)',
     'tocar una foto abre el visor, deslizar cambia de foto y "Ver el servicio" abre su detalle; "Regresar" vuelve a Inicio',
     async () => {
       const { app } = await abrirInicioConFotos();
-      // Una foto por servicio activo con imagen: ni el peinado inactivo ni los servicios sin foto.
-      expect(screen.getAllByRole('imagebutton', { name: /^Ver foto de/ })).toHaveLength(6);
-      expect(
-        screen.queryByRole('imagebutton', { name: 'Ver foto de Peinado de evento en grande' }),
-      ).not.toBeOnTheScreen();
+      // Solo las fotos visibles, cada una anunciada con su texto alternativo.
+      expect(screen.getAllByRole('imagebutton')).toHaveLength(6);
+      expect(screen.queryByRole('imagebutton', { name: 'Peinado de evento terminado' })).not.toBeOnTheScreen();
 
-      await abrirFoto('Corte de dama', 'Cabello · 1 de 6');
+      await abrirFoto(FOTO_CORTE, 'Cabello · 1 de 6');
       expect(screen.getByRole('button', { name: 'Ver el servicio Corte de dama' })).toBeOnTheScreen();
 
       await deslizarA(1);
@@ -96,9 +95,9 @@ describe('Del visor de la galería de Inicio al detalle del servicio (GP-06.1)',
       expect(screen.getByRole('button', { name: VER_ALACIADO })).toBeOnTheScreen();
       expect(screen.queryByRole('button', { name: 'Ver el servicio Corte de dama' })).not.toBeOnTheScreen();
 
-      // Más allá de la última página se queda en la última.
+      // Más allá de la última página se queda en la última (sin servicio, sin categoría).
       await deslizarA(9);
-      expect(await screen.findByText('Maquillaje · 6 de 6')).toBeOnTheScreen();
+      expect(await screen.findByText('6 de 6')).toBeOnTheScreen();
       await deslizarA(1);
       expect(await screen.findByText('Tratamientos · 2 de 6')).toBeOnTheScreen();
 
@@ -111,9 +110,7 @@ describe('Del visor de la galería de Inicio al detalle del servicio (GP-06.1)',
 
       await regresarA(app, '/inicio', 'Nuestro trabajo');
       expect(screen.queryByText('Tratamientos · 2 de 6')).not.toBeOnTheScreen();
-      expect(
-        screen.getByRole('imagebutton', { name: 'Ver foto de Alaciado keratínico en grande' }),
-      ).toBeOnTheScreen();
+      expect(screen.getByRole('imagebutton', { name: 'Alaciado keratínico terminado' })).toBeOnTheScreen();
       esperarConsolaLimpia();
     },
     LIMITE_MS,
@@ -124,17 +121,17 @@ describe('Del visor de la galería de Inicio al detalle del servicio (GP-06.1)',
     async () => {
       const { app } = await abrirInicioConFotos();
 
-      await abrirFoto('Lavado express', '5 de 6');
+      await abrirFoto('Lavado express terminado', '5 de 6');
       expect(screen.getByRole('button', { name: 'Ver el servicio Lavado express' })).toBeOnTheScreen();
       await fireEvent.press(screen.getByRole('button', { name: 'Cerrar galería' }));
       await waitFor(() => expect(screen.queryByText('5 de 6')).not.toBeOnTheScreen());
       expect(screen.queryByRole('button', { name: 'Cerrar galería' })).not.toBeOnTheScreen();
 
-      // Al volver a abrir con otra foto, el contador arranca en ella.
-      await abrirFoto('Maquillaje social', 'Maquillaje · 6 de 6');
+      // Al volver a abrir con otra foto, el contador arranca en ella; sin servicio no hay botón.
+      await abrirFoto('Peinado de novia sin servicio', '6 de 6');
       expect(screen.queryByRole('button', { name: /^Ver el servicio/ })).not.toBeOnTheScreen();
       await fireEvent.press(screen.getByRole('button', { name: 'Cerrar galería' }));
-      await waitFor(() => expect(screen.queryByText('Maquillaje · 6 de 6')).not.toBeOnTheScreen());
+      await waitFor(() => expect(screen.queryByText('6 de 6')).not.toBeOnTheScreen());
       expect(app.getPathname()).toBe('/inicio');
       esperarConsolaLimpia();
     },
@@ -142,10 +139,10 @@ describe('Del visor de la galería de Inicio al detalle del servicio (GP-06.1)',
   );
 
   it(
-    'mientras llegan los servicios la galería muestra su esqueleto',
+    'mientras llega la galería muestra su esqueleto',
     async () => {
-      const retenida = respuestaRetenida(cuerpoLista(CATALOGO_PANTALLA));
-      await abrirEn('/inicio', { 'GET /api/servicios': retenida.manejador });
+      const retenida = respuestaRetenida(cuerpoLista(GALERIA));
+      await abrirEn('/inicio', { 'GET /api/galeria': retenida.manejador });
 
       const esqueleto = await screen.findByLabelText('Cargando fotos del salón');
       await medir(esqueleto);
@@ -155,23 +152,24 @@ describe('Del visor de la galería de Inicio al detalle del servicio (GP-06.1)',
       await waitFor(() =>
         expect(screen.queryByLabelText('Cargando fotos del salón')).not.toBeOnTheScreen(),
       );
-      await medirGaleria('Corte de dama');
+      await medirGaleria(FOTO_CORTE);
       esperarConsolaLimpia();
     },
     LIMITE_MS,
   );
 
   it(
-    'sin fotos de servicios la galería dice que aún no hay fotos publicadas',
+    'sin fotos publicadas la galería muestra su estado vacío, como GaleriaVacia de la web',
     async () => {
-      const sinFotos = CATALOGO_CRUDO.map((servicio) => ({ ...servicio, imagen: [] }));
-      await abrirEn('/inicio', { 'GET /api/servicios': () => respuesta(cuerpoLista(sinFotos)) });
+      await abrirEn('/inicio', { 'GET /api/galeria': () => respuesta(cuerpoLista([])) });
 
-      expect(await screen.findByText('Aún no hay fotos publicadas')).toBeOnTheScreen();
+      expect(await screen.findByText('Pronto verás aquí nuestro trabajo')).toBeOnTheScreen();
       expect(
-        screen.getByText('Cuando el salón publique fotos de sus servicios, las verás aquí.'),
+        screen.getByText(
+          'Estamos reuniendo las fotos de nuestros cortes, color y tratamientos. Mientras tanto, puedes conocer los servicios y reservar tu cita.',
+        ),
       ).toBeOnTheScreen();
-      expect(screen.queryByRole('imagebutton', { name: /^Ver foto de/ })).not.toBeOnTheScreen();
+      expect(screen.queryByRole('imagebutton')).not.toBeOnTheScreen();
       esperarConsolaLimpia();
     },
     LIMITE_MS,
