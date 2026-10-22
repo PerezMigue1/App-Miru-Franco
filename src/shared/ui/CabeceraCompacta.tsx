@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } fro
 import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Contador } from './Contador';
 import { Logotipo } from './Logotipo';
 import { usePresion } from './movimiento';
 import {
@@ -70,13 +71,27 @@ interface BotonCromoProps {
   etiqueta: string;
   onPress: () => void;
   accessibilityHint?: string;
+  /**
+   * Número sobre el ícono (los avisos sin leer de la campana); con 0 o sin él no se pinta. Es solo
+   * visual: quien lo usa pone el número en `etiqueta`.
+   */
+  contador?: number;
+  /** Cifra más alta del contador; arriba de ella se lee, por ejemplo, "9+". */
+  maximoContador?: number;
 }
 
 /**
  * Botón de ícono de 48 sobre el cromo carbón: ícono marfil y, al presionar, el círculo se tiñe
  * (presionadoCromo) y se hunde en 140 ms (solo baja la opacidad con movimiento reducido).
  */
-export function BotonCromo({ icono: Icono, etiqueta, onPress, accessibilityHint }: BotonCromoProps) {
+export function BotonCromo({
+  icono: Icono,
+  etiqueta,
+  onPress,
+  accessibilityHint,
+  contador = 0,
+  maximoContador,
+}: BotonCromoProps) {
   const { colores } = useTheme();
   const { estilo, hundir, soltar } = usePresion();
   return (
@@ -97,6 +112,9 @@ export function BotonCromo({ icono: Icono, etiqueta, onPress, accessibilityHint 
           ]}
         >
           <Icono color={colores.textoSobrePanel} size={icono.tamano} strokeWidth={icono.trazo} />
+          {contador > 0 ? (
+            <Contador valor={contador} maximo={maximoContador} estilo={styles.contadorCromo} />
+          ) : null}
         </Animated.View>
       )}
     </Pressable>
@@ -160,6 +178,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radio.pastilla,
+  },
+  // Arriba a la derecha del área de 48: queda sobre el hombro del ícono de 24, sin taparlo.
+  contadorCromo: {
+    position: 'absolute',
+    top: cabeceraCompacta.contadorCampana,
+    right: cabeceraCompacta.contadorCampana,
   },
   bloqueTitulo: {
     paddingHorizontal: pantalla.margen,

@@ -175,6 +175,8 @@ export const duracion = {
    * (sin_pago): tres consultas. Un pago aprobado aparece casi siempre en la primera.
    */
   limiteConsultaSinPago: 9000,
+  /** Aviso interno en pantalla (GP-07.2): tiempo que se queda a la vista si nadie lo toca. */
+  avisoEnPantalla: 5000,
 } as const;
 
 /** Intervalo de lectura del giroscopio. */
@@ -528,6 +530,10 @@ export const cabeceraCompacta = {
    * superior (16 a 24) y así el contenido no cambia de lugar respecto a antes.
    */
   tituloAbajo: espacio.l,
+  /** Cifra más alta del contador de la campana; arriba de ella se lee "9+". */
+  maximoAvisosVisibles: 9,
+  /** Contador sobre la campana: a 4 del borde de arriba y de la derecha del área de 48. */
+  contadorCampana: espacio.xs,
 } as const;
 
 /**
@@ -645,4 +651,14 @@ export const carruselInicio = {
   trackingVerTodos: 0.7,
   /** Flecha de "Ver todos" (ArrowRight 16 de la web). */
   iconoVerTodos: 16,
+} as const;
+
+/** Avisos internos (GP-07.2): bandeja de Notificaciones y aviso en pantalla. Solo medidas. */
+export const avisosInternos = {
+  /** Diámetro del punto que marca un aviso no leído. */
+  punto: 8,
+  /** Del borde de abajo de la barra de estado al aviso en pantalla. */
+  separacionArriba: espacio.s,
+  /** Filas que dibuja el skeleton mientras carga la bandeja. */
+  esqueletos: 3,
 } as const;

@@ -31,6 +31,24 @@ export interface SesionCabecera {
   useFoto: () => string | null;
   /** Envuelve una acción: con sesión la ejecuta; sin sesión pide iniciar sesión antes. */
   useRequiereSesion: () => (accion?: () => void) => void;
+  /**
+   * Avisos internos sin leer, para el contador de la campana (GP-07.2). Opcional: sin él la campana
+   * no muestra número. La raíz lo inyecta desde features/notificaciones.
+   */
+  useNoLeidos?: () => number;
+}
+
+/** Sin useNoLeidos inyectado no hay avisos que contar. */
+function sinAvisos(): number {
+  return 0;
+}
+
+/** Etiqueta de la campana: el número va aquí porque el contador no se lee por separado. */
+export function etiquetaCampana(noLeidos: number): string {
+  if (noLeidos <= 0) {
+    return 'Abrir notificaciones';
+  }
+  return `Abrir notificaciones, ${noLeidos === 1 ? '1 aviso sin leer' : `${noLeidos} avisos sin leer`}`;
 }
 
 const ContextoSesionCabecera = createContext<SesionCabecera | null>(null);
@@ -59,20 +77,27 @@ function useSesionCabecera(): SesionCabecera {
 
 /**
  * Acciones de la cabecera de las pestañas, iguales en todas: la campana (sin sesión pide iniciar
- * sesión antes de abrir los avisos) y la foto de la clienta, que abre Perfil. Sin sesión, en lugar
- * de la foto va "Iniciar sesión" con el estilo del botón de la cabecera web. La sesión llega
- * inyectada por SesionCabeceraProvider, porque src/shared no depende de src/features.
+ * sesión antes de abrir los avisos; con sesión lleva el número de avisos sin leer, "9+" arriba de
+ * 9) y la foto de la clienta, que abre Perfil. Sin sesión, en lugar de la foto va "Iniciar sesión"
+ * con el estilo del botón de la cabecera web. La sesión y los avisos sin leer llegan inyectados por
+ * SesionCabeceraProvider, porque src/shared no depende de src/features.
  */
 export function AccionesCabecera() {
   const { navigate } = useRouter();
-  const { useSesion, useRequiereSesion } = useSesionCabecera();
+  const { useSesion, useRequiereSesion, useNoLeidos = sinAvisos } = useSesionCabecera();
   const { conSesion } = useSesion();
   const requiereSesion = useRequiereSesion();
+  // El proveedor es una constante de módulo: useNoLeidos es siempre el mismo hook.
+  const noLeidos = useNoLeidos();
+  // Sin sesión la campana sigue como antes: sin número (la lista ya se vació al cerrar sesión).
+  const contador = conSesion ? noLeidos : 0;
   return (
     <>
       <BotonCromo
         icono={Bell}
-        etiqueta="Abrir notificaciones"
+        etiqueta={etiquetaCampana(contador)}
+        contador={contador}
+        maximoContador={cabeceraCompacta.maximoAvisosVisibles}
         onPress={() => requiereSesion(() => navigate('/notificaciones'))}
       />
       {conSesion ? (
