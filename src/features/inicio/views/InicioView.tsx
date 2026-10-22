@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   AccessibilityInfo,
   Pressable,
+  RefreshControl,
   StyleSheet,
   Text,
   View,
@@ -38,19 +39,27 @@ import { useTheme } from '@/shared/ui/useTheme';
 import { GaleriaEsqueleto, GaleriaTrabajo } from '../components/GaleriaTrabajo';
 import { HeroFluidos } from '../components/HeroFluidos';
 import { CarruselProductos, CarruselServicios } from '../components/SeccionCarrusel';
-import type { FotoGaleria } from '../models/FotoModel';
-import { useInicioViewModel, type EstadoInicio } from '../viewmodels/useInicioViewModel';
+import {
+  EncabezadoSeccion,
+  SeccionCierre,
+  SeccionEquipo,
+  SeccionPreguntas,
+  SeccionPromociones,
+  SeccionSobreNosotros,
+  type ErrorSeccion,
+} from '../components/SeccionesContenido';
+import type { GaleriaInicio } from '../viewmodels/useContenidoInicio';
+import { usePantallaInicio } from '../viewmodels/usePantallaInicio';
 
+/**
+ * Inicio: hero de fluidos, carruseles de productos y servicios, la galería "Nuestro trabajo" y las
+ * secciones de contenido del salón (promociones, equipo, preguntas frecuentes, sobre nosotros y
+ * cierre), con deslizar para actualizar. Solo pinta lo que le da usePantallaInicio.
+ */
 export default function InicioView() {
-  const {
-    estado,
-    fluidos,
-    fotos,
-    estadoProductos,
-    productosDestacados,
-    serviciosDestacados,
-    recargar,
-  } = useInicioViewModel();
+  const vm = usePantallaInicio();
+  const { catalogos, contenido } = vm;
+  const { estado, fluidos, estadoProductos, productosDestacados, serviciosDestacados, recargar } = catalogos;
   const { colores } = useTheme();
   const { top } = useSafeAreaInsets();
   const reducido = useMovimientoReducido();
@@ -93,6 +102,17 @@ export default function InicioView() {
         ref={refScroll}
         onLayout={medir}
         contentContainerStyle={styles.contenido}
+        refreshControl={
+          <RefreshControl
+            refreshing={vm.refrescando}
+            onRefresh={vm.refrescar}
+            colors={[colores.foco]}
+            tintColor={colores.foco}
+            progressBackgroundColor={colores.superficie}
+            // El indicador baja desde la cabecera fija, no desde detrás de ella.
+            progressViewOffset={altoCabecera}
+          />
+        }
       >
         {altoVisible > 0 ? (
           <HeroFluidos
@@ -104,6 +124,9 @@ export default function InicioView() {
             altoCabecera={altoCabecera}
             enfocada={enfocada}
             reducido={reducido}
+            nombreSalon={contenido.nombreSalon}
+            destacado={contenido.destacado}
+            tituloAccion={vm.tituloBotonGoji}
             onVerGoji={verGoji}
           />
         ) : null}
@@ -123,23 +146,39 @@ export default function InicioView() {
 
         <CarruselProductos
           cargando={estadoProductos === 'cargando'}
+          descripcion={contenido.productosDescripcion}
           productos={estadoProductos === 'listo' ? productosDestacados : []}
           onAbrir={abrirProducto}
           onVerTodos={verTienda}
         />
         <CarruselServicios
           cargando={estado === 'cargando'}
+          descripcion={contenido.serviciosDescripcion}
           servicios={estado === 'listo' ? serviciosDestacados : []}
           onAbrir={abrirServicio}
           onVerTodos={verServicios}
         />
+        {/* Sin servicios no hay carrusel: si la lectura falló, se dice y se ofrece reintentar. */}
+        {estado === 'error' ? (
+          <View style={styles.errorCatalogos}>
+            <EmptyState
+              titulo="No pudimos cargar el inicio"
+              mensaje="Revisa tu conexión a internet e inténtalo de nuevo."
+              accion={{ titulo: 'Reintentar', onPress: recargar }}
+            />
+          </View>
+        ) : null}
 
         <View style={styles.galeria}>
-          <Text accessibilityRole="header" style={[styles.titulo, { color: colores.textoSuave }]}>
-            Nuestro trabajo
-          </Text>
-          <ContenidoGaleria estado={estado} fotos={fotos} onReintentar={recargar} />
+          <EncabezadoSeccion titulo={contenido.galeria.titulo} descripcion={contenido.galeria.descripcion} />
+          <ContenidoGaleria galeria={contenido.galeria} error={contenido.error} onVerServicios={verServicios} />
         </View>
+
+        <SeccionPromociones seccion={contenido.promociones} error={contenido.error} onAbrir={vm.abrirPromocion} />
+        <SeccionEquipo seccion={contenido.equipo} error={contenido.error} />
+        <SeccionPreguntas seccion={contenido.preguntas} error={contenido.error} />
+        <SeccionSobreNosotros {...contenido.sobreNosotros} onAbrirSalon={vm.abrirSalon} />
+        <SeccionCierre {...contenido.cierre} onReservar={vm.reservar} />
       </Animated.ScrollView>
 
       {/* Cabecera fija con fondo propio: el contenido pasa por debajo sin chocar con la barra de estado.
@@ -230,28 +269,38 @@ function BotonIcono({
   );
 }
 
+/** Galería según su estado: esqueleto, error con Reintentar, vacía (como GaleriaVacia de la web) o el mosaico. */
 function ContenidoGaleria({
-  estado,
-  fotos,
-  onReintentar,
+  galeria,
+  error,
+  onVerServicios,
 }: {
-  estado: EstadoInicio;
-  fotos: FotoGaleria[];
-  onReintentar: () => void;
+  galeria: GaleriaInicio;
+  error: ErrorSeccion;
+  onVerServicios: () => void;
 }) {
-  if (estado === 'cargando') {
+  if (galeria.estado === 'cargando') {
     return <GaleriaEsqueleto />;
   }
-  if (estado === 'error') {
+  if (galeria.estado === 'error') {
     return (
       <EmptyState
-        titulo="No pudimos cargar el inicio"
-        mensaje="Revisa tu conexión a internet e inténtalo de nuevo."
-        accion={{ titulo: 'Reintentar', onPress: onReintentar }}
+        titulo={error.titulo}
+        mensaje={error.texto}
+        accion={{ titulo: 'Reintentar', onPress: galeria.reintentar }}
       />
     );
   }
-  return <GaleriaTrabajo fotos={fotos} />;
+  if (galeria.estado === 'vacio') {
+    return (
+      <EmptyState
+        titulo={galeria.vaciaTitulo}
+        mensaje={galeria.vaciaTexto}
+        accion={{ titulo: 'Ver servicios', onPress: onVerServicios }}
+      />
+    );
+  }
+  return <GaleriaTrabajo fotos={galeria.datos} verServicio={galeria.verServicio} />;
 }
 
 const styles = StyleSheet.create({
@@ -283,6 +332,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: pantalla.margen,
     paddingTop: espacio.x5,
     gap: espacio.xl,
+  },
+  errorCatalogos: {
+    paddingHorizontal: pantalla.margen,
   },
   invitacion: {
     paddingHorizontal: pantalla.margen,
@@ -322,11 +374,5 @@ const styles = StyleSheet.create({
     fontFamily: fuente.textoMedio,
     fontSize: tipo.pequeno.tamano,
     lineHeight: tipo.pequeno.linea,
-  },
-  titulo: {
-    fontFamily: fuente.titulo,
-    fontSize: tipo.titulo.tamano,
-    lineHeight: tipo.titulo.linea,
-    letterSpacing: tracking.tituloPagina,
   },
 });

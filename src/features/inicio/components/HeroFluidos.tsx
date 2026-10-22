@@ -47,6 +47,7 @@ import {
 } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
+import type { LineaDestacado } from '../models/contenidoInicioModel';
 import { CAPAS, ORDEN_CAPAS, type ClaveFluido, type FluidoHero } from '../models/FluidoModel';
 import { FondoHero } from './FondoHero';
 import { MOTIVOS, Sticker, type Motivo } from './StickersSalon';
@@ -105,6 +106,12 @@ interface HeroFluidosProps {
   /** La pestaña Inicio está enfocada: solo entonces se escucha el giroscopio. */
   enfocada: boolean;
   reducido: boolean;
+  /** Nombre del salón (configuración pública): lo que anuncia el lector de pantalla en la marca. */
+  nombreSalon: string;
+  /** Frase grande (contenido.inicio.heroDestacado) ya partida en líneas serif y manuscrita. */
+  destacado: LineaDestacado[];
+  /** "Ver {nombre del Fluido Di Goji}" con el nombre del catálogo. */
+  tituloAccion: string;
   onVerGoji: () => void;
 }
 
@@ -134,6 +141,9 @@ export function HeroFluidos({
   altoCabecera,
   enfocada,
   reducido,
+  nombreSalon,
+  destacado,
+  tituloAccion,
   onVerGoji,
 }: HeroFluidosProps) {
   const { colores } = useTheme();
@@ -239,7 +249,7 @@ export function HeroFluidos({
         <Animated.View
           accessible
           accessibilityRole="header"
-          accessibilityLabel="Mirú Franco Beauty Salón"
+          accessibilityLabel={nombreSalon}
           style={[styles.marca, estiloSalida]}
         >
           <Text style={[styles.miru, { color: colores.oroGrande }]}>MIRÚ</Text>
@@ -273,7 +283,7 @@ export function HeroFluidos({
 
         <View style={styles.accion}>
           <Button
-            titulo="Ver Fluido Di Goji"
+            titulo={tituloAccion}
             onPress={onVerGoji}
             icono={
               <ArrowRight
@@ -292,12 +302,25 @@ export function HeroFluidos({
             accessibilityElementsHidden
             style={[styles.destino, { top: caja.y, height: caja.height }, estiloDestino]}
           >
-            {/* Texto PROVISIONAL (DESIGN.md). */}
-            {/* Como .mf-fluidos__gigante: "que se" en Great Vibes y --oro-grande, en su propia línea. */}
+            {/* Como .mf-fluidos__gigante: la frase sale de contenido.inicio.heroDestacado; las palabras
+                del medio en Great Vibes y --oro-grande, en su propia línea. Cada línea se encoge si
+                no cabe, para no romper la composición. */}
             <View style={styles.gigante}>
-              <Text style={[styles.giganteSerif, { color: colores.gigante }]}>Brillo</Text>
-              <Text style={[styles.giganteManuscrita, { color: colores.oroGrande }]}>que se</Text>
-              <Text style={[styles.giganteSerif, { color: colores.gigante }]}>nota</Text>
+              {destacado.map((linea, indice) => (
+                <Text
+                  // Las líneas son fijas mientras no cambie la frase: su posición es su identidad.
+                  key={`${indice}-${linea.texto}`}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  style={
+                    linea.estilo === 'manuscrita'
+                      ? [styles.giganteManuscrita, { color: colores.oroGrande }]
+                      : [styles.giganteSerif, { color: colores.gigante }]
+                  }
+                >
+                  {linea.texto}
+                </Text>
+              ))}
             </View>
             <View
               onLayout={medirAncla}

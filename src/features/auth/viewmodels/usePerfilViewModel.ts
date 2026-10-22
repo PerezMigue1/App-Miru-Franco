@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking } from 'react-native';
 
 import { generacionActual } from '@/shared/api/tokenStorage';
+import { useTextos } from '@/shared/api/useTextos';
 import { useApariencia } from '@/shared/ui/apariencia';
 import type { PreferenciaApariencia } from '@/shared/ui/preferencias';
 import { useCandado } from '@/shared/ui/useCandado';
@@ -74,10 +75,13 @@ export interface PerfilViewModel {
   abrirApariencia: () => void;
   cerrarApariencia: () => void;
   elegirApariencia: (preferencia: PreferenciaApariencia) => void;
+  /** Fila "El salón" (textos del sitio): visible con y sin sesión. */
+  filaSalon: { titulo: string; descripcion: string };
   // Navegación
   editarPerfil: () => void;
   abrirMisCitas: () => void;
   abrirMisPedidos: () => void;
+  abrirSalon: () => void;
   cambiarContrasena: () => void;
   abrirAviso: () => void;
   cerrarSesion: () => void;
@@ -114,6 +118,7 @@ export function usePerfilViewModel(): PerfilViewModel {
   const { estado: estadoSesion, salir } = useAuth();
   const { preferencia, cambiar } = useApariencia();
   const { guardado } = useLocalSearchParams<{ guardado?: string }>();
+  const texto = useTextos();
   const conSesion = estadoSesion === 'autenticado';
 
   const [estado, setEstado] = useState<EstadoPerfil>(conSesion ? 'cargando' : 'sinSesion');
@@ -369,9 +374,11 @@ export function usePerfilViewModel(): PerfilViewModel {
       cambiar(nueva);
       setHojaApariencia(false);
     },
+    filaSalon: { titulo: texto('salon.titulo'), descripcion: texto('salon.perfil.descripcion') },
     editarPerfil: () => push('/editar-perfil'),
     abrirMisCitas: () => push('/mis-citas' as Href),
     abrirMisPedidos: () => push('/mis-pedidos' as Href),
+    abrirSalon: () => push('/salon' as Href),
     cambiarContrasena: () => push('/cambiar-contrasena'),
     abrirAviso,
     // Mientras una foto se sube o se quita, no se cierra la sesión; si no, se confirma antes.

@@ -131,6 +131,10 @@ describe('Arranque de la app con las rutas reales (GP-02)', () => {
       if (url === `${API}/api/productos`) {
         return Promise.resolve(respuesta(PRODUCTOS));
       }
+      // Contenido del salón (GP-07.3): galería, promociones, equipo y preguntas, vacíos.
+      if (url === `${API}/api/galeria` || url.startsWith(`${API}/api/contenido/`)) {
+        return Promise.resolve(respuesta({ success: true, data: [] }));
+      }
       return Promise.resolve(respuesta({ message: 'No encontrado' }, 404));
     });
     globalThis.fetch = fetchSimulado as unknown as typeof fetch;
@@ -149,10 +153,10 @@ describe('Arranque de la app con las rutas reales (GP-02)', () => {
     expect(screen.getByRole('button', { name: 'Iniciar sesión' })).toBeOnTheScreen();
     expect(screen.getByText('Nuestro trabajo')).toBeOnTheScreen();
 
-    // Catálogos simulados: un servicio y un producto, y la galería vacía (el servicio no trae foto).
+    // Catálogos simulados: un servicio y un producto, y la galería vacía (GET /api/galeria sin fotos).
     expect(await screen.findByText('Corte y peinado')).toBeOnTheScreen();
     expect(await screen.findByText('Shampoo de prueba')).toBeOnTheScreen();
-    expect(await screen.findByText('Aún no hay fotos publicadas')).toBeOnTheScreen();
+    expect(await screen.findByText('Pronto verás aquí nuestro trabajo')).toBeOnTheScreen();
     expect(screen.queryByText('No pudimos cargar el inicio')).not.toBeOnTheScreen();
 
     // La intro de la grieta cubre la app al abrir y la hoja de bienvenida espera a que termine.
@@ -173,15 +177,24 @@ describe('Arranque de la app con las rutas reales (GP-02)', () => {
     expect(arranque.getPathname()).toBe('/inicio');
     expect(arranque.getSegments()).toEqual(['(cliente)', 'inicio']);
 
-    // Solo se pidieron los dos catálogos públicos y la configuración pública del salón (GP-07.1,
-    // aquí responde 404 y la app sigue con el respaldo), sin token y siempre a la API de prueba.
+    // Solo se pidieron los dos catálogos públicos, la configuración pública del salón (GP-07.1,
+    // aquí responde 404 y la app sigue con el respaldo) y el contenido público del salón de Inicio
+    // (GP-07.3), sin token y siempre a la API de prueba.
     const urls = fetchSimulado.mock.calls.map(([entrada]) => urlDe(entrada));
     expect(urls.length).toBeGreaterThan(0);
     for (const url of urls) {
       expect(url.startsWith(`${API}/`)).toBe(true);
     }
     expect(new Set(urls)).toEqual(
-      new Set([`${API}/api/servicios`, `${API}/api/productos`, `${API}/api/configuracion-publica`]),
+      new Set([
+        `${API}/api/servicios`,
+        `${API}/api/productos`,
+        `${API}/api/configuracion-publica`,
+        `${API}/api/galeria`,
+        `${API}/api/contenido/promociones`,
+        `${API}/api/contenido/equipo`,
+        `${API}/api/contenido/preguntas-frecuentes`,
+      ]),
     );
     for (const [, init] of fetchSimulado.mock.calls as unknown as [unknown, RequestInit][]) {
       expect(init.method).toBe('GET');

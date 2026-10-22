@@ -2,14 +2,13 @@
 
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 
-import type { Servicio } from '@/features/citas/models/servicioModel';
 import {
   CAPAS,
   ORDEN_CAPAS,
   precioParaMostrar,
   seleccionarFluidos,
 } from '@/features/inicio/models/FluidoModel';
-import { fotosDeServicios } from '@/features/inicio/models/FotoModel';
+import { fotosDeGaleria } from '@/features/inicio/models/FotoModel';
 import {
   esObjeto,
   idDe,
@@ -25,7 +24,8 @@ import { ApiError, ErrorDeRed } from '@/shared/api/apiClient';
 import { colorFluido } from '@/shared/ui/tokens';
 
 /**
- * GP-04, Inicio: modelos (FluidoModel, FotoModel, inicioService) y useInicioViewModel. Solo fetch es
+ * GP-04, Inicio: modelos (FluidoModel, FotoModel, inicioService) y useInicioViewModel (los catálogos;
+ * desde GP-07.3 la galería sale de GET /api/galeria y no de los servicios). Solo fetch es
  * simulado; apiClient, servicioModel y productoModel son los reales. El viewmodel no usa expo-router
  * ni la sesión, así que renderHook no necesita wrapper.
  */
@@ -88,22 +88,6 @@ function diferida(): { promesa: Promise<Response>; resolver: (r: Response) => vo
     resolver = res;
   });
   return { promesa, resolver };
-}
-
-/** Servicio normalizado mínimo para FotoModel. */
-function servicio(datos: Partial<Servicio> & Pick<Servicio, 'id' | 'nombre'>): Servicio {
-  return {
-    descripcion: '',
-    descripcionLarga: '',
-    precio: null,
-    anticipo: null,
-    duracion: null,
-    requiereEvaluacion: false,
-    incluye: [],
-    recomendaciones: [],
-    especialistas: [],
-    ...datos,
-  };
 }
 
 /** Servicio crudo como lo manda GET /api/servicios. */
@@ -194,28 +178,23 @@ describe('FluidoModel: seleccionarFluidos', () => {
 
 // ── FotoModel ───────────────────────────────────────────────────────────────────────────────
 
-describe('FotoModel: fotosDeServicios', () => {
-  it('toma la imagen de cada servicio activo, sin repetir URLs y en el orden del catálogo', () => {
-    const fotos = fotosDeServicios([
-      servicio({ id: 1, nombre: 'Corte', imagen: 'https://img.test/a.jpg', categoria: 'Cabello', activo: true }),
-      servicio({ id: 2, nombre: 'Tinte', imagen: 'https://img.test/b.jpg' }),
-      // Misma foto que el primero: no se repite.
-      servicio({ id: 3, nombre: 'Peinado', imagen: 'https://img.test/a.jpg' }),
-      // Inactivo: no se muestra aunque tenga foto.
-      servicio({ id: 4, nombre: 'Uñas', imagen: 'https://img.test/c.jpg', activo: false }),
-      // Sin foto.
-      servicio({ id: 5, nombre: 'Maquillaje' }),
+describe('FotoModel: fotosDeGaleria', () => {
+  it('conserva el orden de la galería y arma la ruta del servicio de cada foto (GP-07.3)', () => {
+    const fotos = fotosDeGaleria([
+      { id: 1, url: 'https://img.test/a.jpg', alt: 'Corte terminado', servicio: { id: 7, nombre: 'Corte', categoria: 'Cabello' } },
+      { id: 2, url: 'https://img.test/b.jpg', alt: 'Peinado de prueba', servicio: null },
+      { id: 3, url: 'https://img.test/c.jpg', alt: 'Foto de Tinte', servicio: { id: 8, nombre: 'Tinte', categoria: '' } },
     ]);
 
     expect(fotos).toEqual([
-      { url: 'https://img.test/a.jpg', servicioId: 1, servicio: 'Corte', categoria: 'Cabello' },
-      { url: 'https://img.test/b.jpg', servicioId: 2, servicio: 'Tinte', categoria: undefined },
+      { id: 1, url: 'https://img.test/a.jpg', alt: 'Corte terminado', servicio: 'Corte', categoria: 'Cabello', rutaServicio: '/servicio/7' },
+      { id: 2, url: 'https://img.test/b.jpg', alt: 'Peinado de prueba', servicio: null, categoria: null, rutaServicio: null },
+      { id: 3, url: 'https://img.test/c.jpg', alt: 'Foto de Tinte', servicio: 'Tinte', categoria: null, rutaServicio: '/servicio/8' },
     ]);
   });
 
   it('sin fotos devuelve una lista vacía (nunca imágenes de relleno)', () => {
-    expect(fotosDeServicios([])).toEqual([]);
-    expect(fotosDeServicios([servicio({ id: 1, nombre: 'Corte' })])).toEqual([]);
+    expect(fotosDeGaleria([])).toEqual([]);
   });
 });
 
@@ -381,7 +360,6 @@ describe('useInicioViewModel', () => {
 
     expect(result.current.estado).toBe('cargando');
     expect(result.current.estadoProductos).toBe('cargando');
-    expect(result.current.fotos).toEqual([]);
     expect(result.current.serviciosDestacados).toEqual([]);
     expect(result.current.productosDestacados).toEqual([]);
     expect(result.current.fluidos).toEqual(seleccionarFluidos([]));
@@ -401,12 +379,12 @@ describe('useInicioViewModel', () => {
     await unmount();
   });
 
-  it('con datos: fotos, hasta 6 servicios activos y hasta 6 productos con existencias, y el hero con el catálogo', async () => {
+  it('con datos: hasta 6 servicios activos y hasta 6 productos con existencias, y el hero con el catálogo', async () => {
     const serviciosCrudos = [
       ...Array.from({ length: 7 }, (_, i) =>
         servicioCrudo(i + 1, i < 2 ? { imagen: `https://img.test/servicio-${i + 1}.jpg` } : {}),
       ),
-      // Inactivo con foto: ni foto ni carrusel.
+      // Inactivo: nunca en el carrusel.
       servicioCrudo(50, { activo: false, imagen: 'https://img.test/inactivo.jpg' }),
     ];
     const productosCrudos = [
@@ -431,14 +409,6 @@ describe('useInicioViewModel', () => {
     await waitFor(() => expect(result.current.estado).toBe('listo'));
     await waitFor(() => expect(result.current.estadoProductos).toBe('listo'));
     const vm = result.current;
-
-    expect(vm.fotos.map((foto) => foto.servicioId)).toEqual([1, 2]);
-    expect(vm.fotos[0]).toEqual({
-      url: 'https://img.test/servicio-1.jpg',
-      servicioId: 1,
-      servicio: 'Servicio 1',
-      categoria: undefined,
-    });
 
     // Al azar, pero siempre 6, sin repetir y solo activos.
     const idsServicios = vm.serviciosDestacados.map((s) => s.id);
@@ -472,7 +442,6 @@ describe('useInicioViewModel', () => {
     await waitFor(() => expect(result.current.estadoProductos).toBe('listo'));
     expect(result.current.serviciosDestacados.map((s) => s.id).sort()).toEqual([1, 2]);
     expect(result.current.productosDestacados.map((p) => p.id)).toEqual([7]);
-    expect(result.current.fotos).toEqual([]);
     await unmount();
   });
 
@@ -488,7 +457,6 @@ describe('useInicioViewModel', () => {
     await waitFor(() => expect(result.current.estadoProductos).toBe('listo'));
     expect(result.current.productosDestacados.map((p) => p.id)).toEqual([7]);
     expect(result.current.serviciosDestacados).toEqual([]);
-    expect(result.current.fotos).toEqual([]);
     await unmount();
   });
 

@@ -38,6 +38,8 @@ interface VisorFotoProps {
   fotos: FotoGaleria[];
   /** Foto abierta; null mantiene el visor cerrado. */
   indice: number | null;
+  /** Texto del botón que abre el servicio de la foto (textos del sitio). */
+  verServicio: string;
   onCerrar: () => void;
 }
 
@@ -45,7 +47,7 @@ interface VisorFotoProps {
  * Visor a pantalla completa: deslizamiento horizontal por páginas, contador y cierre (también con
  * el botón Atrás de Android). El deslizamiento lo resuelve la lista nativa, así la foto sigue al dedo.
  */
-export function VisorFoto({ fotos, indice, onCerrar }: VisorFotoProps) {
+export function VisorFoto({ fotos, indice, verServicio: textoVerServicio, onCerrar }: VisorFotoProps) {
   const { colores } = useTheme();
   const { width, height } = useWindowDimensions();
   const { top, bottom } = useSafeAreaInsets();
@@ -66,13 +68,14 @@ export function VisorFoto({ fotos, indice, onCerrar }: VisorFotoProps) {
   }
 
   const foto = fotos[actual];
-  const tieneServicio = foto ? foto.servicioId !== '' && foto.servicioId != null : false;
+  // El botón solo aparece si la foto está ligada a un servicio.
+  const rutaServicio = foto?.rutaServicio ?? null;
   const verServicio = () => {
-    if (!foto || !tieneServicio) {
+    if (!rutaServicio) {
       return;
     }
     onCerrar();
-    push(`/servicio/${foto.servicioId}` as Href);
+    push(rutaServicio as Href);
   };
   const alSoltar = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const pagina = Math.round(e.nativeEvent.contentOffset.x / width);
@@ -96,7 +99,7 @@ export function VisorFoto({ fotos, indice, onCerrar }: VisorFotoProps) {
             pagingEnabled
             initialScrollIndex={indice}
             getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
-            keyExtractor={(item) => item.url}
+            keyExtractor={(item) => String(item.id)}
             showsHorizontalScrollIndicator={false}
             onMomentumScrollEnd={alSoltar}
             renderItem={({ item }) => (
@@ -106,7 +109,8 @@ export function VisorFoto({ fotos, indice, onCerrar }: VisorFotoProps) {
                   recyclingKey={item.url}
                   style={StyleSheet.absoluteFill}
                   contentFit="contain"
-                  accessibilityLabel={`${item.servicio} en Mirú Franco`}
+                  accessible
+                  accessibilityLabel={item.alt}
                 />
               </View>
             )}
@@ -139,12 +143,12 @@ export function VisorFoto({ fotos, indice, onCerrar }: VisorFotoProps) {
           >
             <View style={styles.filaServicio}>
               <Text numberOfLines={1} style={[styles.servicio, { color: colores.textoSobrePanel }]}>
-                {foto.servicio}
+                {foto.servicio ?? foto.alt}
               </Text>
-              {tieneServicio ? (
+              {rutaServicio ? (
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={`Ver el servicio ${foto.servicio}`}
+                  accessibilityLabel={`Ver el servicio ${foto.servicio ?? ''}`.trim()}
                   onPress={verServicio}
                   onPressIn={presionServicio.hundir}
                   onPressOut={presionServicio.soltar}
@@ -161,7 +165,7 @@ export function VisorFoto({ fotos, indice, onCerrar }: VisorFotoProps) {
                         presionServicio.estilo,
                       ]}
                     >
-                      <Text style={[styles.textoVerServicio, { color: oro }]}>Ver servicio</Text>
+                      <Text style={[styles.textoVerServicio, { color: oro }]}>{textoVerServicio}</Text>
                       <ChevronRight
                         color={oro}
                         size={icono.tamanoPequeno}

@@ -226,17 +226,18 @@ export async function medir(vista: TestInstance): Promise<void> {
   await fireEvent.layout(vista, { x: 0, y: 0, width: ANCHO_GALERIA, height: 0 });
 }
 
-/** Mide el mosaico de la galería y espera la foto del servicio indicado. */
-export async function medirGaleria(primerServicio: string): Promise<void> {
+/**
+ * Mide el mosaico de la galería y espera la foto indicada. Desde GP-07.3 cada miniatura se anuncia
+ * con el texto alternativo de su foto (GET /api/galeria).
+ */
+export async function medirGaleria(primeraFoto: string): Promise<void> {
   await medir(capaGaleria());
-  expect(
-    await screen.findByRole('imagebutton', { name: `Ver foto de ${primerServicio} en grande` }),
-  ).toBeOnTheScreen();
+  expect(await screen.findByRole('imagebutton', { name: primeraFoto })).toBeOnTheScreen();
 }
 
-/** Toca la foto de ese servicio en la galería y espera el visor con su contador. */
-export async function abrirFoto(servicio: string, contador: string): Promise<void> {
-  const foto = screen.getByRole('imagebutton', { name: `Ver foto de ${servicio} en grande` });
+/** Toca la foto con ese texto alternativo y espera el visor con su contador. */
+export async function abrirFoto(alt: string, contador: string): Promise<void> {
+  const foto = screen.getByRole('imagebutton', { name: alt });
   await fireEvent.press(foto);
   expect(await screen.findByText(contador)).toBeOnTheScreen();
   expect(screen.getByRole('button', { name: 'Cerrar galería' })).toBeOnTheScreen();

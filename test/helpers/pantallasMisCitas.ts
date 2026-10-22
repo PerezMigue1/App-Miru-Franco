@@ -2,6 +2,7 @@
 
 import * as SecureStore from 'expo-secure-store';
 import { act, fireEvent, screen, waitFor } from 'expo-router/testing-library';
+import type { TestInstance } from 'test-renderer';
 
 import {
   AHORA,
@@ -250,14 +251,28 @@ export async function abrirTarjeta(
 
 /**
  * La clienta desliza hacia abajo para actualizar la lista: el ScrollView simulado no dibuja su
- * RefreshControl, así que se llama al onRefresh que recibió, como lo haría el gesto.
+ * RefreshControl, así que se llama al onRefresh que recibió, como lo haría el gesto. Solo cuenta la
+ * lista de la pantalla visible: Inicio (que también se actualiza al deslizar) sigue montado debajo
+ * de las pantallas apiladas, dentro de una pantalla con aria-hidden.
  */
 export async function deslizarParaActualizar(): Promise<void> {
-  const [lista] = screen.container.queryAll((nodo) => nodo.props.refreshControl != null);
+  const [lista] = screen.container.queryAll(
+    (nodo) => nodo.props.refreshControl != null && !dentroDePantallaOculta(nodo),
+  );
   const control = lista.props.refreshControl as { props: { onRefresh: () => void } };
   await act(async () => {
     control.props.onRefresh();
   });
+}
+
+/** true si algún contenedor del nodo está oculto para la clienta (aria-hidden), como la pantalla de abajo. */
+function dentroDePantallaOculta(nodo: TestInstance): boolean {
+  for (let padre = nodo.parent; padre; padre = padre.parent) {
+    if (padre.props['aria-hidden'] === true) {
+      return true;
+    }
+  }
+  return false;
 }
 
 // ── Detalle y hoja de cancelar ───────────────────────────────────────────────────────────────

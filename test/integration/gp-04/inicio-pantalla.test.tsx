@@ -42,6 +42,15 @@ jest.mock('expo-linking', () => ({
 const API = 'http://api.test';
 const URL_SERVICIOS = `${API}/api/servicios`;
 const URL_PRODUCTOS = `${API}/api/productos`;
+/** Contenido del salón que Inicio pide desde GP-07.3 (galería, promociones, equipo y preguntas). */
+const URLS_CONTENIDO = [
+  `${API}/api/galeria`,
+  `${API}/api/contenido/promociones`,
+  `${API}/api/contenido/equipo`,
+  `${API}/api/contenido/preguntas-frecuentes`,
+];
+/** Galería vacía (GaleriaVacia de la web). */
+const GALERIA_VACIA = 'Pronto verás aquí nuestro trabajo';
 
 /** Límite amplio: sin caché, Babel tarda en transformar lo que carga la pantalla. */
 const LIMITE_MS = 180_000;
@@ -129,10 +138,19 @@ function urlDe(entrada: unknown): string {
   return (entrada as { url: string }).url;
 }
 
-/** Instala un fetch simulado que responde por URL; cualquier otra URL es un 404. */
+/** El contenido del salón vacío: cada sección se oculta y la galería muestra su estado vacío. */
+const CONTENIDO_VACIO: Record<string, Salida> = Object.fromEntries(
+  URLS_CONTENIDO.map((url) => [url, { cuerpo: { success: true, data: [] } }]),
+);
+
+/**
+ * Instala un fetch simulado que responde por URL (con el contenido del salón vacío de fondo);
+ * cualquier otra URL es un 404.
+ */
 function servidor(rutas: Record<string, Salida>): jest.Mock {
+  const todas = { ...CONTENIDO_VACIO, ...rutas };
   const simulado = jest.fn((entrada: unknown) => {
-    const salida = rutas[urlDe(entrada)];
+    const salida = todas[urlDe(entrada)];
     if (!salida) {
       return Promise.resolve(respuesta({ message: 'No encontrado' }, 404));
     }
@@ -153,11 +171,17 @@ function vecesQuePidio(simulado: jest.Mock, url: string): number {
   return urlsDe(simulado).filter((pedida) => pedida === url).length;
 }
 
-/** Solo los catálogos públicos, por GET, sin token y siempre a la API de prueba. */
-function revisarPeticionesPublicas(simulado: jest.Mock): void {
+/**
+ * Solo las lecturas públicas esperadas (por omisión, los catálogos y el contenido del salón), por GET,
+ * sin token y siempre a la API de prueba.
+ */
+function revisarPeticionesPublicas(
+  simulado: jest.Mock,
+  esperadas: string[] = [URL_SERVICIOS, URL_PRODUCTOS, ...URLS_CONTENIDO],
+): void {
   const urls = urlsDe(simulado);
   expect(urls.length).toBeGreaterThan(0);
-  expect(new Set(urls)).toEqual(new Set([URL_SERVICIOS, URL_PRODUCTOS]));
+  expect(new Set(urls)).toEqual(new Set(esperadas));
   for (const [, init] of simulado.mock.calls as unknown as [unknown, RequestInit][]) {
     expect(init.method).toBe('GET');
     expect((init.headers as Record<string, string>).Authorization).toBeUndefined();
@@ -201,9 +225,9 @@ describe('Pantalla de Inicio con el servidor simulado (GP-04)', () => {
       expect(screen.getByRole('link', { name: 'Ver todos los servicios' })).toBeOnTheScreen();
       expect(screen.getByRole('link', { name: 'Ver todos los productos' })).toBeOnTheScreen();
 
-      // El servicio no trae foto: la galería muestra su estado vacío, sin error.
+      // GET /api/galeria no trae fotos: la galería muestra su estado vacío, sin error.
       expect(screen.getByText('Nuestro trabajo')).toBeOnTheScreen();
-      expect(await screen.findByText('Aún no hay fotos publicadas')).toBeOnTheScreen();
+      expect(await screen.findByText(GALERIA_VACIA)).toBeOnTheScreen();
       expect(screen.queryByText(TITULO_ERROR)).not.toBeOnTheScreen();
 
       revisarPeticionesPublicas(simulado);
@@ -223,7 +247,7 @@ describe('Pantalla de Inicio con el servidor simulado (GP-04)', () => {
 
       await abrirInicio();
 
-      expect(await screen.findByText('Aún no hay fotos publicadas')).toBeOnTheScreen();
+      expect(await screen.findByText(GALERIA_VACIA)).toBeOnTheScreen();
       // Mientras cargan, los carruseles muestran su esqueleto; vacíos, la sección desaparece.
       await waitFor(() =>
         expect(screen.queryByRole('link', { name: 'Ver todos los productos' })).not.toBeOnTheScreen(),
@@ -266,7 +290,8 @@ describe('Pantalla de Inicio con el servidor simulado (GP-04)', () => {
       expect(vecesQuePidio(simuladoFallo, URL_SERVICIOS)).toBe(1);
       expect(vecesQuePidio(simuladoFallo, URL_PRODUCTOS)).toBe(1);
 
-      // El servidor ya responde: Reintentar pide los dos catálogos otra vez.
+      // El servidor ya responde: Reintentar pide los dos catálogos otra vez (el error de los
+      // catálogos va bajo los carruseles; el contenido del salón llegó vacío y no muestra error).
       const simulado = servidor({
         [URL_SERVICIOS]: { cuerpo: SERVICIOS },
         [URL_PRODUCTOS]: { cuerpo: PRODUCTOS },
@@ -275,11 +300,12 @@ describe('Pantalla de Inicio con el servidor simulado (GP-04)', () => {
 
       expect(await screen.findByText('Corte y peinado')).toBeOnTheScreen();
       expect(await screen.findByText('Shampoo de prueba')).toBeOnTheScreen();
-      expect(await screen.findByText('Aún no hay fotos publicadas')).toBeOnTheScreen();
+      expect(await screen.findByText(GALERIA_VACIA)).toBeOnTheScreen();
       expect(screen.queryByText(TITULO_ERROR)).not.toBeOnTheScreen();
       expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeOnTheScreen();
 
-      revisarPeticionesPublicas(simulado);
+      // Reintentar solo vuelve a pedir los catálogos: el contenido del salón ya había llegado.
+      revisarPeticionesPublicas(simulado, [URL_SERVICIOS, URL_PRODUCTOS]);
       expect(vecesQuePidio(simulado, URL_SERVICIOS)).toBe(1);
       expect(vecesQuePidio(simulado, URL_PRODUCTOS)).toBe(1);
     },

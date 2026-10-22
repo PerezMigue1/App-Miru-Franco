@@ -1,7 +1,6 @@
 /// <reference types="jest" />
 
 import { precioParaMostrar } from '@/features/inicio/models/FluidoModel';
-import { fotosDeServicios } from '@/features/inicio/models/FotoModel';
 import {
   esObjeto,
   idDe,
@@ -14,17 +13,11 @@ import {
 } from '@/features/inicio/models/inicioService';
 
 import { respuesta } from '../../helpers/servidorSimulado';
-import {
-  CATALOGO_NORMALIZADO,
-  imagenServicio,
-  servicioNormalizado,
-  simularServidorServicios,
-} from '../../helpers/serviciosFicticios';
+import { imagenServicio, simularServidorServicios } from '../../helpers/serviciosFicticios';
 
 /**
  * GP-06.1: lectores compartidos con los que el modelo de servicios normaliza las respuestas
- * (src/features/inicio/models/inicioService.ts), precioParaMostrar de FluidoModel y fotosDeServicios
- * de FotoModel. Cada lector con valores válidos, vacíos y de tipo equivocado. El precio de los
+ * (src/features/inicio/models/inicioService.ts) y precioParaMostrar de FluidoModel. Cada lector con valores válidos, vacíos y de tipo equivocado. El precio de los
  * productos (precioDe) solo se alcanza por obtenerProductos, con fetch simulado.
  */
 
@@ -189,34 +182,5 @@ describe('obtenerProductos: precio de las presentaciones (precioDe)', () => {
     await expect(obtenerProductos()).resolves.toEqual([
       { id: 'producto-2', nombre: 'Shampoo ficticio', precio: '', categoria: '5', imagen: A },
     ]);
-  });
-});
-
-describe('fotosDeServicios', () => {
-  it('del catálogo ficticio toma las fotos de los activos con imagen', () => {
-    expect(fotosDeServicios(CATALOGO_NORMALIZADO)).toEqual([
-      { url: imagenServicio('corte'), servicioId: 1, servicio: 'Corte de dama', categoria: 'Cabello' },
-      { url: imagenServicio('alaciado'), servicioId: 2, servicio: 'Alaciado keratínico', categoria: 'Tratamientos' },
-      { url: imagenServicio('balayage'), servicioId: 4, servicio: 'Balayage', categoria: 'Color' },
-    ]);
-  });
-
-  it('no repite URLs, ignora inactivos y sin imagen, y conserva el servicioId del primero', () => {
-    const fotos = fotosDeServicios([
-      servicioNormalizado({ id: 'servicio-a', nombre: 'Primero', imagen: A }),
-      servicioNormalizado({ id: 'servicio-b', nombre: 'Repetido', imagen: A, categoria: 'Color' }),
-      servicioNormalizado({ id: 'servicio-c', nombre: 'Inactivo', imagen: B, activo: false }),
-      servicioNormalizado({ id: 'servicio-d', nombre: 'Sin imagen' }),
-      servicioNormalizado({ id: 'servicio-e', nombre: 'Imagen vacía', imagen: '' }),
-      servicioNormalizado({ id: 7, nombre: 'Activo explícito', imagen: B, activo: true, categoria: 'Uñas' }),
-    ]);
-    expect(fotos).toEqual([
-      { url: A, servicioId: 'servicio-a', servicio: 'Primero', categoria: undefined },
-      { url: B, servicioId: 7, servicio: 'Activo explícito', categoria: 'Uñas' },
-    ]);
-  });
-
-  it('sin servicios devuelve una lista vacía', () => {
-    expect(fotosDeServicios([])).toEqual([]);
   });
 });

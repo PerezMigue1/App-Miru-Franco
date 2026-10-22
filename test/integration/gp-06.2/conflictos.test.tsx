@@ -5,6 +5,8 @@ import '../../helpers/mocksPantallas';
 
 import { screen, waitFor } from 'expo-router/testing-library';
 
+import { reiniciarConfiguracionPublica } from '@/shared/api/configuracionPublica';
+
 import {
   CITA_CON_ANTICIPO,
   conError,
@@ -32,6 +34,12 @@ import {
   type DisponibilidadCruda,
 } from '../../helpers/citasFicticias';
 import { abrirSesionSimulada } from '../../helpers/google';
+import {
+  rutaCalendario,
+  SALON_ABRE_DIARIO,
+  TEXTO_CERRADO,
+  type OpcionesCalendario,
+} from '../../helpers/calendarioFicticio';
 import { LIMITE_MS, type App } from '../../helpers/pantallas';
 import {
   abrirReserva,
@@ -89,6 +97,8 @@ function corteDelMartes(ocupadas: { inicio: string; fin: string }[] = []): Dispo
 }
 
 describe('Errores y conflictos al reservar con las pantallas reales (GP-06.2)', () => {
+  // La configuración que siembra una prueba se queda en memoria: cada prueba empieza con el respaldo.
+  beforeEach(reiniciarConfiguracionPublica);
   const esperarConsolaLimpia = prepararPruebasReserva();
 
   it(
@@ -155,27 +165,42 @@ describe('Errores y conflictos al reservar con las pantallas reales (GP-06.2)', 
     LIMITE_MS,
   );
 
-  it.each<[string, string, DisponibilidadCruda | null, string, string]>([
+  // GP-07.3: con la configuración del respaldo el domingo ya no se puede elegir (lo prueban
+  // test/unit/gp-07.3/calendario-*); para seguir probando el motivo que manda el backend de un día
+  // cerrado, esa fila siembra una configuración con el salón abierto los siete días.
+  it.each<[string, string, DisponibilidadCruda | null, string, string, OpcionesCalendario | null]>([
     [
       'sin horarios libres',
       DIA_CITA,
       disponibilidadCruda({ ...corteDelMartes(), slots: [] }),
       'No hay horarios libres este día',
       'Prueba con otro día.',
+      null,
     ],
-    ['el domingo, con el salón cerrado', DIA_DOMINGO, null, MENSAJES_BACKEND.salonCerrado, 'Elige otro día.'],
+    [
+      'el domingo, con el salón cerrado',
+      DIA_DOMINGO,
+      null,
+      MENSAJES_BACKEND.salonCerrado,
+      'Elige otro día.',
+      SALON_ABRE_DIARIO,
+    ],
     [
       'un día cerrado sin motivo',
       DIA_CITA,
       disponibilidadCerrada({ ...corteDelMartes(), abierto: false, slots: [], motivo: null }),
-      'El salón no abre este día',
+      TEXTO_CERRADO,
       'Elige otro día.',
+      null,
     ],
   ])(
     '%s lo dice y no ofrece horarios',
-    async (_caso, fecha, disponibilidad, titulo, sugerencia) => {
+    async (_caso, fecha, disponibilidad, titulo, sugerencia, configuracion) => {
       await abrirReserva('/reservar/1', {
-        rutas: disponibilidad ? { [rutaCorte(fecha)]: conDisponibilidad(disponibilidad) } : {},
+        rutas: {
+          ...(configuracion ? rutaCalendario(configuracion) : {}),
+          ...(disponibilidad ? { [rutaCorte(fecha)]: conDisponibilidad(disponibilidad) } : {}),
+        },
       });
       await elegirEspecialista();
       await elegirDia(fecha);

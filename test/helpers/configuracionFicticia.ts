@@ -45,7 +45,27 @@ export function respuestaCompleta(): Record<string, unknown> {
         { dia: 'domingo', cerrado: true, abre: '', cierra: '' },
       ],
     },
-    contenido: { inicio: { heroTexto: 'Texto ficticio' }, sobreNosotros: null, contacto: null },
+    contenido: {
+      inicio: {
+        heroTexto: '  Portada ficticia de prueba  ',
+        heroDestacado: 'Frase ficticia',
+        productosDescripcion: 'Productos ficticios',
+        serviciosDescripcion: 'Servicios ficticios',
+        trabajoDescripcion: 'Galería ficticia',
+        sobreNosotrosParrafos: ['Párrafo ficticio uno', 'Párrafo ficticio dos'],
+        sobreNosotrosImagen: 'https://res.cloudinary.com/ficticio/inicio.jpg',
+        cierreTitulo: 'Cierre ficticio',
+        cierreTexto: 'Texto de cierre ficticio',
+        campoAjeno: 'Campo ajeno ficticio',
+      },
+      sobreNosotros: {
+        titulo: 'Historia ficticia',
+        parrafos: ['Historia ficticia uno'],
+        imagen: 'https://res.cloudinary.com/ficticio/salon.jpg',
+        valores: [{ titulo: 'Valor ficticio', descripcion: 'Descripción de valor ficticio' }],
+      },
+      contacto: { introduccion: 'Introducción ficticia', agendaTexto: 'Agenda ficticia' },
+    },
     anticiposActivos: false,
     reglas: {
       citas: {
@@ -105,6 +125,26 @@ export const CONFIGURACION_COMPLETA: ConfiguracionPublica = {
       { dia: 'domingo', cerrado: true, abre: '', cierra: '' },
     ],
   },
+  contenido: {
+    inicio: {
+      heroTexto: 'Portada ficticia de prueba',
+      heroDestacado: 'Frase ficticia',
+      productosDescripcion: 'Productos ficticios',
+      serviciosDescripcion: 'Servicios ficticios',
+      trabajoDescripcion: 'Galería ficticia',
+      sobreNosotrosParrafos: ['Párrafo ficticio uno', 'Párrafo ficticio dos'],
+      sobreNosotrosImagen: 'https://res.cloudinary.com/ficticio/inicio.jpg',
+      cierreTitulo: 'Cierre ficticio',
+      cierreTexto: 'Texto de cierre ficticio',
+    },
+    sobreNosotros: {
+      titulo: 'Historia ficticia',
+      parrafos: ['Historia ficticia uno'],
+      imagen: 'https://res.cloudinary.com/ficticio/salon.jpg',
+      valores: [{ titulo: 'Valor ficticio', descripcion: 'Descripción de valor ficticio' }],
+    },
+    contacto: { introduccion: 'Introducción ficticia', agendaTexto: 'Agenda ficticia' },
+  },
   anticiposActivos: false,
   reglas: {
     citas: {
@@ -138,7 +178,7 @@ export const DATOS_EXCLUIDOS = [
   'Titular Ficticia',
   'clabe-ficticia',
   'https://facebook.com/ficticio',
-  'Texto ficticio',
+  'Campo ajeno ficticio',
 ];
 
 /** Configuración guardada antes en el archivo: distinta de la completa y del respaldo. */
