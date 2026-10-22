@@ -16,6 +16,7 @@ import { HojaBienvenida } from '@/features/auth/components/HojaBienvenida';
 import { sesionCabecera } from '@/features/auth/viewmodels/sesionCabecera';
 import { AuthProvider, useAuth } from '@/features/auth/viewmodels/useAuth';
 import { SesionRequeridaProvider } from '@/features/auth/viewmodels/useRequiereSesion';
+import { useCargaConfiguracion, useConfiguracionPublica } from '@/shared/api/useConfiguracionPublica';
 import { SesionCabeceraProvider } from '@/shared/ui/AccionesCabecera';
 import { AparienciaProvider, useApariencia } from '@/shared/ui/apariencia';
 import { FondoBarraEstado } from '@/shared/ui/FondoBarraEstado';
@@ -59,8 +60,12 @@ function Navegacion({ fuentesListas }: { fuentesListas: boolean }) {
   const { navigate } = useRouter();
   const [introTerminada, setIntroTerminada] = useState(false);
   const terminarIntro = useCallback(() => setIntroTerminada(true), []);
+  // La configuración del salón espera a lo más TIEMPO_MAXIMO_CARGA_MS; luego sigue con lo guardado.
+  const configuracionLista = useCargaConfiguracion();
+  // Montado en la raíz para refrescar la configuración al volver a primer plano.
+  useConfiguracionPublica();
   // La apariencia guardada se aplica antes de mostrar nada: sin parpadeo de tema.
-  const listo = fuentesListas && estado !== 'cargando' && aparienciaLista;
+  const listo = fuentesListas && estado !== 'cargando' && aparienciaLista && configuracionLista;
 
   // Si la sesión vence o el servidor la rechaza, la app queda en Inicio (las pantallas que
   // necesitan sesión salen solas de la pila por su guard).
