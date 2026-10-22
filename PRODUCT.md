@@ -10,7 +10,7 @@ android
 React Native con Expo SDK 57, solo Android en la v1, sin iOS ni web.
 
 ## Users
-- **Clientas del salón**: ven el inicio con los productos y el trabajo del salón, reservan servicios, pagan el anticipo de su cita, compran productos de la tienda, consultan sus citas, pedidos y perfil, y reciben recordatorios por notificación push. Usan el celular como dispositivo principal de la app.
+- **Clientas del salón**: ven el inicio con los productos y el trabajo del salón, reservan servicios, pagan el anticipo de su cita, compran productos de la tienda, consultan sus citas, pedidos y perfil, y reciben recordatorios como avisos internos (campana, bandeja y aviso en pantalla mientras la app está abierta; sin push). Usan el celular como dispositivo principal de la app.
 - La app de la v1 es solo para el rol cliente. Personal del salón y administración siguen usando el sitio web (`/operacion` y `/admin`).
 
 ## Product Purpose
@@ -21,12 +21,12 @@ Mirú Franco Beauty Salón (Huejutla de Reyes, Hidalgo, México) ya opera un sis
 - Backend propio NestJS ya desplegado sobre Neon PostgreSQL con datos reales de clientas. La app no crea backend nuevo ni modifica contratos de API.
 - Autenticación con JWT Bearer. El token se guarda en el almacenamiento seguro del dispositivo, nunca en texto plano ni en el bundle.
 - Pagos con Mercado Pago Checkout Pro, que se abre en un navegador interno y se confirma consultando el estado al volver a la app.
-- Anticipo de cita: si el servicio lo requiere, la cita queda pendiente y se paga en un máximo de 2 horas; si no, el backend la cancela sola. La interfaz debe mostrar el estado pendiente y su vencimiento.
+- Anticipo de cita: solo se pide si la fecha de inicio de anticipos está configurada en el panel. Si el servicio lo requiere, la cita queda pendiente y el anticipo se paga en línea dentro del plazo configurado (por omisión 2 horas) o en el salón si la regla lo permite; si no se paga a tiempo, el backend la cancela sola. La interfaz debe mostrar el estado pendiente y su vencimiento.
 - Imágenes de servicios y productos en Cloudinary, servidas por las mismas URLs que usa la web. Los renders del hero (frascos y secuencia de giro) son archivos propios de la marca incluidos en la app.
 - El esquema de enlaces de la app es `appmirufranco`.
 
 ## Capabilities and Constraints
-- Alcance de la v1: inicio (hero de fluidos y galería), autenticación (correo y Google), citas (disponibilidad, registrar, cancelar, reprogramar, pago del anticipo), perfil (editar datos y foto desde galería), tienda (comprar y pagar), notificaciones push y operación con manejo de falta de conexión.
+- Alcance de la v1: inicio (hero de fluidos y galería), autenticación (correo y Google), citas (disponibilidad, registrar, cancelar, reprogramar, pago del anticipo), perfil (editar datos y foto desde galería), tienda (comprar y pagar), avisos internos (campana, bandeja y aviso en pantalla mientras la app está abierta; sin push) y operación con manejo de falta de conexión.
 - Lecturas públicas de solo lectura, sin sesión: `GET /api/productos` (nombre y precio de los cuatro fluidos del hero) y `GET /api/servicios` (fotos de la galería).
 - Fuera de la v1: roles admin, operación y especialista, punto de venta, inventario, empleados, marketing y promociones, WhatsApp, iOS y web.
 - Solo contenido real: servicios, productos y fotos salen de la API. Sin datos de relleno ni mocks en pantallas de producción; si el API no devuelve un dato, se deja vacío.

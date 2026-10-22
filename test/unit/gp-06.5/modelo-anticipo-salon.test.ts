@@ -118,8 +118,9 @@ describe('estadoAnticipo y pideAnticipo de una cita con anticipo en el salón', 
       citaEnSalon({ fechaHoraInicio: isoMexico(HOY, '10:30') }),
     ],
     [
+      // GP-07.4: el reloj del teléfono no la vence; sigue pendiente hasta que el backend la cancele.
       'de hoy a las 10:10: el plazo (9:55) ya pasó y la barrida aún no la cancela',
-      'vencido',
+      'pendiente',
       true,
       citaEnSalon({ fechaHoraInicio: isoMexico(HOY, '10:10') }),
     ],
@@ -147,7 +148,7 @@ describe('estadoAnticipo y pideAnticipo de una cita con anticipo en el salón', 
   ])('una cita %s da %p (pide anticipo: %p)', async (_caso, estado, pide, cruda) => {
     const cita = await normalizada(cruda);
     expect(cita.anticipoEnSalon).toBe(true);
-    expect(estadoAnticipo(cita, AHORA)).toBe(estado);
+    expect(estadoAnticipo(cita)).toBe(estado);
     expect(pideAnticipo(cita)).toBe(pide);
   });
 
@@ -158,11 +159,15 @@ describe('estadoAnticipo y pideAnticipo de una cita con anticipo en el salón', 
     ]);
   });
 
-  it('tres horas después la cita en el salón sigue pendiente; la de pago en línea ya venció', () => {
+  // GP-07.4: el plazo vencido lo decide el backend; con el reloj tres horas después las dos siguen
+  // pendientes y la de pago en línea ya no muestra una hora límite que pasó.
+  it('tres horas después la cita en el salón y la de pago en línea siguen pendientes', () => {
     const despues = new Date(AHORA.getTime() + 3 * HORA_MS);
+    jest.setSystemTime(despues);
     const enLinea = citaEnSalonNormalizada({ anticipoEnSalon: false, anticipoVenceEn: VENCE_ANTICIPO_ISO });
-    expect(estadoAnticipo(citaEnSalonNormalizada(), despues)).toBe('pendiente');
-    expect(estadoAnticipo(enLinea, despues)).toBe('vencido');
+    expect(estadoAnticipo(citaEnSalonNormalizada())).toBe('pendiente');
+    expect(estadoAnticipo(enLinea)).toBe('pendiente');
+    expect(limitePagoCorto(enLinea.anticipoVenceEn, despues)).toBeNull();
   });
 });
 
@@ -206,7 +211,7 @@ describe('limiteAnticipo y avisoAnticipoEnSalon con el plazo que manda el servid
     ['el plazo no es una fecha', '2026-10-20T25:61:00.000Z'],
   ])('%s: sigue pendiente y el aviso pide pagar a más tardar 15 minutos antes', async (_caso, anticipoVenceEn) => {
     const cita = await normalizada(citaEnSalon({ anticipoVenceEn }));
-    expect(estadoAnticipo(cita, AHORA)).toBe('pendiente');
+    expect(estadoAnticipo(cita)).toBe('pendiente');
     expect(limiteAnticipo(cita.anticipoVenceEn, AHORA)).toBeNull();
     expect(limitePagoCorto(cita.anticipoVenceEn, AHORA)).toBeNull();
     expect(avisoAnticipoEnSalon(cita.anticipoVenceEn, AHORA)).toBe(AVISO_EN_SALON_SIN_PLAZO);

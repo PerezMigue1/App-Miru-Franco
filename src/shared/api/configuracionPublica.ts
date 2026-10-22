@@ -53,6 +53,14 @@ export interface ReglasCitasPublicas {
   maxCitasPorPagarEnSalon: number;
   intervaloHorariosMinutos: number;
   horasAvisoCancelarReagendar: number;
+  /** Días hábiles desde el pago en que el anticipo ya no se devuelve al cancelar (Política de anticipos). */
+  diasHabilesExcepcionAnticipo: number;
+  /** Días hábiles después del pago para cancelar con reembolso del anticipo. */
+  diasHabilesCancelarConReembolso: number;
+  /** reglas.citas.noAsistio.pierdeAnticipo del servidor: si no llega, el anticipo se retiene. */
+  pierdeAnticipoSiNoAsiste: boolean;
+  /** reglas.citas.noAsistio.mesesSoloPagoEnLinea: meses con pago solo en línea después de una falta. */
+  mesesSoloPagoEnLinea: number;
 }
 
 export interface ReglasTiendaPublicas {
@@ -181,8 +189,11 @@ const abierto = (dia: DiaSemana, abre: string, cierra: string): DiaHorario => ({
  * tal como los publica GET /api/configuracion-publica (datos públicos; el enlace del mapa viene vacío).
  * Horario: SALON_RECOGER de tienda/models/pedidoModel. Citas:
  * textos de citas/views/ReservarCitaView y límites de citas/models/citaModel (2 horas en línea, 15
- * minutos antes en el salón, llegar 20 minutos antes, horarios cada 30). Tienda, pagos y lo demás:
- * valores por omisión del backend (reglas-negocio.ts). Contenido: los que publica hoy el sitio web
+ * minutos antes en el salón, llegar 20 minutos antes, horarios cada 30). La política de anticipos
+ * (10 días hábiles de excepción y 5 para cancelar con reembolso), qué pasa si no llega (pierde el
+ * anticipo y 6 meses con pago solo en línea), tienda, pagos y lo demás: valores por omisión del
+ * backend (REGLAS_POR_OMISION de reglas-negocio.ts). Los datos de transferencia no se guardan.
+ * Contenido: los que publica hoy el sitio web
  * (CONFIGURACION_POR_OMISION.contenido de miru-franco-web).
  */
 export const RESPALDO_CONFIGURACION: ConfiguracionPublica = congelar({
@@ -245,6 +256,10 @@ export const RESPALDO_CONFIGURACION: ConfiguracionPublica = congelar({
       maxCitasPorPagarEnSalon: 1,
       intervaloHorariosMinutos: 30,
       horasAvisoCancelarReagendar: 0,
+      diasHabilesExcepcionAnticipo: 10,
+      diasHabilesCancelarConReembolso: 5,
+      pierdeAnticipoSiNoAsiste: true,
+      mesesSoloPagoEnLinea: 6,
     },
     tienda: {
       plazoPagoLineaHoras: 24,
@@ -389,6 +404,25 @@ function contenido(crudo: unknown): ContenidoPublico {
 }
 
 /**
+ * Reglas de citas en una sola capa: el servidor manda qué pasa si no llega dentro de
+ * reglas.citas.noAsistio ({ pierdeAnticipo, mesesSoloPagoEnLinea }) y la app lo guarda plano
+ * (pierdeAnticipoSiNoAsiste y mesesSoloPagoEnLinea). Lo guardado en el archivo ya viene plano y no
+ * trae noAsistio, así que sin él se toma el campo plano.
+ */
+function reglasCitas(crudo: unknown): ReglasCitasPublicas {
+  const citas = objeto(crudo);
+  const noAsistio = esObjeto(citas.noAsistio) ? citas.noAsistio : null;
+  return porCampos(
+    {
+      ...citas,
+      pierdeAnticipoSiNoAsiste: noAsistio ? noAsistio.pierdeAnticipo : citas.pierdeAnticipoSiNoAsiste,
+      mesesSoloPagoEnLinea: noAsistio ? noAsistio.mesesSoloPagoEnLinea : citas.mesesSoloPagoEnLinea,
+    },
+    RESPALDO_CONFIGURACION.reglas.citas,
+  );
+}
+
+/**
  * Convierte la respuesta del servidor (o lo guardado en el archivo) en una ConfiguracionPublica,
  * campo por campo: lo que falte o venga con otro tipo toma el valor del respaldo sin romper el resto.
  * Pura: no lee ni escribe nada. Devuelve un objeto congelado.
@@ -406,7 +440,7 @@ export function normalizarConfiguracion(cuerpo: unknown): ConfiguracionPublica {
     contenido: contenido(cuerpo.contenido),
     anticiposActivos: campo(cuerpo.anticiposActivos, RESPALDO_CONFIGURACION.anticiposActivos),
     reglas: {
-      citas: porCampos(reglas.citas, respaldo.citas),
+      citas: reglasCitas(reglas.citas),
       tienda: porCampos(reglas.tienda, respaldo.tienda),
       pagos: {
         mercadoPagoTienda: campo(pagos.mercadoPagoTienda, respaldo.pagos.mercadoPagoTienda),

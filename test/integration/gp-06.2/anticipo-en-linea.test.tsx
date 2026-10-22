@@ -24,18 +24,22 @@ import {
 } from '../../helpers/citasFicticias';
 import { abrirSesionSimulada, navegadorRegresa, navegadorSeCierra } from '../../helpers/google';
 import { LIMITE_MS } from '../../helpers/pantallas';
+import { marcarCasillaPolitica, TEXTOS_DETALLE } from '../../helpers/pantallasMisCitas';
 import {
   abrirReserva,
   appVuelveAPrimerPlano,
   AVISO_APARTADA,
   BOTON,
+  CASILLA_POLITICA,
   citasEnOrden,
   conEstado,
+  confirmarConAnticipo,
   esperarPantallaDePago,
   esperarRuta,
   llegarAlResumen,
   navegadorFalla,
   navegadorQuedaAbierto,
+  OPCION_PAGO,
   plazoEsperado,
   prepararPruebasReserva,
   reservarYPagar,
@@ -68,7 +72,7 @@ jest.mock('../../../src/app/+native-intent', () => {
 
 /**
  * GP-06.2: pago del anticipo en línea con Mercado Pago, con las pantallas reales y el navegador
- * simulado (expo-web-browser): la reserva con "Pagar anticipo con Mercado Pago" abre el checkout
+ * simulado (expo-web-browser): la reserva con "Confirmar y pagar anticipo" abre el checkout
  * sola, el regreso por deep link o por el respaldo de AppState consulta el estado real del pago y
  * la clienta ve el resultado (pagado, en proceso, no completado, plazo terminado o sin navegador).
  */
@@ -111,16 +115,18 @@ describe('Anticipo en línea con Mercado Pago y las pantallas reales (GP-06.2)',
   const esperarConsolaLimpia = prepararPruebasReserva();
 
   it(
-    '"Pagar anticipo con Mercado Pago" crea la cita, abre el checkout solo y el regreso por AppState revisa el pago',
+    '"Confirmar y pagar anticipo" (política aceptada) crea la cita, abre el checkout solo y el regreso por AppState revisa el pago',
     async () => {
       const retenida = retener();
       navegadorQuedaAbierto();
       const abierta = await abrirReserva(`/reservar/${SERVICIO_CON_ANTICIPO.id}`, { crear: retenida.envolver });
       await llegarAlResumen();
 
-      await tocar(BOTON.pagarEnLinea);
+      await confirmarConAnticipo('linea');
       expect(await screen.findByRole('button', { name: 'Abriendo Mercado Pago…' })).toBeBusy();
-      expect(screen.getByRole('button', { name: BOTON.apartarEnSalon })).toBeDisabled();
+      // GP-07.4: mientras se envía, la otra opción y la casilla quedan bloqueadas.
+      expect(screen.getByRole('radio', { name: OPCION_PAGO.salon })).toBeDisabled();
+      expect(screen.getByRole('checkbox', { name: CASILLA_POLITICA })).toBeDisabled();
       await retenida.soltar();
 
       await esperarPantallaDePago(abierta);
@@ -157,7 +163,7 @@ describe('Anticipo en línea con Mercado Pago y las pantallas reales (GP-06.2)',
         },
       });
       await llegarAlResumen();
-      await tocar(BOTON.pagarEnLinea);
+      await confirmarConAnticipo('linea');
 
       await esperarAnticipoPagado(abierta);
       revisarCheckout(1, initPointFicticio());
@@ -213,6 +219,8 @@ describe('Anticipo en línea con Mercado Pago y las pantallas reales (GP-06.2)',
       revisarPagoPendiente();
       sinTextos(EN_PROCESO);
 
+      // GP-07.4: volver a pagar con el botón pide antes la casilla de la política.
+      await marcarCasillaPolitica();
       await tocar(INTENTAR);
       await waitFor(() => revisarCheckout(2, initPointFicticio()));
       await esperarConsultas(abierta, 2);
@@ -224,7 +232,7 @@ describe('Anticipo en línea con Mercado Pago y las pantallas reales (GP-06.2)',
   );
 
   it.each<[string, CuerpoError, string]>([
-    ['el plazo terminó', ERRORES.plazoTerminado, 'El plazo para pagar terminó y la cita se canceló. Puedes agendar de nuevo.'],
+    ['el plazo terminó', ERRORES.plazoTerminado, TEXTOS_DETALLE.liberada],
     ['la cita ya no está vigente', ERRORES.citaNoVigente, 'Esta cita ya no está vigente.'],
   ])(
     'un 409 de la preferencia porque %s lo dice y "Ver mis citas" lleva a Mis citas',
@@ -275,9 +283,8 @@ describe('Anticipo en línea con Mercado Pago y las pantallas reales (GP-06.2)',
       expect(screen.getByLabelText('Estado: Pendiente de pago')).toBeOnTheScreen();
       expect(screen.getByLabelText('Anticipo: $360')).toBeOnTheScreen();
       expect(screen.getByLabelText(plazoEsperado(VENCE_ANTICIPO_ISO))).toBeOnTheScreen();
-      expect(
-        screen.getByText('Págalo en línea o en el salón. Si no se paga a tiempo, el horario se libera.'),
-      ).toBeOnTheScreen();
+      // GP-07.4: cómo pagarlo y el plazo salen del catálogo con la regla de la cita.
+      expect(screen.getByText(TEXTOS_DETALLE.pendienteConfirmacion)).toBeOnTheScreen();
       expect(screen.getByRole('button', { name: BOTON.verMisCitas })).toBeOnTheScreen();
       expect(screen.getByRole('button', { name: BOTON.volverAlInicio })).toBeOnTheScreen();
 

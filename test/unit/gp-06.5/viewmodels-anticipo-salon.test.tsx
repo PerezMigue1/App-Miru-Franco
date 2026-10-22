@@ -4,18 +4,14 @@ import { act, renderHook, waitFor } from '@testing-library/react-native';
 import { AppState } from 'react-native';
 
 import { MENSAJE_SIN_CONEXION } from '@/features/auth/models/AuthModel';
+import { MENSAJE_SESION_RESERVA } from '@/features/citas/models/consentimientosReserva';
 import { useAnticipoViewModel } from '@/features/citas/viewmodels/useAnticipoViewModel';
 import {
   useCitaConfirmadaViewModel,
   type AnticipoConfirmacion,
 } from '@/features/citas/viewmodels/useCitaConfirmadaViewModel';
-import {
-  admiteCambios,
-  avisoAnticipoEnSalon,
-  estadoAnticipo,
-  etiquetaEstadoAnticipo,
-  useDetalleCitaViewModel,
-} from '@/features/citas/viewmodels/useDetalleCitaViewModel';
+import { useDetalleCitaViewModel } from '@/features/citas/viewmodels/useDetalleCitaViewModel';
+import { obtenerTexto, RESPALDO_TEXTOS } from '@/shared/api/textosSitio';
 import { useReservarCitaViewModel } from '@/features/citas/viewmodels/useReservarCitaViewModel';
 
 import {
@@ -55,6 +51,7 @@ import {
 import { espiarConsola } from '../../helpers/consola';
 import { diaLegible, horaEnTelefono } from '../../helpers/pantallasReserva';
 import { ESPECIALISTA_UNO, type ServicioCrudo } from '../../helpers/serviciosFicticios';
+import { rutasConsentimientos } from '../../helpers/reservaFicticia';
 import { sembrarSesion, sesionGuardada } from '../../helpers/sesionGuardada';
 import { respuesta, type Llamada, type Manejador } from '../../helpers/servidorSimulado';
 import {
@@ -87,10 +84,11 @@ const RUTA_CONFIRMADA = `/cita-confirmada/${ID_CITA}`;
 const RUTA_ANTICIPO_PAGAR = `/anticipo/${ID_CITA}?pagar=1`;
 
 const ERROR_RESERVA = 'No pudimos reservar tu cita. Intenta de nuevo.';
-const RECOMENDACION = 'Te recomendamos reprogramar tu cita en lugar de cancelarla.';
-const AVISO_PAGADO =
-  'El anticipo de $360 que pagaste no se devuelve si cancelas. Si reprogramas tu cita con aviso, tu anticipo se respeta.';
-const MENSAJE_VENCIDO = 'El plazo para pagar terminó y la cita se canceló. Puedes agendar de nuevo.';
+// GP-07.4: los avisos de cancelar y del plazo salen del catálogo con la regla de la cita (estas citas
+// no guardan reglas: las de omisión, 10 días de excepción y 5 de reembolso).
+const RECOMENDACION = RESPALDO_TEXTOS['citas.cancelar.sinAnticipo'];
+const AVISO_PAGADO = `${obtenerTexto('citas.cancelar.anticipoSinDatos', { anticipo: '$360', diasExcepcion: 10, diasReembolso: 5 })} ${RESPALDO_TEXTOS['citas.cancelar.reprogramar']}`;
+const MENSAJE_VENCIDO = RESPALDO_TEXTOS['anticipos.liberada'];
 const MENSAJE_NO_REVISO = 'No pudimos revisar tu pago. Si ya pagaste, no pagues de nuevo: toca Revisar mi pago.';
 
 /** Plazo de citaEnSalon() (martes, 15 minutos antes de las 11:00 de México) en la hora del teléfono. */
@@ -115,7 +113,8 @@ const RUTAS_HORARIOS = rutasDisponibilidad(
 );
 
 function servidor(rutas: Record<string, Manejador> = {}): Llamada[] {
-  return simularServidorMisCitas({ ...RUTAS_HORARIOS, ...rutas });
+  // GP-07.4: con anticipo, la reserva registra la Política de anticipos vigente antes de crear la cita.
+  return simularServidorMisCitas({ ...rutasConsentimientos(), ...RUTAS_HORARIOS, ...rutas });
 }
 
 const veces = (llamadas: Llamada[], ruta: string) => llamadasDeRuta(llamadas, ruta).length;
@@ -127,6 +126,18 @@ const hacer = (accion: () => void) =>
   act(async () => {
     accion();
   });
+
+/**
+ * GP-07.4: el paso Confirmar tiene un solo botón; antes de tocarlo, la clienta elige la opción y
+ * marca la Política de anticipos (sin anticipo no cambian nada).
+ */
+async function confirmarCon(result: { current: ReturnType<typeof useReservarCitaViewModel> }, opcion: 'linea' | 'salon') {
+  await hacer(() => {
+    result.current.elegirOpcion(opcion);
+    result.current.cambiarAceptaPolitica(true);
+  });
+  await hacer(() => result.current.confirmar());
+}
 
 /** Un turno que no responde hasta que la prueba lo suelta. */
 function enPausa(): { turno: Turno; soltar: (r: Response) => Promise<void> } {
@@ -182,11 +193,11 @@ async function hastaConfirmar(servicio: ServicioCrudo = SERVICIO_CON_ANTICIPO) {
 async function fallaYReintenta(primero: Turno, mensaje: string, rutas: Record<string, Manejador> = {}) {
   const llamadas = servidor({ [RUTA_CREAR_CITA]: turnos(primero, citaComo(citaEnSalon(), 201)), ...rutas });
   const { result } = await hastaConfirmar();
-  await hacer(() => result.current.confirmar('salon'));
+  await confirmarCon(result, 'salon');
   await waitFor(() => expect(result.current.errorEnvio).toBe(mensaje));
   expect(result.current).toMatchObject({ paso: 3, enviando: false, modoEnvio: null, horarioOcupado: false });
   expect(router.replace).not.toHaveBeenCalled();
-  await hacer(() => result.current.confirmar('salon'));
+  await hacer(() => result.current.confirmar());
   await waitFor(() => expect(router.replace).toHaveBeenCalledWith(RUTA_CONFIRMADA));
   expect(result.current.errorEnvio).toBeNull();
   expect(cuerposCrear(llamadas).map((c) => c.pagoAnticipo)).toEqual(['salon', 'salon']);
@@ -194,14 +205,16 @@ async function fallaYReintenta(primero: Turno, mensaje: string, rutas: Record<st
 }
 
 describe('useReservarCitaViewModel: apartar y pagar en el salón', () => {
-  it("mientras aparta: enviando y modoEnvio 'salon'; tocar pagar en línea no envía otra cita y al terminar va a la confirmación, nunca al anticipo", async () => {
+  it("mientras aparta: enviando y modoEnvio 'salon'; elegir pagar en línea no envía otra cita y al terminar va a la confirmación, nunca al anticipo", async () => {
     const post = enPausa();
     const llamadas = servidor({ [RUTA_CREAR_CITA]: turnos(post.turno) });
     const { result } = await hastaConfirmar();
-    await hacer(() => result.current.confirmar('salon'));
+    await confirmarCon(result, 'salon');
     expect(result.current).toMatchObject({ enviando: true, modoEnvio: 'salon', errorEnvio: null });
-    await hacer(() => result.current.confirmar('linea'));
-    expect(result.current.modoEnvio).toBe('salon');
+    // Mientras aparta, elegir pagar en línea y volver a tocar el botón no hacen nada.
+    await hacer(() => result.current.elegirOpcion('linea'));
+    await hacer(() => result.current.confirmar());
+    expect(result.current).toMatchObject({ modoEnvio: 'salon', opcionPago: 'salon' });
     // La cita creada sigue pidiendo el anticipo (en el salón): aun así no se abre Mercado Pago.
     await post.soltar(respuesta(cuerpoCita(citaEnSalon()), 201));
     await waitFor(() => expect(router.replace).toHaveBeenCalledTimes(1));
@@ -209,11 +222,11 @@ describe('useReservarCitaViewModel: apartar y pagar en el salón', () => {
     expect(cuerposCrear(llamadas)).toEqual([expect.objectContaining({ pagoAnticipo: 'salon' })]);
   });
 
-  it("servicio sin anticipo con el botón único ('salon'): no manda pagoAnticipo y va a la confirmación", async () => {
+  it('servicio sin anticipo con el botón único: no manda pagoAnticipo y va a la confirmación', async () => {
     const llamadas = servidor();
     const { result } = await hastaConfirmar(SERVICIO_SIN_ANTICIPO);
     expect(result.current.servicio?.anticipo).toBeNull();
-    await hacer(() => result.current.confirmar('salon'));
+    await hacer(() => result.current.confirmar());
     await waitFor(() => expect(router.replace).toHaveBeenCalledWith(RUTA_CONFIRMADA));
     const [cuerpo] = cuerposCrear(llamadas);
     expect(cuerpo).not.toHaveProperty('pagoAnticipo');
@@ -234,9 +247,10 @@ describe('useReservarCitaViewModel: apartar y pagar en el salón', () => {
     await fallaYReintenta(primero, mensaje);
   });
 
-  it('sesión vencida al apartar: renueva una vez, el servidor la rechaza, la sesión se borra y queda el mensaje genérico', async () => {
+  // GP-07.4: el mensaje ya no es el genérico; dice que la sesión terminó y qué hacer.
+  it('sesión vencida al apartar: renueva una vez, el servidor la rechaza, la sesión se borra y se pide iniciar sesión de nuevo', async () => {
     await sembrarSesion(CLIENTA_CITAS);
-    const llamadas = await fallaYReintenta(falla(ERRORES.noAutorizado), ERROR_RESERVA, {
+    const llamadas = await fallaYReintenta(falla(ERRORES.noAutorizado), MENSAJE_SESION_RESERVA, {
       [RUTA_RENOVAR_MOVIL]: turnos(falla(ERRORES.sesionVencida)),
     });
     expect(veces(llamadas, RUTA_RENOVAR_MOVIL)).toBe(1);
@@ -304,18 +318,20 @@ describe('useDetalleCitaViewModel: cita en el salón', () => {
   ])('avisoCancelacion de una cita %s', async (_caso, cita, aviso) => {
     const { result } = await abrirDetalle(cita);
     expect(result.current.cita?.anticipoEnSalon).toBe(true);
-    expect(result.current.avisoCancelacion).toBe(aviso);
+    // Con anticipo pagado, el aviso final se arma al abrir la hoja con la política del backend
+    // (aquí sin datos: el estado no trae `cancelacion`).
+    await hacer(() => result.current.abrirCancelar());
+    await waitFor(() => expect(result.current.avisoCancelacion).toBe(aviso));
   });
 
-  it('sin pagar: lo que reexporta el viewmodel arma para la vista el anticipo pendiente y el aviso con su plazo', async () => {
+  it('sin pagar: el viewmodel arma para la vista el anticipo pendiente y el aviso con su plazo', async () => {
     const { result } = await abrirDetalle(citaEnSalon());
-    const cita = result.current.cita;
-    if (!cita) throw new Error('Sin cita');
-    expect(cita).toMatchObject({ anticipoEnSalon: true, anticipoVenceEn: VENCE_EN_SALON_ISO });
-    expect(estadoAnticipo(cita)).toBe('pendiente');
-    expect(etiquetaEstadoAnticipo(estadoAnticipo(cita)).texto).toBe('Anticipo pendiente');
-    expect(admiteCambios(cita)).toBe(true);
-    expect(avisoAnticipoEnSalon(cita.anticipoVenceEn)).toBe(AVISO_SALON);
+    expect(result.current.cita).toMatchObject({ anticipoEnSalon: true, anticipoVenceEn: VENCE_EN_SALON_ISO });
+    const presentacion = result.current.presentacion;
+    expect(presentacion?.insigniaAnticipo.texto).toBe('Anticipo pendiente');
+    expect(presentacion?.cambios).toBe(true);
+    // GP-07.4: el plazo del salón va en la forma de pago, sin la invitación a pagar en línea.
+    expect(presentacion?.formaPago.avisos[0]).toContain(AVISO_SALON.replace(' También puedes pagarlo en línea.', ''));
   });
 });
 
@@ -343,6 +359,8 @@ describe('useAnticipoViewModel: cita en el salón', () => {
     ['error al revisar el pago', falla(ERRORES.interno), { tipo: 'errorRevision', mensaje: MENSAJE_NO_REVISO }],
   ])('intentó pagar en línea y vuelve (%s): el aviso del salón sigue, sin limite', async (_caso, estado, pago) => {
     const { result } = await abrirAnticipo(citaEnSalon(), { [rutaEstadoAnticipo()]: turnos(estado) });
+    // GP-07.4: pagar con el botón pide antes la casilla de la Política de anticipos.
+    await hacer(() => result.current.casilla.cambiar(true));
     await hacer(() => result.current.accionPrincipal());
     await waitFor(() => expect(result.current.pago).toEqual(pago));
     expect(result.current).toMatchObject({ avisoSalon: AVISO_SALON, limite: null });

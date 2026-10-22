@@ -1,15 +1,20 @@
 import * as WebBrowser from 'expo-web-browser';
 import { useRouter, type Href } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { AppState } from 'react-native';
 
 import { MENSAJE_SIN_CONEXION, esErrorDeRed } from '@/features/auth/models/AuthModel';
 import { ApiError } from '@/shared/api/apiClient';
+import { obtenerConfiguracion, suscribir } from '@/shared/api/configuracionPublica';
+import { rutaVisorDocumento } from '@/shared/api/documentosLegales';
+import { obtenerTexto } from '@/shared/api/textosSitio';
 import { useCandado } from '@/shared/ui/useCandado';
 
 import {
   avisoAnticipoEnSalon,
   crearPreferenciaAnticipo,
+  esCanceladaPorAnticipo,
+  esVigente,
   limiteAnticipo,
   motivoConflictoAnticipo,
   obtenerCita,
@@ -18,9 +23,15 @@ import {
   REDIRECCION_ANTICIPO,
   type Cita,
 } from '../models/citaModel';
+import { textosAdvertenciaAnticipo } from '../models/formaPagoModel';
+import { useAceptacionAnticipos, type AceptacionAnticipos } from './useAceptacionAnticipos';
 
-// La vista no importa de models/: recibe este tipo del viewmodel.
+// La vista no importa de models/: recibe estos tipos del viewmodel.
 export type { Cita } from '../models/citaModel';
+export type { AceptacionAnticipos } from './useAceptacionAnticipos';
+
+/** Ruta de la app que se guarda con el consentimiento de la política al pagar desde esta pantalla. */
+export const RUTA_ORIGEN_ANTICIPO = 'app/anticipo';
 
 export type EstadoCargaAnticipo = 'cargando' | 'listo' | 'error' | 'noEncontrado';
 
@@ -54,6 +65,17 @@ export interface AnticipoViewModel {
   limite: string | null;
   /** Anticipo pendiente que se paga en el salón: texto con la hora límite, o null. */
   avisoSalon: string | null;
+  /** Anticipo en línea pendiente: el plazo con la regla de la cita (anticipos.plazoLinea), o null. */
+  plazo: string | null;
+  /** Qué pasa si no llega a la cita (regla de la cita), o null con el pago cerrado. */
+  consecuencia: string | null;
+  /** Casilla de la política: obligatoria antes de abrir Mercado Pago con el botón. */
+  casilla: AceptacionAnticipos;
+  /** El botón principal abre Mercado Pago (y entonces pide la casilla). */
+  pideCasilla: boolean;
+  /** Texto del enlace a la Política de anticipos y cancelación. */
+  enlacePolitica: string;
+  abrirPolitica: () => void;
   recargar: () => void;
   /** Acción del botón principal: pagar, volver a revisar el pago o ir a Mis citas. */
   accionPrincipal: () => void;
@@ -61,16 +83,12 @@ export interface AnticipoViewModel {
   verMisCitas: () => void;
 }
 
-const MENSAJE_VENCIDO = 'El plazo para pagar terminó y la cita se canceló. Puedes agendar de nuevo.';
 const MENSAJE_NO_VIGENTE = 'Esta cita ya no está vigente.';
 const MENSAJE_NO_ABRIO = 'No pudimos abrir el pago. Intenta de nuevo.';
 const MENSAJE_NO_REVISO =
   'No pudimos revisar tu pago. Si ya pagaste, no pagues de nuevo: toca Revisar mi pago.';
 const MENSAJE_SIN_NAVEGADOR =
   'No encontramos un navegador para abrir Mercado Pago. Activa Chrome u otro navegador e intenta de nuevo.';
-
-/** Estados de cita que ya no admiten pago. */
-const ESTADOS_CERRADOS = ['cancelada', 'completada', 'no_asistio'];
 
 function mensajeDeError(error: unknown, generico: string): string {
   return esErrorDeRed(error) ? MENSAJE_SIN_CONEXION : generico;
@@ -115,6 +133,8 @@ export function useAnticipoViewModel(
 ): AnticipoViewModel {
   const router = useRouter();
   const candado = useCandado();
+  const configuracion = useSyncExternalStore(suscribir, obtenerConfiguracion, obtenerConfiguracion);
+  const casilla = useAceptacionAnticipos(RUTA_ORIGEN_ANTICIPO);
   const [estado, setEstado] = useState<EstadoCargaAnticipo>('cargando');
   const [cita, setCita] = useState<Cita | null>(null);
   const [pago, setPago] = useState<EstadoPago>({ tipo: 'inicial' });
@@ -170,12 +190,13 @@ export function useAnticipoViewModel(
           return;
         }
         setCita(respuesta);
-        if (ESTADOS_CERRADOS.includes(respuesta.estado)) {
-          const vencida =
-            respuesta.estado === 'cancelada' &&
-            respuesta.anticipoVenceEn != null &&
-            new Date(respuesta.anticipoVenceEn).getTime() <= Date.now();
-          setPago({ tipo: 'cerrada', mensaje: vencida ? MENSAJE_VENCIDO : MENSAJE_NO_VIGENTE });
+        // Cancelada, completada, no asistió o cualquier otro estado final ya no admite pago. Si el
+        // plazo venció lo dice el backend (estado y motivo), nunca el reloj del teléfono.
+        if (!esVigente(respuesta)) {
+          setPago({
+            tipo: 'cerrada',
+            mensaje: esCanceladaPorAnticipo(respuesta) ? obtenerTexto('anticipos.liberada') : MENSAJE_NO_VIGENTE,
+          });
         }
         setEstado('listo');
       })
@@ -212,7 +233,7 @@ export function useAnticipoViewModel(
       if (motivo === 'vencido' || motivo === 'noVigente') {
         setPago({
           tipo: 'cerrada',
-          mensaje: motivo === 'vencido' ? MENSAJE_VENCIDO : MENSAJE_NO_VIGENTE,
+          mensaje: motivo === 'vencido' ? obtenerTexto('anticipos.liberada') : MENSAJE_NO_VIGENTE,
         });
         return true;
       }
@@ -332,21 +353,62 @@ export function useAnticipoViewModel(
       return;
     }
     // Con el pago en proceso se vuelve a consultar, nunca se crea otra preferencia (cobro doble).
-    const revisar = pago.tipo === 'errorRevision' || enProceso;
-    candado(() => (revisar ? revisarEstado(id) : pagar(id)));
-  }, [candado, cita, enProceso, pagar, pago.tipo, revisarEstado, verMisCitas]);
+    if (pago.tipo === 'errorRevision' || enProceso) {
+      candado(() => revisarEstado(id));
+      return;
+    }
+    // Pagar con el botón pide la casilla y el consentimiento, como la web (el pago automático de
+    // ?pagar=1 llega justo después de reservar o del detalle, que ya lo registraron).
+    candado(async () => {
+      const aceptada = await casilla.aceptar();
+      if (!montada.current) {
+        return;
+      }
+      if (!aceptada.ok) {
+        if (aceptada.mensaje) {
+          setPago({ tipo: 'error', mensaje: aceptada.mensaje });
+        }
+        return;
+      }
+      await pagar(id);
+    });
+  }, [candado, casilla, cita, enProceso, pagar, pago.tipo, revisarEstado, verMisCitas]);
 
+  const abrirPolitica = useCallback(() => {
+    router.push(rutaVisorDocumento('anticipos'));
+  }, [router]);
+
+  // Una cita cerrada (cancelada, completada u otro estado final) ya no tiene plazo de pago.
+  const abierta = cita != null && pago.tipo !== 'cerrada' && esVigente(cita);
   // En el salón y sin pago en curso: ni cita cerrada ni pago que Mercado Pago todavía procesa.
-  const enSalon = cita != null && cita.anticipoEnSalon && pago.tipo !== 'cerrada' && !enProceso;
+  const enSalon = abierta && cita.anticipoEnSalon && !enProceso;
   // Con el pago en proceso no se pide pagar antes de una hora: ya pagó o está pagando.
-  const limite = cita && !enSalon && !enProceso ? limiteAnticipo(cita.anticipoVenceEn) : null;
+  const enLinea = abierta && !cita.anticipoEnSalon && !enProceso;
+  const limite = enLinea ? limiteAnticipo(cita.anticipoVenceEn) : null;
+  const advertencia =
+    abierta && !enProceso
+      ? textosAdvertenciaAnticipo({
+          enSalon: cita.anticipoEnSalon,
+          venceEn: cita.anticipoVenceEn,
+          reglas: cita.reglas,
+          config: configuracion,
+        })
+      : null;
 
   return {
     estado,
     cita,
     pago,
     limite: limite ? `Paga ${limite}` : null,
-    avisoSalon: cita && enSalon ? avisoAnticipoEnSalon(cita.anticipoVenceEn) : null,
+    avisoSalon: enSalon
+      ? avisoAnticipoEnSalon(cita.anticipoVenceEn, new Date(), cita.reglas.minutosAntesPagoSalon, configuracion)
+      : null,
+    plazo: enLinea && advertencia ? advertencia[0] : null,
+    consecuencia: advertencia ? advertencia[2] : null,
+    casilla,
+    pideCasilla: abierta && pago.tipo !== 'errorRevision' && !enProceso,
+    enlacePolitica: obtenerTexto('anticipos.enlacePolitica', {}, configuracion),
+    abrirPolitica,
     recargar,
     accionPrincipal,
     regresar,

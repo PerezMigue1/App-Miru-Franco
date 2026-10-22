@@ -1,5 +1,5 @@
 import { useLocalSearchParams } from 'expo-router';
-import { CircleCheck, Hourglass, Timer } from 'lucide-react-native';
+import { CircleAlert, CircleCheck, Hourglass, Store, Timer } from 'lucide-react-native';
 import type { ReactNode } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,58 +23,32 @@ import {
 import { useTheme } from '@/shared/ui/useTheme';
 
 import { BadgeEstado } from '../components/BadgeEstado';
+import { CasillaPoliticaAnticipos } from '../components/CasillaPoliticaAnticipos';
+import { EnlacePolitica } from '../components/EnlacePolitica';
 import { HojaCancelarCita } from '../components/HojaCancelarCita';
 import { Dato, ResumenCita } from '../components/ResumenCita';
 import {
-  admiteCambios,
-  avisoAnticipoEnSalon,
-  duracionParaMostrar,
-  estadoAnticipo,
-  etiquetaEstadoAnticipo,
-  etiquetaEstadoCita,
-  limitePagoCorto,
-  motivoCancelacionParaClienta,
   useDetalleCitaViewModel,
   type Cita,
-  type EstadoAnticipoCita,
+  type DetalleCitaViewModel,
+  type FormaPagoCita,
+  type PresentacionDetalle,
 } from '../viewmodels/useDetalleCitaViewModel';
 
-/** Qué significa cada estado del anticipo, sin prometer nada que el salón no haga. */
-const EXPLICACION_ANTICIPO: Partial<Record<EstadoAnticipoCita, string>> = {
-  pagado: 'Recibimos tu anticipo.',
-  en_revision: 'Recibimos tu pago y está en revisión. No necesitas pagarlo de nuevo.',
-  vencido: 'El plazo para pagar el anticipo terminó. Sin el pago, el horario se libera.',
-  retenido: 'El salón conservó tu anticipo, así que ya no se devuelve.',
-  reembolsado: 'El salón te devolvió el anticipo.',
-  liberada: 'La cita se canceló antes de pagar el anticipo, así que no hay nada que pagar.',
-};
-
-/** Anticipo vencido en una cita que el backend ya canceló: el horario ya quedó libre. */
-const EXPLICACION_VENCIDO_CANCELADA =
-  'El plazo para pagar el anticipo terminó. Como el anticipo no llegó a tiempo, el horario quedó libre.';
-
-/** Detalle de una cita de la clienta: datos, estado del anticipo, reprogramar y cancelar. */
+/** Detalle de una cita de la clienta: datos, forma de pago, pagar el anticipo, reprogramar y cancelar. */
 export default function DetalleCitaView() {
   const { colores } = useTheme();
   const { bottom } = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const vm = useDetalleCitaViewModel(id);
 
-  const listo = vm.estado === 'listo' && vm.cita != null;
-
   return (
     <View style={[styles.raiz, { backgroundColor: colores.fondo }]}>
       <EncabezadoVolver titulo="Tu cita" onVolver={vm.regresar} />
 
-      {listo && vm.cita ? (
+      {vm.estado === 'listo' && vm.cita && vm.presentacion ? (
         <ScrollView contentContainerStyle={[styles.contenido, { paddingBottom: bottom + espacio.x3 }]}>
-          <Contenido
-            cita={vm.cita}
-            recienCancelada={vm.recienCancelada}
-            onPagar={vm.pagarAnticipo}
-            onReprogramar={vm.reprogramar}
-            onCancelar={vm.abrirCancelar}
-          />
+          <Contenido vm={vm} cita={vm.cita} presentacion={vm.presentacion} />
         </ScrollView>
       ) : null}
 
@@ -128,6 +102,10 @@ export default function DetalleCitaView() {
         visible={vm.hojaCancelarVisible}
         onCerrar={vm.cerrarCancelar}
         aviso={vm.avisoCancelacion}
+        enlacePolitica={vm.avisoConPolitica ? vm.presentacion?.enlacePolitica : undefined}
+        onVerPolitica={vm.abrirPolitica}
+        puedeConfirmar={vm.puedeConfirmarCancelacion}
+        puedeReprogramar={vm.puedeReprogramar}
         cancelando={vm.cancelando}
         error={vm.errorCancelacion}
         onCancelar={vm.cancelar}
@@ -138,44 +116,35 @@ export default function DetalleCitaView() {
 }
 
 function Contenido({
+  vm,
   cita,
-  recienCancelada,
-  onPagar,
-  onReprogramar,
-  onCancelar,
+  presentacion,
 }: {
+  vm: DetalleCitaViewModel;
   cita: Cita;
-  recienCancelada: boolean;
-  onPagar: () => void;
-  onReprogramar: () => void;
-  onCancelar: () => void;
+  presentacion: PresentacionDetalle;
 }) {
   const { colores } = useTheme();
-  const anticipo = estadoAnticipo(cita);
-  const insigniaCita = etiquetaEstadoCita(cita.estado);
-  const insigniaAnticipo = etiquetaEstadoAnticipo(anticipo);
-  const duracion = duracionParaMostrar(cita.servicioDuracionMinutos);
-  const cambios = admiteCambios(cita);
-  const conPago = cambios && anticipo === 'pendiente';
-  const motivoCancelacion = motivoCancelacionParaClienta(cita);
+  const { duracion, cambios, opcionesPago, motivoCancelacion } = presentacion;
+  const conPago = opcionesPago.enLinea || opcionesPago.enSalon;
+  // Un solo primario: pagar si falta el anticipo; si no, reprogramar.
+  let varianteReprogramar: 'primario' | 'secundario' | 'contorno' = 'primario';
+  if (conPago) {
+    varianteReprogramar = opcionesPago.enLinea && opcionesPago.enSalon ? 'contorno' : 'secundario';
+  }
 
   return (
     <>
       {/* Aviso tras cancelar en esta pantalla: la hoja se cierra y TalkBack lo anuncia. */}
       <View collapsable={false} accessibilityLiveRegion="polite">
-        {recienCancelada && cita.estado === 'cancelada' ? (
-          <View style={styles.filaIcono}>
-            <View style={styles.iconoLinea}>
-              <CircleCheck color={colores.exito} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
-            </View>
-            <Text style={[styles.textoFuerte, { color: colores.texto }]}>Cancelamos tu cita.</Text>
-          </View>
+        {vm.avisoCancelada && cita.estado === 'cancelada' ? (
+          <FilaIcono Icono={CircleCheck} color={colores.exito} texto={vm.avisoCancelada} />
         ) : null}
       </View>
 
       <View style={styles.insignias}>
-        <BadgeEstado texto={insigniaCita.texto} tono={insigniaCita.tono} />
-        <BadgeEstado texto={insigniaAnticipo.texto} tono={insigniaAnticipo.tono} />
+        <BadgeEstado texto={presentacion.insigniaCita.texto} tono={presentacion.insigniaCita.tono} />
+        <BadgeEstado texto={presentacion.insigniaAnticipo.texto} tono={presentacion.insigniaAnticipo.tono} />
       </View>
 
       <ResumenCita cita={cita} conEspecialista>
@@ -183,33 +152,29 @@ function Contenido({
           <View style={styles.extras}>
             {duracion ? <Dato Icono={Timer} etiqueta="Duración" valor={duracion} /> : null}
             {cita.servicioPrecio ? (
-              <View
-                style={styles.monto}
-                accessible
-                accessibilityLabel={`Precio del servicio: ${cita.servicioPrecio}`}
-              >
-                <Text style={[styles.etiquetaMonto, { color: colores.texto }]}>Precio del servicio</Text>
-                <Text style={[styles.cifra, { color: colores.texto }]}>{cita.servicioPrecio}</Text>
-              </View>
+              <Monto etiqueta="Precio del servicio" valor={cita.servicioPrecio} />
             ) : null}
           </View>
         ) : null}
       </ResumenCita>
 
-      {anticipo !== 'no_requiere' ? (
-        <Tarjeta>
-          <View
-            style={styles.monto}
-            accessible
-            accessibilityLabel={cita.anticipoMonto ? `Anticipo: ${cita.anticipoMonto}` : 'Anticipo'}
-          >
-            <Text style={[styles.tituloTarjeta, { color: colores.texto }]}>Anticipo</Text>
-            {cita.anticipoMonto ? (
-              <Text style={[styles.cifra, { color: colores.texto }]}>{cita.anticipoMonto}</Text>
-            ) : null}
-          </View>
-          <ExplicacionAnticipo cita={cita} anticipo={anticipo} cambios={cambios} />
-        </Tarjeta>
+      <FormaPago formaPago={presentacion.formaPago} enlace={presentacion.enlacePolitica} onVerPolitica={vm.abrirPolitica} />
+
+      {conPago ? <PagoAnticipo vm={vm} cita={cita} presentacion={presentacion} /> : null}
+
+      {/* Región en vivo siempre montada: el resultado del pago se anuncia al aparecer. */}
+      <View collapsable={false} accessibilityLiveRegion="polite">
+        {vm.avisoPago ? (
+          <FilaIcono
+            Icono={vm.avisoPago.tipo === 'exito' ? CircleCheck : CircleAlert}
+            color={vm.avisoPago.tipo === 'exito' ? colores.exito : colores.peligro}
+            texto={vm.avisoPago.texto}
+          />
+        ) : null}
+      </View>
+
+      {presentacion.recordatorio ? (
+        <Text style={[styles.cuerpo, { color: colores.texto }]}>{presentacion.recordatorio}</Text>
       ) : null}
 
       {cita.notas ? (
@@ -226,76 +191,136 @@ function Contenido({
 
       {cambios ? (
         <View style={styles.acciones}>
-          {/* Un solo primario: pagar si falta el anticipo; si no, reprogramar. */}
-          {conPago ? <Button titulo="Pagar anticipo" onPress={onPagar} /> : null}
           <Button
             titulo="Reprogramar"
-            variante={conPago ? 'secundario' : 'primario'}
-            onPress={onReprogramar}
+            variante={varianteReprogramar}
+            onPress={vm.reprogramar}
+            deshabilitado={vm.pagando !== null}
           />
-          <Button titulo="Cancelar cita" variante="peligro" onPress={onCancelar} />
+          <Button titulo="Cancelar cita" variante="peligro" onPress={vm.abrirCancelar} deshabilitado={vm.pagando !== null} />
         </View>
       ) : null}
     </>
   );
 }
 
-/** Lo que significa el estado del anticipo; con el pago pendiente, el plazo para pagarlo. */
-function ExplicacionAnticipo({
-  cita,
-  anticipo,
-  cambios,
+/** Forma de pago con la regla guardada en la cita: anticipo, saldo, plazo, consecuencias y métodos. */
+function FormaPago({
+  formaPago,
+  enlace,
+  onVerPolitica,
 }: {
-  cita: Cita;
-  anticipo: EstadoAnticipoCita;
-  cambios: boolean;
+  formaPago: FormaPagoCita;
+  enlace: string;
+  onVerPolitica: () => void;
 }) {
   const { colores } = useTheme();
-
-  if (anticipo === 'pendiente') {
-    if (!cambios) {
-      return null;
-    }
-    if (cita.anticipoEnSalon) {
-      return (
-        <Text style={[styles.cuerpo, { color: colores.texto }]}>
-          {avisoAnticipoEnSalon(cita.anticipoVenceEn)}
-        </Text>
-      );
-    }
-    const limite = limitePagoCorto(cita.anticipoVenceEn);
-    return (
-      <>
-        {limite ? (
-          <View style={styles.filaIcono} accessible accessibilityLabel={limite}>
-            <View style={styles.iconoLinea}>
-              <Hourglass color={colores.texto} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
-            </View>
-            <Text style={[styles.textoFuerte, { color: colores.texto }]}>{limite}</Text>
-          </View>
-        ) : null}
-        {/* Aviso que explica una consecuencia: va en el principal, no en el secundario. */}
-        <Text style={[styles.cuerpo, { color: colores.texto }]}>
-          Si el anticipo no se paga a tiempo, la cita se cancela sola.
-        </Text>
-      </>
-    );
-  }
-
-  const explicacion =
-    anticipo === 'vencido' && cita.estado === 'cancelada'
-      ? EXPLICACION_VENCIDO_CANCELADA
-      : EXPLICACION_ANTICIPO[anticipo];
-  if (!explicacion) {
+  const parrafos = [
+    formaPago.modo,
+    formaPago.explicacion,
+    formaPago.saldo,
+    ...formaPago.avisos,
+    formaPago.metodos,
+    formaPago.avisoReagendar,
+  ].filter((texto): texto is string => Boolean(texto));
+  if (!formaPago.anticipo && parrafos.length === 0) {
     return null;
   }
-  const respeto =
-    anticipo === 'pagado' && cambios ? ' Si reprogramas tu cita con aviso, tu anticipo se respeta.' : '';
   return (
-    <Text style={[styles.cuerpo, { color: colores.texto }]}>
-      {explicacion}
-      {respeto}
-    </Text>
+    <Tarjeta>
+      <Text accessibilityRole="header" style={[styles.tituloTarjeta, { color: colores.texto }]}>
+        Forma de pago
+      </Text>
+      {formaPago.anticipo ? <Monto etiqueta={formaPago.etiquetaAnticipo} valor={formaPago.anticipo} /> : null}
+      {formaPago.limite ? <FilaIcono Icono={Hourglass} color={colores.texto} texto={formaPago.limite} /> : null}
+      {parrafos.map((texto) => (
+        <Text key={texto} style={[styles.cuerpo, { color: colores.texto }]}>
+          {texto}
+        </Text>
+      ))}
+      {formaPago.conPolitica ? <EnlacePolitica texto={enlace} onPress={onVerPolitica} /> : null}
+    </Tarjeta>
+  );
+}
+
+/** Casilla de la política y los botones para pagar el anticipo pendiente. */
+function PagoAnticipo({
+  vm,
+  cita,
+  presentacion,
+}: {
+  vm: DetalleCitaViewModel;
+  cita: Cita;
+  presentacion: PresentacionDetalle;
+}) {
+  const { colores } = useTheme();
+  const { enLinea, enSalon } = presentacion.opcionesPago;
+  const ocupado = vm.pagando !== null || vm.cancelando;
+  return (
+    <View style={styles.pago}>
+      <CasillaPoliticaAnticipos
+        marcada={vm.casilla.marcada}
+        onCambiar={vm.casilla.cambiar}
+        error={vm.casilla.error}
+        reglas={cita.reglas}
+      />
+      {enLinea ? (
+        <Button
+          titulo={presentacion.botonLinea}
+          onPress={vm.pagarAnticipo}
+          cargando={vm.pagando === 'linea'}
+          deshabilitado={ocupado && vm.pagando !== 'linea'}
+          accessibilityHint="Abre Mercado Pago en el navegador"
+        />
+      ) : null}
+      {enSalon ? (
+        <Button
+          titulo={presentacion.botonSalon}
+          variante={enLinea ? 'secundario' : 'primario'}
+          onPress={vm.pagarEnSalon}
+          cargando={vm.pagando === 'salon'}
+          deshabilitado={ocupado && vm.pagando !== 'salon'}
+          icono={
+            <Store
+              color={enLinea ? colores.textoSobreSecundario : colores.textoSobreAccion}
+              size={icono.tamanoPequeno}
+              strokeWidth={icono.trazo}
+            />
+          }
+          posicionIcono="inicio"
+        />
+      ) : null}
+    </View>
+  );
+}
+
+function Monto({ etiqueta, valor }: { etiqueta: string; valor: string }) {
+  const { colores } = useTheme();
+  return (
+    <View style={styles.monto} accessible accessibilityLabel={`${etiqueta}: ${valor}`}>
+      <Text style={[styles.etiquetaMonto, { color: colores.texto }]}>{etiqueta}</Text>
+      <Text style={[styles.cifra, { color: colores.texto }]}>{valor}</Text>
+    </View>
+  );
+}
+
+function FilaIcono({
+  Icono,
+  color,
+  texto,
+}: {
+  Icono: typeof CircleCheck;
+  color: string;
+  texto: string;
+}) {
+  const { colores } = useTheme();
+  return (
+    <View style={styles.filaIcono} accessible accessibilityLabel={texto}>
+      <View style={styles.iconoLinea}>
+        <Icono color={color} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
+      </View>
+      <Text style={[styles.textoFuerte, { color: colores.texto }]}>{texto}</Text>
+    </View>
   );
 }
 
@@ -362,6 +387,7 @@ const styles = StyleSheet.create({
     columnGap: espacio.m,
   },
   etiquetaMonto: {
+    flexShrink: 1,
     fontFamily: fuente.textoMedio,
     fontSize: tipo.cuerpo.tamano,
     lineHeight: tipo.cuerpo.linea,
@@ -393,6 +419,9 @@ const styles = StyleSheet.create({
     fontFamily: fuente.texto,
     fontSize: tipo.parrafo.tamano,
     lineHeight: tipo.parrafo.linea,
+  },
+  pago: {
+    gap: espacio.m,
   },
   seccion: {
     gap: espacio.s,

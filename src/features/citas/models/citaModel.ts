@@ -10,6 +10,8 @@ import {
   type Crudo,
 } from '@/features/inicio/models/inicioService';
 import type { ConfiguracionPublica, DiaSemana } from '@/shared/api/configuracionPublica';
+import { obtenerTexto, obtenerTextoConReglas } from '@/shared/api/textosSitio';
+import { reglasDeCita, type ReglasCita } from './reglasCitaModel';
 import { especialistaOculta, type Especialista as EspecialistaDeServicio } from './servicioModel';
 
 /** Tono de una insignia (BadgeEstado); vive aquí para que el model no importe componentes. */
@@ -71,7 +73,7 @@ export interface Cita {
   anticipoVenceEn: string | null;
   /** Cuándo se pagó el anticipo (ISO), o null. */
   anticipoPagadoEn: string | null;
-  /** La clienta eligió pagar el anticipo en el salón (plazo: 15 minutos antes del inicio). */
+  /** La clienta eligió pagar el anticipo en el salón (plazo: minutosAntesPagoSalon de sus reglas antes del inicio). */
   anticipoEnSalon: boolean;
   /** Notas de la clienta ('' si no hay). */
   notas: string;
@@ -83,6 +85,13 @@ export interface Cita {
   servicioPrecio: string | null;
   /** Pagos del anticipo ([] si no hay). */
   pagos: PagoCita[];
+  /**
+   * Reglas guardadas en la cita al crearla (plazos, aviso, política del anticipo), ya completas con
+   * reglasDeCita: sin objeto o con campos inválidos, los valores por omisión (no los vigentes).
+   */
+  reglas: ReglasCita;
+  /** true si el backend mandó el objeto `reglas` (citas anteriores no lo traen). */
+  reglasGuardadas: boolean;
 }
 
 /** Cómo se paga el anticipo al agendar: en línea con Mercado Pago o en el salón. */
@@ -131,8 +140,16 @@ function textoONull(valor: unknown): string | null {
 
 /** Monto decimal ("360.00", 360 o "$1,200") a número; 0 si no es válido. */
 function montoDe(valor: unknown): number {
-  const numero = Number(texto(valor).split('$').join('').split(',').join(''));
+  const numero = Number(texto(valor).replaceAll('$', '').replaceAll(',', ''));
   return Number.isFinite(numero) && numero > 0 ? numero : 0;
+}
+
+/** Id de una relación (especialista o servicio): el número tal cual, el texto sin espacios; '' si no viene. */
+function idDeRelacion(valor: unknown): string | number {
+  if (typeof valor === 'number') {
+    return valor;
+  }
+  return typeof valor === 'string' ? valor.trim() : '';
 }
 
 function listaDeTextos(valor: unknown): string[] {
@@ -185,19 +202,18 @@ function normalizarPago(crudo: Crudo): PagoCita {
 
 /**
  * La cita trae especialista { id, nombre, rol }, servicio { id, nombre, duracionMinutos, precio } y
- * pagos [{ id, estado, monto, metodo, proveedor, pagadoEn, retenidoEn }] anidados.
+ * pagos [{ id, estado, monto, metodo, proveedor, pagadoEn, retenidoEn }] anidados. Pura: la usan las
+ * llamadas de abajo y las pruebas de las reglas de una cita.
  */
-function normalizarCita(crudo: Crudo): Cita {
+export function normalizarCita(crudo: Crudo): Cita {
   const servicio = esObjeto(crudo.servicio) ? crudo.servicio : undefined;
   const especialista = esObjeto(crudo.especialista) ? crudo.especialista : undefined;
-  const servicioId = crudo.servicioId ?? servicio?.id;
-  const especialistaId = crudo.especialistaId ?? especialista?.id;
   return {
     id: idDe(crudo),
-    servicioId: typeof servicioId === 'number' || typeof servicioId === 'string' ? servicioId : '',
+    servicioId: idDeRelacion(crudo.servicioId ?? servicio?.id),
     servicioNombre: texto(servicio?.nombre),
-    especialistaId:
-      typeof especialistaId === 'number' || typeof especialistaId === 'string' ? especialistaId : '',
+    // Recortado: con espacios, la consulta de disponibilidad buscaría a otra especialista.
+    especialistaId: idDeRelacion(crudo.especialistaId ?? especialista?.id),
     especialistaNombre: texto(especialista?.nombre),
     fechaHoraInicio: texto(crudo.fechaHoraInicio),
     fechaHoraFin: texto(crudo.fechaHoraFin),
@@ -212,6 +228,8 @@ function normalizarCita(crudo: Crudo): Cita {
     servicioDuracionMinutos: minutosDe(servicio?.duracionMinutos),
     servicioPrecio: precioParaMostrar(texto(servicio?.precio)),
     pagos: Array.isArray(crudo.pagos) ? crudo.pagos.filter(esObjeto).map(normalizarPago) : [],
+    reglas: reglasDeCita(crudo.reglas),
+    reglasGuardadas: esObjeto(crudo.reglas),
   };
 }
 
@@ -246,7 +264,7 @@ export function obtenerDisponibilidad(params: {
   servicioId: string | number;
 }): Promise<Disponibilidad> {
   const consulta =
-    `especialistaId=${encodeURIComponent(String(params.especialistaId))}` +
+    `especialistaId=${encodeURIComponent(String(params.especialistaId).trim())}` +
     `&fecha=${encodeURIComponent(params.fecha)}` +
     `&servicioId=${encodeURIComponent(String(params.servicioId))}`;
   return apiGet<unknown>(`/api/citas/disponibilidad?${consulta}`).then((respuesta) => {
@@ -302,7 +320,8 @@ export function listarMisCitas(): Promise<Cita[]> {
 /**
  * Mueve la cita al slot elegido: PATCH /api/citas/:id/reprogramar?propios=true. El backend responde
  * { success, data } con la cita ya en estado 'reprogramada', sus relaciones y sus pagos (el anticipo
- * se conserva; con pago en el salón sin pagar, el plazo pasa a 15 min antes del nuevo inicio). Si la
+ * se conserva; con pago en el salón sin pagar, el plazo pasa a los minutosAntesPagoSalon de sus reglas
+ * antes del nuevo inicio; en línea sin pagar, conserva su plazo). Si la
  * respuesta llegara sin data, se relee la cita con obtenerCita para no dar por fallido un cambio que sí
  * se guardó. Los errores se leen con mensajeReprogramacion (horario ocupado: esHorarioOcupado).
  */
@@ -353,12 +372,15 @@ export function crearPreferenciaAnticipo(citaId: string | number): Promise<strin
   });
 }
 
+/** GET /api/pagos-en-linea/citas/:id/estado (consulta a Mercado Pago), sin envoltura. */
+function leerEstadoAnticipo(citaId: string | number): Promise<Crudo | undefined> {
+  return apiGet<unknown>(`/api/pagos-en-linea/citas/${encodeURIComponent(String(citaId))}/estado`).then(cuerpoDe);
+}
+
 /** Estado real del anticipo: GET /api/pagos-en-linea/citas/:id/estado (consulta a Mercado Pago). */
 export function obtenerEstadoAnticipo(citaId: string | number): Promise<EstadoAnticipo> {
-  return apiGet<unknown>(
-    `/api/pagos-en-linea/citas/${encodeURIComponent(String(citaId))}/estado`,
-  ).then((respuesta) => {
-    const estado = texto(cuerpoDe(respuesta)?.estado);
+  return leerEstadoAnticipo(citaId).then((cuerpo) => {
+    const estado = texto(cuerpo?.estado);
     if (estado === 'aprobado' || estado === 'no_requiere') {
       return 'aprobado';
     }
@@ -367,6 +389,49 @@ export function obtenerEstadoAnticipo(citaId: string | number): Promise<EstadoAn
     }
     return 'sin_pago';
   });
+}
+
+/**
+ * Qué pasa con el anticipo pagado si la clienta cancela hoy (Política de anticipos): campo
+ * `cancelacion` del estado del anticipo. El backend lo calcula con los días hábiles y las reglas
+ * guardadas en la cita; solo viene con el anticipo pagado, sin retener y la cita vigente.
+ */
+export interface PoliticaCancelacion {
+  reembolsable: boolean;
+  /** Fin del plazo para cancelar con reembolso (ISO), o null si la cita está muy cerca del pago. */
+  reembolsableHasta: string | null;
+  diasHabilesHastaCita: number;
+}
+
+/**
+ * La política de cancelación del anticipo: GET /api/pagos-en-linea/citas/:id/estado (`cancelacion`).
+ * null si no viene. Los errores llegan como ApiError o ErrorDeRed; quien la usa decide qué mostrar.
+ */
+export function obtenerPoliticaCancelacion(citaId: string | number): Promise<PoliticaCancelacion | null> {
+  return leerEstadoAnticipo(citaId).then((cuerpo) => {
+    const politica = cuerpo?.cancelacion;
+    if (!esObjeto(politica)) {
+      return null;
+    }
+    const dias = Number(politica.diasHabilesHastaCita);
+    return {
+      reembolsable: politica.reembolsable === true,
+      reembolsableHasta: textoONull(politica.reembolsableHasta),
+      diasHabilesHastaCita: Number.isFinite(dias) ? dias : 0,
+    };
+  });
+}
+
+/**
+ * La clienta cambia a pago en el salón el anticipo que apartó en línea: PATCH
+ * /api/citas/:id/anticipo-en-salon, sin cuerpo (la web lo llama sin ?propios). Responde
+ * { success, citaId, anticipoEnSalon, anticipoVenceEn }; devuelve el plazo nuevo (o null). Los
+ * errores se leen con mensajeAnticipoEnSalon.
+ */
+export function cambiarAnticipoASalon(citaId: string | number): Promise<{ anticipoVenceEn: string | null }> {
+  return apiPatch<unknown>(`/api/citas/${encodeURIComponent(String(citaId))}/anticipo-en-salon`).then(
+    (respuesta) => ({ anticipoVenceEn: textoONull(cuerpoDe(respuesta)?.anticipoVenceEn) }),
+  );
 }
 
 // ── Reglas de negocio ──────────────────────────────────────────────────────────────────────
@@ -423,6 +488,46 @@ export function mensajeAnticipoParaClienta(error: unknown): string | null {
     return mensaje;
   }
   return null;
+}
+
+/**
+ * Respuestas de PATCH /api/citas/:id/anticipo-en-salon ya escritas para la clienta: los 409 (ya no
+ * se puede cambiar, ya se pagó en línea, pago en línea en proceso), los 400 de la regla y el 503 de
+ * Mercado Pago. Solo estos (y la variante con N citas por pagar en el salón) se muestran tal cual.
+ */
+export const MENSAJES_ANTICIPO_EN_SALON: Readonly<Record<number, readonly string[]>> = {
+  400: [
+    'El anticipo se paga en línea.',
+    'Ya no da tiempo de pagar en el salón. Paga el anticipo en línea.',
+    'Para esta cita, el anticipo se paga en línea.',
+    'Ya tienes una cita por pagar en el salón. Paga su anticipo o paga esta en línea.',
+  ],
+  409: [
+    'El anticipo de esta cita ya no se puede cambiar a pago en el salón.',
+    'Tu anticipo ya se pagó en línea: no tienes que pagarlo en el salón.',
+    'Tienes un pago en línea en proceso para este anticipo. Espera su confirmación antes de cambiar a pago en el salón.',
+  ],
+  503: ['No pudimos confirmar con Mercado Pago si ya pagaste el anticipo. Intenta de nuevo en unos minutos.'],
+};
+
+/** 400 de anticipo-en-salon con N citas por pagar en el salón (N distinto de 1). */
+const MENSAJE_VARIAS_CITAS_EN_SALON =
+  /^Ya tienes \d+ citas por pagar en el salón\. Paga su anticipo o paga esta en línea\.$/;
+
+/**
+ * Mensaje para la clienta al fallar cambiarAnticipoASalon: el del servidor si está en
+ * MENSAJES_ANTICIPO_EN_SALON para su status (o es la variante con N citas); si no, uno propio por
+ * tipo de error. Nunca el texto técnico del servidor.
+ */
+export function mensajeAnticipoEnSalon(error: unknown): string {
+  if (error instanceof ApiError) {
+    const mensaje = error.message.trim();
+    const permitidos = MENSAJES_ANTICIPO_EN_SALON[error.status] ?? [];
+    if (permitidos.includes(mensaje) || (error.status === 400 && MENSAJE_VARIAS_CITAS_EN_SALON.test(mensaje))) {
+      return mensaje;
+    }
+  }
+  return mensajeComunDeCita(error) ?? obtenerTexto('citas.anticipoSalon.noSePudo');
 }
 
 /**
@@ -483,10 +588,11 @@ const MOTIVO_ANTICIPO_NO_PAGADO = 'anticipo_no_pagado';
  * 'retenido'; anticipoPagadoEn con un pago aprobado → 'pagado' ('retenido' si la cita es no_asistio);
  * un pago en revisión → 'en_revision'; un pago reembolsado → 'reembolsado'; anticipoPagadoEn sin pago
  * aprobado → 'pagado' ('retenido' si la cita es no_asistio), como la web; cita cancelada sin pago →
- * 'vencido' si la canceló el backend por no pagar a tiempo y 'liberada' si no; si no, 'pendiente' o
- * 'vencido' según anticipoVenceEn ('pendiente' sin plazo válido).
+ * 'vencido' si la canceló el backend por no pagar a tiempo y 'liberada' si no; si no, 'pendiente'.
+ * El plazo vencido lo decide el backend (estado y motivo), nunca el reloj del teléfono: una cita
+ * vigente cuyo anticipoVenceEn ya pasó sigue 'pendiente' hasta que la barrida la cancele.
  */
-export function estadoAnticipo(cita: Cita, ahora: Date = new Date()): EstadoAnticipoCita {
+export function estadoAnticipo(cita: Cita): EstadoAnticipoCita {
   if (cita.anticipoRequerido <= 0) {
     return 'no_requiere';
   }
@@ -508,13 +614,24 @@ export function estadoAnticipo(cita: Cita, ahora: Date = new Date()): EstadoAnti
     return cita.estado === 'no_asistio' ? 'retenido' : 'pagado';
   }
   if (cita.estado === 'cancelada') {
-    return cita.motivoCancelacion === MOTIVO_ANTICIPO_NO_PAGADO ? 'vencido' : 'liberada';
+    return esCanceladaPorAnticipo(cita) ? 'vencido' : 'liberada';
   }
-  const vence = cita.anticipoVenceEn ? new Date(cita.anticipoVenceEn).getTime() : Number.NaN;
-  if (Number.isNaN(vence)) {
-    return 'pendiente';
-  }
-  return vence > ahora.getTime() ? 'pendiente' : 'vencido';
+  return 'pendiente';
+}
+
+/** El backend canceló la cita porque el anticipo no se pagó a tiempo (barrida de anticipos). */
+export function esCanceladaPorAnticipo(cita: Pick<Cita, 'estado' | 'motivoCancelacion'>): boolean {
+  return cita.estado === 'cancelada' && cita.motivoCancelacion === MOTIVO_ANTICIPO_NO_PAGADO;
+}
+
+/**
+ * El plazo del anticipo ya pasó según el reloj del teléfono. Solo sirve para no mostrar una hora
+ * límite que ya pasó (el backend puede tener otra hora o el pago puede estar en camino): el estado lo
+ * sigue decidiendo el backend. false sin plazo válido.
+ */
+export function plazoAnticipoPasado(venceEn: string | null, ahora: Date = new Date()): boolean {
+  const vence = venceEn ? new Date(venceEn).getTime() : Number.NaN;
+  return Number.isFinite(vence) && vence <= ahora.getTime();
 }
 
 const ETIQUETAS_ANTICIPO: Record<EstadoAnticipoCita, EtiquetaEstado> = {
@@ -536,9 +653,7 @@ export function motivoCancelacionParaClienta(cita: Cita): string | null {
   if (!cita.motivoCancelacion) {
     return null;
   }
-  return cita.motivoCancelacion === MOTIVO_ANTICIPO_NO_PAGADO
-    ? 'No recibimos tu anticipo a tiempo y el horario quedó libre.'
-    : cita.motivoCancelacion;
+  return cita.motivoCancelacion === MOTIVO_ANTICIPO_NO_PAGADO ? obtenerTexto('anticipos.liberada') : cita.motivoCancelacion;
 }
 
 /** Insignia del estado del anticipo. */
@@ -694,22 +809,34 @@ export function esHorarioPasado(error: unknown): boolean {
 
 /**
  * 400 de reprogramarCita con menos aviso del que pide la regla horasAvisoCancelarReagendar (solo desde
- * el portal): "Para reagendar con menos de N horas de anticipación, comunícate con el salón.". El
- * mensaje lo arma la app con el número de horas si viene; null si es otro error.
+ * el portal): "Para reagendar con menos de N horas de anticipación, comunícate con el salón.".
  */
+export function esAvisoReagendar(error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    error.status === 400 &&
+    error.message.toLowerCase().includes('para reagendar con menos de')
+  );
+}
+
+/**
+ * El mensaje del aviso mínimo para reagendar con `horas` (las de la regla de la cita o las que trae
+ * el servidor); sin horas válidas, el texto sin número. Del catálogo de textos.
+ */
+export function textoAvisoReagendar(horas: number): string {
+  if (!(horas > 0)) {
+    return obtenerTexto('citas.reprogramar.avisoSinHoras');
+  }
+  return obtenerTexto('citas.reprogramar.avisoMinimo', { horasAviso: `${horas} ${horas === 1 ? 'hora' : 'horas'}` });
+}
+
+/** El aviso de reagendar con el número de horas que trae el error del servidor; null si es otro error. */
 function mensajeAvisoReagendar(error: unknown): string | null {
-  if (!(error instanceof ApiError) || error.status !== 400) {
+  if (!esAvisoReagendar(error)) {
     return null;
   }
-  const mensaje = error.message.toLowerCase();
-  if (!mensaje.includes('para reagendar con menos de')) {
-    return null;
-  }
-  const horas = Number(/menos de (\d+) hora/.exec(mensaje)?.[1] ?? 0);
-  if (horas <= 0) {
-    return 'Para reagendar con tan poco tiempo, comunícate con el salón.';
-  }
-  return `Para reagendar con menos de ${horas} ${horas === 1 ? 'hora' : 'horas'} de anticipación, comunícate con el salón.`;
+  const mensaje = (error as ApiError).message.toLowerCase();
+  return textoAvisoReagendar(Number(/menos de (\d+) hora/.exec(mensaje)?.[1] ?? 0));
 }
 
 /**
@@ -728,6 +855,12 @@ export function mensajeReprogramacion(error: unknown): string {
   const aviso = mensajeAvisoReagendar(error);
   if (aviso) {
     return aviso;
+  }
+  // Con el anticipo sin pagar, el nuevo horario no deja tiempo para pagarlo ("Ya no da tiempo de
+  // pagar el anticipo antes de tu cita."): el texto ya está escrito para la clienta.
+  const anticipo = mensajeAnticipoParaClienta(error);
+  if (anticipo) {
+    return anticipo;
   }
   const comun = mensajeComunDeCita(error);
   if (comun) {
@@ -963,13 +1096,34 @@ export function horaLegible(valor: string | Date): string {
   return `${hora12}:${dosDigitos(fecha.getMinutes())} ${horas < 12 ? 'a. m.' : 'p. m.'}`;
 }
 
+/** 'jueves 29 de octubre de 2026' (año, mes y día locales); '' si la fecha no es válida. */
+export function fechaLargaLegible(valor: string | Date): string {
+  const fecha = aFecha(valor);
+  const dia = fechaLegible(fecha);
+  return dia ? `${dia} de ${fecha.getFullYear()}` : '';
+}
+
+/**
+ * 'Sábado 18 de octubre, 6:30 p. m.' con los componentes locales de la fecha ISO. Es la única forma
+ * de escribir un día y hora completos (por ejemplo, el "De" y el "A" al reprogramar), así los dos
+ * salen en la misma zona horaria. '' si la fecha no es válida.
+ */
+export function fechaHoraLegible(valor: string | Date): string {
+  const dia = fechaLegible(valor);
+  if (!dia) {
+    return '';
+  }
+  return `${dia.charAt(0).toUpperCase()}${dia.slice(1)}, ${horaLegible(valor)}`;
+}
+
 /**
  * Hora límite del anticipo para armar frases, sin conteo en horas: 'antes de las 6:30 p. m.' si
  * vence hoy (año, mes y día locales) o 'antes del miércoles 28 de octubre, 11:15 a. m.' si vence
- * otro día. null si no hay plazo válido.
+ * otro día. null si no hay plazo válido o si ya pasó según el reloj del teléfono (no se muestra una
+ * hora límite que ya pasó; el estado lo decide el backend).
  */
 export function limiteAnticipo(venceEn: string | null, ahora: Date = new Date()): string | null {
-  if (!venceEn) {
+  if (!venceEn || plazoAnticipoPasado(venceEn, ahora)) {
     return null;
   }
   const fecha = new Date(venceEn);
@@ -994,13 +1148,35 @@ export function limitePagoCorto(venceEn: string | null, ahora: Date = new Date()
 }
 
 /**
- * Aviso de la cita con anticipo en el salón y aún sin pagar: 'Paga tu anticipo en el salón antes
- * de las 11:15 a. m. (15 minutos antes de tu cita). También puedes pagarlo en línea.'
+ * Plazo del anticipo en el salón: 'Paga tu anticipo en el salón antes de las 11:15 a. m. (15
+ * minutos antes de tu cita).' o, sin plazo válido, 'a más tardar 15 minutos antes de tu cita'. Los
+ * minutos son los de la regla de la cita (cita.reglas.minutosAntesPagoSalon); sin ellos, los
+ * vigentes. El texto sale del catálogo con esos minutos aunque la regla vigente sea otra.
  */
-export function avisoAnticipoEnSalon(venceEn: string | null, ahora: Date = new Date()): string {
+export function plazoAnticipoEnSalon(
+  venceEn: string | null,
+  ahora: Date = new Date(),
+  minutosAntesPagoSalon?: number,
+  config?: ConfiguracionPublica,
+): string {
   const limite = limiteAnticipo(venceEn, ahora);
-  const plazo = limite
-    ? `${limite} (15 minutos antes de tu cita)`
-    : 'a más tardar 15 minutos antes de tu cita';
-  return `Paga tu anticipo en el salón ${plazo}. También puedes pagarlo en línea.`;
+  const clave = limite ? 'citas.anticipoSalon.plazo' : 'citas.anticipoSalon.plazoSinLimite';
+  const contexto = limite ? { limite } : {};
+  return minutosAntesPagoSalon === undefined
+    ? obtenerTexto(clave, contexto, config)
+    : obtenerTextoConReglas(clave, { minutosAntesPagoSalon: String(minutosAntesPagoSalon) }, contexto, config);
+}
+
+/**
+ * Aviso de la cita con anticipo en el salón y aún sin pagar: plazoAnticipoEnSalon más 'También
+ * puedes pagarlo en línea.', con los minutos de la regla de la cita.
+ */
+export function avisoAnticipoEnSalon(
+  venceEn: string | null,
+  ahora: Date = new Date(),
+  minutosAntesPagoSalon?: number,
+  config?: ConfiguracionPublica,
+): string {
+  const plazo = plazoAnticipoEnSalon(venceEn, ahora, minutosAntesPagoSalon, config);
+  return `${plazo} ${obtenerTexto('citas.anticipoSalon.tambienEnLinea', {}, config)}`;
 }

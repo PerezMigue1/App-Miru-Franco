@@ -103,22 +103,10 @@ describe('Regla 4: sin colores escritos, sin console y sin guion largo', () => {
 describe('Corrección A: cada vista toma de su viewmodel lo que antes leía de models/', () => {
   it.each([
     ['MisCitasView', 'useMisCitasViewModel', [], ['Cita']],
-    [
-      'DetalleCitaView',
-      'useDetalleCitaViewModel',
-      [
-        'admiteCambios',
-        'avisoAnticipoEnSalon',
-        'duracionParaMostrar',
-        'estadoAnticipo',
-        'etiquetaEstadoAnticipo',
-        'etiquetaEstadoCita',
-        'limitePagoCorto',
-        'motivoCancelacionParaClienta',
-      ],
-      ['Cita', 'EstadoAnticipoCita'],
-    ],
-    ['ReprogramarCitaView', 'useReprogramarCitaViewModel', ['fechaLegible', 'horaLegible'], []],
+    // GP-07.4: el detalle y reprogramar reciben del viewmodel todo ya armado (presentacion, forma de
+    // pago y resumen del cambio): la vista solo toma tipos, que el viewmodel vuelve a exportar.
+    ['DetalleCitaView', 'useDetalleCitaViewModel', [], ['FormaPagoCita']],
+    ['ReprogramarCitaView', 'useReprogramarCitaViewModel', [], []],
   ])('%s importa de %s, que lo vuelve a exportar', (archivo, vm, valores, tipos) => {
     const importado = piezasDe(leer(vista(archivo)), 'import', `../viewmodels/${vm}`);
     expect(importado.valores).toEqual(expect.arrayContaining(valores));
@@ -126,7 +114,7 @@ describe('Corrección A: cada vista toma de su viewmodel lo que antes leía de m
 
     // Lo que viene de servicioModel (duracionParaMostrar) se re-exporta desde ese model.
     const textoVm = leer(viewmodel(vm));
-    const reexportado = ['../models/citaModel', '../models/servicioModel'].map((m) =>
+    const reexportado = ['../models/citaModel', '../models/servicioModel', '../models/gestionCitaModel'].map((m) =>
       piezasDe(textoVm, 'export', m),
     );
     expect(reexportado.flatMap((p) => p.valores)).toEqual(expect.arrayContaining(valores));

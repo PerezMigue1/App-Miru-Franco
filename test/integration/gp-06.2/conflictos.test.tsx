@@ -44,6 +44,7 @@ import { LIMITE_MS, type App } from '../../helpers/pantallas';
 import {
   abrirReserva,
   BOTON,
+  confirmarConAnticipo,
   elegirDia,
   elegirEspecialista,
   elegirHorario,
@@ -153,7 +154,7 @@ describe('Errores y conflictos al reservar con las pantallas reales (GP-06.2)', 
       const abierta = await abrirReserva(`/reservar/${SERVICIO_CON_ANTICIPO.id}`, { rutas: { [RUTA_CREAR_CITA]: falla } });
       await llegarAlResumen();
 
-      await tocar(BOTON.pagarEnLinea);
+      await confirmarConAnticipo('linea');
       expect(await screen.findByText(mensaje)).toBeOnTheScreen();
       sinTextos(tecnico, OCUPADO);
       expect(screen.getByRole('header', { name: PASO.confirmar })).toBeOnTheScreen();

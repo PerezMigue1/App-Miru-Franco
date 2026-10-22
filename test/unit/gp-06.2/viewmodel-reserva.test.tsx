@@ -5,6 +5,7 @@ import { AppState, type AppStateStatus } from 'react-native';
 
 import { MENSAJE_SIN_CONEXION } from '@/features/auth/models/AuthModel';
 import { fechaLegible as fechaLegibleDelModelo, REDIRECCION_ANTICIPO } from '@/features/citas/models/citaModel';
+import { RESPALDO_TEXTOS } from '@/shared/api/textosSitio';
 import { useAnticipoViewModel, type AnticipoViewModel } from '@/features/citas/viewmodels/useAnticipoViewModel';
 import { useCitaConfirmadaViewModel } from '@/features/citas/viewmodels/useCitaConfirmadaViewModel';
 import {
@@ -56,6 +57,7 @@ import {
 import { espiarConsola } from '../../helpers/consola';
 import { abrirSesionSimulada, navegadorRegresa } from '../../helpers/google';
 import { ESPECIALISTA_DOS, ESPECIALISTA_UNO, especialistaCruda, imagenServicio } from '../../helpers/serviciosFicticios';
+import { rutasConsentimientos } from '../../helpers/reservaFicticia';
 import { respuesta, type Llamada, type Manejador } from '../../helpers/servidorSimulado';
 import {
   authSimulada,
@@ -96,7 +98,8 @@ const DOS = ESPECIALISTA_DOS.usuarioId;
 
 const ERROR_RESERVA = 'No pudimos reservar tu cita. Intenta de nuevo.';
 const ERROR_HORARIOS = 'No pudimos cargar los horarios de este día.';
-const MENSAJE_VENCIDO = 'El plazo para pagar terminó y la cita se canceló. Puedes agendar de nuevo.';
+// GP-07.4: el plazo vencido sale del catálogo (anticipos.liberada).
+const MENSAJE_VENCIDO = RESPALDO_TEXTOS['anticipos.liberada'];
 const MENSAJE_NO_VIGENTE = 'Esta cita ya no está vigente.';
 const MENSAJE_NO_ABRIO = 'No pudimos abrir el pago. Intenta de nuevo.';
 const MENSAJE_NO_REVISO = 'No pudimos revisar tu pago. Si ya pagaste, no pagues de nuevo: toca Revisar mi pago.';
@@ -106,9 +109,9 @@ const MENSAJE_SIN_NAVEGADOR =
 const RUTA_CONFIRMADA = `/cita-confirmada/${ID_CITA}`;
 const RUTA_ANTICIPO_PAGAR = `/anticipo/${ID_CITA}?pagar=1`;
 
-/** Plazo de hoy a las 12:30 locales y su texto (igual en cualquier zona). */
-const VENCE_HOY = enHoraLocal(HOY, '12:30').toISOString();
-const LIMITE_HOY = 'Paga antes de las 12:30 p. m.';
+/** Plazo de hoy a las 18:30 locales y su texto: sigue por venir con el reloj fijo (16:00 UTC) en UTC y en México. */
+const VENCE_HOY = enHoraLocal(HOY, '18:30').toISOString();
+const LIMITE_HOY = 'Paga antes de las 6:30 p. m.';
 /** Plazo del martes a las 10:45 locales. */
 const VENCE_MARTES = enHoraLocal(DIA_CITA, '10:45').toISOString();
 const LIMITE_MARTES = 'Paga antes del martes 20 de octubre, 10:45 a. m.';
@@ -121,6 +124,8 @@ const LIMITE_MARTES = 'Paga antes del martes 20 de octubre, 10:45 a. m.';
  */
 function servidor(rutas: Record<string, Manejador> = {}): Llamada[] {
   return simularServidorReserva({
+    // GP-07.4: con anticipo se registra la Política de anticipos vigente antes de crear la cita.
+    ...rutasConsentimientos(),
     ...rutasDisponibilidad([
       ...disponibilidadesDe(HOY, ALACIADO),
       ...disponibilidadesDe(DIA_SABADO, ALACIADO),
@@ -265,9 +270,21 @@ async function hastaConfirmar(result: Resultado<ReservarCitaViewModel>, id = UNO
   await elegirPrimerHorario(result);
 }
 
-async function confirmar(result: Resultado<ReservarCitaViewModel>, modo: 'linea' | 'salon' = 'linea'): Promise<void> {
+/**
+ * GP-07.4: elige cómo pagar el anticipo y marca la Política de anticipos (sin anticipo no cambian
+ * nada), como haría la clienta antes del botón final.
+ */
+async function prepararConfirmar(result: Resultado<ReservarCitaViewModel>, modo: 'linea' | 'salon'): Promise<void> {
   await act(async () => {
-    result.current.confirmar(modo);
+    result.current.elegirOpcion(modo);
+    result.current.cambiarAceptaPolitica(true);
+  });
+}
+
+async function confirmar(result: Resultado<ReservarCitaViewModel>, modo: 'linea' | 'salon' = 'linea'): Promise<void> {
+  await prepararConfirmar(result, modo);
+  await act(async () => {
+    result.current.confirmar();
   });
 }
 
@@ -872,11 +889,14 @@ describe('useReservarCitaViewModel: confirmar', () => {
     const llamadas = servidor({ [RUTA_CREAR_CITA]: espera.manejador });
     const { result } = await abrirReserva();
     await hastaConfirmar(result);
+    await prepararConfirmar(result, 'linea');
     await act(async () => {
-      result.current.confirmar('linea');
-      result.current.confirmar('salon');
+      result.current.confirmar();
+      result.current.confirmar();
     });
-    await confirmar(result, 'salon');
+    await act(async () => {
+      result.current.confirmar();
+    });
     expect(result.current.modoEnvio).toBe('linea');
     await espera.soltar(respuesta(cuerpoCita(citaConAnticipo()), 201));
     await waitFor(() => expect(router.replace).toHaveBeenCalledTimes(1));
@@ -1082,13 +1102,20 @@ async function abrirAnticipo(...args: [id?: string, pagar?: boolean, revisar?: b
   return hook;
 }
 
+/**
+ * Toca el botón principal. GP-07.4: pagar con el botón pide antes la casilla de la Política de
+ * anticipos (y registra el consentimiento con rutasConsentimientos), así que se marca primero.
+ */
 async function accion(result: Resultado<AnticipoViewModel>): Promise<void> {
+  await act(async () => {
+    result.current.casilla.cambiar(true);
+  });
   await act(async () => {
     result.current.accionPrincipal();
   });
 }
 
-/** La cita con anticipo pendiente y plazo de hoy a las 12:30 locales. */
+/** La cita con anticipo pendiente y plazo de hoy a las 18:30 locales. */
 const CITA_PENDIENTE = citaConAnticipo({ anticipoVenceEn: VENCE_HOY });
 
 describe('useAnticipoViewModel: carga', () => {
@@ -1157,8 +1184,9 @@ describe('useAnticipoViewModel: carga', () => {
   });
 
   it.each<[string, Partial<CitaCruda>, string]>([
-    ['cancelada con el plazo vencido', { estado: 'cancelada', anticipoVenceEn: masMinutos(AHORA, -1).toISOString() }, MENSAJE_VENCIDO],
-    ['cancelada con el plazo justo ahora', { estado: 'cancelada', anticipoVenceEn: AHORA.toISOString() }, MENSAJE_VENCIDO],
+    // GP-07.4: el plazo vencido lo dice el backend con el motivo de la barrida, no el reloj del teléfono.
+    ['cancelada por la barrida (anticipo_no_pagado)', { estado: 'cancelada', motivoCancelacion: 'anticipo_no_pagado' }, MENSAJE_VENCIDO],
+    ['cancelada por la clienta con el plazo vencido', { estado: 'cancelada', anticipoVenceEn: masMinutos(AHORA, -1).toISOString() }, MENSAJE_NO_VIGENTE],
     ['cancelada con plazo por venir', { estado: 'cancelada', anticipoVenceEn: masMinutos(AHORA, 30).toISOString() }, MENSAJE_NO_VIGENTE],
     ['cancelada sin plazo', { estado: 'cancelada', anticipoVenceEn: null }, MENSAJE_NO_VIGENTE],
     ['completada', { estado: 'completada' }, MENSAJE_NO_VIGENTE],

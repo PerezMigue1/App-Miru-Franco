@@ -8,6 +8,8 @@ import { Input } from '@/shared/ui/Input';
 import { cancelacion, espacio, fuente, icono, radio, tipo, toqueMinimo } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
+import { EnlacePolitica } from './EnlacePolitica';
+
 type ClaveMotivo = 'planes' | 'emergencia' | 'salud' | 'horario' | 'otro';
 
 const MOTIVOS: { clave: ClaveMotivo; etiqueta: string }[] = [
@@ -21,8 +23,15 @@ const MOTIVOS: { clave: ClaveMotivo; etiqueta: string }[] = [
 interface HojaCancelarCitaProps {
   visible: boolean;
   onCerrar: () => void;
-  /** Qué pasa con el anticipo si cancela, o la recomendación de reprogramar. */
+  /** Qué pasa con el anticipo si cancela y con reagendar (la regla de la cita). */
   aviso: string;
+  /** Texto del enlace a la Política de anticipos y cancelación (con anticipo pagado), o undefined. */
+  enlacePolitica?: string;
+  onVerPolitica?: () => void;
+  /** false mientras carga la política del anticipo pagado: el aviso final debe decir si se devuelve. */
+  puedeConfirmar: boolean;
+  /** "Prefiero reprogramar" solo fuera de las horas de aviso de la cita. */
+  puedeReprogramar: boolean;
   cancelando: boolean;
   /** Mensaje para la clienta si la cancelación falló, o null. */
   error: string | null;
@@ -32,35 +41,29 @@ interface HojaCancelarCitaProps {
   onReprogramar: () => void;
 }
 
-/** Hoja para cancelar una cita: aviso del anticipo, motivo y confirmación en color de peligro. */
-export function HojaCancelarCita({
-  visible,
-  onCerrar,
-  aviso,
-  cancelando,
-  error,
-  onCancelar,
-  onReprogramar,
-}: HojaCancelarCitaProps) {
+/**
+ * Hoja para cancelar una cita: aviso del anticipo (y enlace a la política si está pagado), motivo y
+ * confirmación en color de peligro.
+ */
+export function HojaCancelarCita({ visible, onCerrar, aviso, ...formulario }: HojaCancelarCitaProps) {
   return (
     <Hoja visible={visible} onCerrar={onCerrar} titulo="¿Cancelar tu cita?" texto={aviso}>
       {/* El Modal desmonta su contenido al cerrarse: el motivo elegido empieza de cero cada vez. */}
-      <Formulario
-        cancelando={cancelando}
-        error={error}
-        onCancelar={onCancelar}
-        onReprogramar={onReprogramar}
-      />
+      <Formulario {...formulario} />
     </Hoja>
   );
 }
 
 function Formulario({
+  enlacePolitica,
+  onVerPolitica,
+  puedeConfirmar,
+  puedeReprogramar,
   cancelando,
   error,
   onCancelar,
   onReprogramar,
-}: Pick<HojaCancelarCitaProps, 'cancelando' | 'error' | 'onCancelar' | 'onReprogramar'>) {
+}: Omit<HojaCancelarCitaProps, 'visible' | 'onCerrar' | 'aviso'>) {
   const { colores } = useTheme();
   const [motivo, setMotivo] = useState<ClaveMotivo | null>(null);
   const [otro, setOtro] = useState('');
@@ -79,6 +82,7 @@ function Formulario({
   const valido = motivoFinal !== '';
 
   const confirmar = () => {
+    // El botón ya se desactiva sin motivo o mientras carga la política; el viewmodel lo vuelve a revisar.
     if (valido && !cancelando) {
       onCancelar(motivoFinal);
     }
@@ -90,6 +94,8 @@ function Formulario({
       contentContainerStyle={styles.contenido}
       keyboardShouldPersistTaps="handled"
     >
+      {enlacePolitica && onVerPolitica ? <EnlacePolitica texto={enlacePolitica} onPress={onVerPolitica} /> : null}
+
       <View
         accessibilityRole="radiogroup"
         accessibilityLabel="Motivo de la cancelación"
@@ -151,16 +157,18 @@ function Formulario({
           titulo={cancelando ? 'Cancelando tu cita' : 'Cancelar cita'}
           variante="peligro"
           onPress={confirmar}
-          deshabilitado={!valido}
+          deshabilitado={!valido || !puedeConfirmar}
           cargando={cancelando}
           accessibilityHint={valido ? undefined : 'Elige un motivo para poder cancelar'}
         />
-        <Button
-          titulo="Prefiero reprogramar"
-          variante="secundario"
-          onPress={onReprogramar}
-          deshabilitado={cancelando}
-        />
+        {puedeReprogramar ? (
+          <Button
+            titulo="Prefiero reprogramar"
+            variante="secundario"
+            onPress={onReprogramar}
+            deshabilitado={cancelando}
+          />
+        ) : null}
       </View>
     </ScrollView>
   );

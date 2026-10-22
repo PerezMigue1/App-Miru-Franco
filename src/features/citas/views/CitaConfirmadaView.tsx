@@ -69,6 +69,8 @@ export default function CitaConfirmadaView() {
               anticipo={vm.anticipo}
               limite={vm.limite}
               avisoSalon={vm.avisoSalon}
+              textoPendiente={vm.textoPendiente}
+              recordatorio={vm.recordatorio}
             />
             <View style={styles.acciones}>
               {pendiente ? (
@@ -138,12 +140,17 @@ function Confirmacion({
   anticipo,
   limite,
   avisoSalon,
+  textoPendiente,
+  recordatorio,
 }: {
   cita: Cita;
   anticipo: AnticipoConfirmacion;
   limite: string | null;
   /** Anticipo pendiente en el salón: reemplaza el título y el mensaje de la confirmación. */
   avisoSalon: string | null;
+  /** Anticipo pendiente en línea: cómo pagarlo y su plazo, o null. */
+  textoPendiente: string | null;
+  recordatorio: string;
 }) {
   const { colores } = useTheme();
   // Una sola entrada al montarse, en 220 ms: opacidad y 8px hacia arriba (solo opacidad si se
@@ -189,11 +196,10 @@ function Confirmacion({
         ) : null}
       </ResumenCita>
 
-      {anticipo === 'pendiente' && !avisoSalon ? (
-        <Text style={[styles.mensaje, { color: colores.textoSuave }]}>
-          Págalo en línea o en el salón. Si no se paga a tiempo, el horario se libera.
-        </Text>
+      {textoPendiente ? (
+        <Text style={[styles.mensaje, { color: colores.textoSuave }]}>{textoPendiente}</Text>
       ) : null}
+      <Text style={[styles.mensaje, { color: colores.textoSuave }]}>{recordatorio}</Text>
     </Animated.View>
   );
 }

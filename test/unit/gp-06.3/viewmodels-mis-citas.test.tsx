@@ -11,6 +11,8 @@ import {
   type ReprogramarCitaViewModel,
 } from '@/features/citas/viewmodels/useReprogramarCitaViewModel';
 
+import { obtenerTexto, RESPALDO_TEXTOS } from '@/shared/api/textosSitio';
+
 import {
   AYER,
   CITA_CON_ANTICIPO,
@@ -50,6 +52,7 @@ import {
   type CitaCruda,
   type CuerpoError,
 } from '../../helpers/citasFicticias';
+import { rutasConsentimientos } from '../../helpers/reservaFicticia';
 import { espiarConsola } from '../../helpers/consola';
 import { cuerpoLista, ESPECIALISTA_UNO } from '../../helpers/serviciosFicticios';
 import { respuesta, type Llamada, type Manejador } from '../../helpers/servidorSimulado';
@@ -107,9 +110,12 @@ const NOVIEMBRE = '2026-11-03';
 
 const GENERICO_LISTA = 'Algo salió mal al traer tus citas. Intenta de nuevo en un momento.';
 const AVISO_REFRESCO = 'No pudimos actualizar tus citas. Desliza hacia abajo para intentar de nuevo.';
-const RECOMENDACION = 'Te recomendamos reprogramar tu cita en lugar de cancelarla.';
-const AVISO_PAGADO =
-  'El anticipo de $360 que pagaste no se devuelve si cancelas. Si reprogramas tu cita con aviso, tu anticipo se respeta.';
+// GP-07.4: los avisos de cancelar salen del catálogo con la regla de la cita (estas citas no guardan
+// reglas: las de omisión, 10 días de excepción y 5 de reembolso). Con anticipo pagado y sin
+// `cancelacion` en el estado del anticipo, el aviso es el de sin datos.
+const RECOMENDACION = RESPALDO_TEXTOS['citas.cancelar.sinAnticipo'];
+const AVISO_PAGADO = `${obtenerTexto('citas.cancelar.anticipoSinDatos', { anticipo: '$360', diasExcepcion: 10, diasReembolso: 5 })} ${RESPALDO_TEXTOS['citas.cancelar.reprogramar']}`;
+const AVISO_CANCELADA = RESPALDO_TEXTOS['citas.cancelar.toast'];
 const HORARIOS_FALLARON = 'No pudimos cargar los horarios de este día.';
 
 // ── Andamiaje ────────────────────────────────────────────────────────────────────────────────
@@ -395,11 +401,11 @@ describe('useDetalleCitaViewModel: carga', () => {
     const detalle = enPausa();
     simularServidorMisCitas({ [RUTA_DETALLE]: turnos(detalle.turno) });
     const { result } = await renderHook(() => useDetalleCitaViewModel(` ${ID} `));
-    expect(result.current).toMatchObject({ estado: 'cargando', cita: null, avisoCancelacion: RECOMENDACION });
+    expect(result.current).toMatchObject({ estado: 'cargando', cita: null, avisoCancelacion: '' });
     await detalle.soltar(respuesta(cuerpoCita()));
     await esperarEstado(result, 'listo');
     expect(result.current.cita).toEqual(CITA_CON_ANTICIPO_NORMALIZADA);
-    expect(result.current).toMatchObject({ hojaCancelarVisible: false, cancelando: false, recienCancelada: false });
+    expect(result.current).toMatchObject({ hojaCancelarVisible: false, cancelando: false, avisoCancelada: null });
   });
 
   it.each<[string, string, Turno]>([
@@ -418,7 +424,7 @@ describe('useDetalleCitaViewModel: carga', () => {
     'id %s: noEncontrado sin pedir nada, y pagar, reprogramar o cancelar no hacen nada',
     async (_caso, id) => {
       const { result, llamadas } = await abrirDetalle({}, id);
-      expect(result.current).toMatchObject({ estado: 'noEncontrado', cita: null, avisoCancelacion: RECOMENDACION });
+      expect(result.current).toMatchObject({ estado: 'noEncontrado', cita: null, avisoCancelacion: '' });
       await hacer(() => result.current.pagarAnticipo());
       await hacer(() => result.current.reprogramar());
       await hacer(() => result.current.cancelar(MOTIVO_CANCELACION));
@@ -457,7 +463,7 @@ describe('useDetalleCitaViewModel: cancelar', () => {
       [RUTA_DETALLE]: turnos(citaComo(CITA_CON_ANTICIPO), citaComo(citaCancelada())),
     });
     await cancelarCon(result);
-    await waitFor(() => expect(result.current.recienCancelada).toBe(true));
+    await waitFor(() => expect(result.current.avisoCancelada).toBe(AVISO_CANCELADA));
     expect(result.current).toMatchObject({
       estado: 'listo',
       hojaCancelarVisible: false,
@@ -505,7 +511,7 @@ describe('useDetalleCitaViewModel: cancelar', () => {
     await cancelarCon(result);
     await waitFor(() => expect(result.current.errorCancelacion).toBe(mensaje));
     expect(result.current.errorCancelacion).not.toContain(String(cuerpo.message));
-    expect(result.current).toMatchObject({ hojaCancelarVisible: true, cancelando: false, recienCancelada: false });
+    expect(result.current).toMatchObject({ hojaCancelarVisible: true, cancelando: false, avisoCancelada: null });
     expect(result.current.cita?.estado).toBe('pendiente');
     // Cerrar la hoja borra el error.
     await hacer(() => result.current.cerrarCancelar());
@@ -515,7 +521,7 @@ describe('useDetalleCitaViewModel: cancelar', () => {
   it('si la relectura falla tras cancelar, muestra la cita como cancelada con el motivo', async () => {
     const { result } = await abrirDetalle({ [RUTA_DETALLE]: turnos(citaComo(CITA_CON_ANTICIPO), sinRed) });
     await cancelarCon(result);
-    await waitFor(() => expect(result.current.recienCancelada).toBe(true));
+    await waitFor(() => expect(result.current.avisoCancelada).toBe(AVISO_CANCELADA));
     expect(result.current.cita).toEqual({
       ...CITA_CON_ANTICIPO_NORMALIZADA,
       estado: 'cancelada',
@@ -534,7 +540,7 @@ describe('useDetalleCitaViewModel: cancelar', () => {
     await unmount();
     await patch.soltar(tardia());
     await vaciar();
-    expect(result.current).toMatchObject({ cancelando: true, recienCancelada: false, errorCancelacion: null });
+    expect(result.current).toMatchObject({ cancelando: true, avisoCancelada: null, errorCancelacion: null });
   });
 });
 
@@ -561,22 +567,27 @@ describe('useDetalleCitaViewModel: aviso de cancelación', () => {
     ],
   ])('%s', async (_caso, cita, aviso) => {
     const { result } = await abrirDetalle({ [RUTA_DETALLE]: turnos(citaComo(cita)) });
-    expect(result.current.avisoCancelacion).toBe(aviso);
+    // El aviso con anticipo pagado se decide al abrir la hoja, con la política del backend.
+    await hacer(() => result.current.abrirCancelar());
+    await waitFor(() => expect(result.current.avisoCancelacion).toBe(aviso));
   });
 });
 
 describe('useDetalleCitaViewModel: navegación', () => {
+  // GP-07.4: pagar pide la casilla de la política y registra el consentimiento; después abre el pago,
+  // que lanza Mercado Pago solo (?pagar=1).
   it('pagarAnticipo abre el anticipo una sola vez aunque se toque dos veces; al volver se puede de nuevo', async () => {
-    const { result } = await abrirDetalle();
+    const { result } = await abrirDetalle(rutasConsentimientos());
+    await hacer(() => result.current.casilla.cambiar(true));
     await hacer(() => {
       result.current.pagarAnticipo();
       result.current.pagarAnticipo();
     });
-    expect(router.push).toHaveBeenCalledTimes(1);
-    expect(router.push).toHaveBeenCalledWith(`/anticipo/${ID_CITA}`);
+    await waitFor(() => expect(router.push).toHaveBeenCalledTimes(1));
+    expect(router.push).toHaveBeenCalledWith(`/anticipo/${ID_CITA}?pagar=1`);
     await reenfocar();
     await hacer(() => result.current.pagarAnticipo());
-    expect(router.push).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(router.push).toHaveBeenCalledTimes(2));
   });
 
   it('reprogramar abre la reprogramación una vez y cierra la hoja de cancelar', async () => {

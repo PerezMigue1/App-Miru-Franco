@@ -5,6 +5,8 @@ import '../../helpers/mocksPantallas';
 
 import { fireEvent, screen } from 'expo-router/testing-library';
 
+import { plazoDeOpcion } from '@/features/citas/models/formaPagoModel';
+
 import {
   conError,
   DIA_CITA,
@@ -25,9 +27,11 @@ import { LIMITE_MS } from '../../helpers/pantallas';
 import {
   abrirReserva,
   BOTON,
+  confirmarConAnticipo,
   esperarRuta,
   horaDelServidor,
   llegarAlResumen,
+  OPCION_PAGO,
   PASO,
   prepararPruebasReserva,
   revisarDatos,
@@ -51,8 +55,8 @@ jest.mock('expo-web-browser', () => require('../../helpers/google').navegadorSim
  */
 
 const NOTAS = 'Traigo foto de referencia';
-const NOTA_SALON =
-  'Llega entre 20 y 15 minutos antes para pagarlo. Si a 15 minutos de tu cita no se ha pagado, se cancela.';
+/** Plazo bajo la opción en el salón, con las reglas de la configuración (GP-07.4). */
+const NOTA_SALON = () => plazoDeOpcion('salon');
 const ERROR_RESERVA = 'No pudimos reservar tu cita. Intenta de nuevo.';
 const SIN_CONEXION = 'Sin conexión. Revisa tu internet e intenta de nuevo';
 const SESION_TERMINADA = 'Tu sesión terminó. Inicia sesión de nuevo.';
@@ -71,7 +75,7 @@ async function apartarEnSalon(opciones: OpcionesReserva): Promise<PantallaReserv
   const abierta = await abrirReserva(`/reservar/${SERVICIO_CON_ANTICIPO.id}`, opciones);
   await llegarAlResumen();
   await fireEvent.changeText(screen.getByLabelText('Notas para el salón (opcional)'), NOTAS);
-  await tocar(BOTON.apartarEnSalon);
+  await confirmarConAnticipo('salon');
   return abierta;
 }
 
@@ -82,11 +86,17 @@ async function apartarEnSalon(opciones: OpcionesReserva): Promise<PantallaReserv
 function sigueEnElPaso3(abierta: PantallaReserva): void {
   expect(screen.getByRole('header', { name: PASO.confirmar })).toBeOnTheScreen();
   expect(abierta.app.getPathname()).toBe(`/reservar/${SERVICIO_CON_ANTICIPO.id}`);
-  revisarDatos({ Servicio: 'Alaciado keratínico', Hora: horaDelServidor(DIA_CITA, '11:00'), Anticipo: '$360' });
+  revisarDatos({
+    Servicio: 'Alaciado keratínico',
+    Hora: horaDelServidor(DIA_CITA, '11:00'),
+    'Anticipo para apartar tu cita': '$360',
+  });
   expect(screen.getByDisplayValue(NOTAS)).toBeOnTheScreen();
-  expect(screen.getByText(NOTA_SALON)).toBeOnTheScreen();
+  expect(screen.getByText(NOTA_SALON())).toBeOnTheScreen();
+  // GP-07.4: un solo botón con la opción elegida; pagar en línea sigue como la otra opción.
   expect(screen.getByRole('button', { name: BOTON.apartarEnSalon })).toBeEnabled();
-  expect(screen.getByRole('button', { name: BOTON.pagarEnLinea })).toBeEnabled();
+  expect(screen.getByRole('radio', { name: OPCION_PAGO.salon })).toBeChecked();
+  expect(screen.getByRole('radio', { name: OPCION_PAGO.linea })).toBeEnabled();
   expect(abrirSesionSimulada()).not.toHaveBeenCalled();
   sinTextos(...TECNICOS);
 }
@@ -176,7 +186,8 @@ describe('Errores al apartar la cita para pagar el anticipo en el salón (GP-06.
 
       expect(screen.getByRole('button', { name: BOTON.confirmar })).toBeEnabled();
       expect(screen.queryByRole('button', { name: BOTON.apartarEnSalon })).not.toBeOnTheScreen();
-      sinTextos(NOTA_SALON);
+      sinTextos(NOTA_SALON());
+      expect(screen.queryByRole('radio')).not.toBeOnTheScreen();
 
       await tocar(BOTON.confirmar);
       await esperarRuta(abierta.app, `/cita-confirmada/${ID_CITA}`);

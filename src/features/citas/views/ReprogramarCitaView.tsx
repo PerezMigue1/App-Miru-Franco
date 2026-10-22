@@ -1,5 +1,5 @@
 import { useLocalSearchParams } from 'expo-router';
-import { ArrowDown, CalendarCheck, Info, UserRound } from 'lucide-react-native';
+import { ArrowDown, CalendarCheck, Info, MessageCircle, Phone, UserRound } from 'lucide-react-native';
 import { useEffect, useRef } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,28 +24,13 @@ import { useMovimientoReducido } from '@/shared/ui/useMovimientoReducido';
 import { useTheme } from '@/shared/ui/useTheme';
 
 import { CalendarioMensual } from '../components/CalendarioMensual';
+import { EnlacePolitica } from '../components/EnlacePolitica';
 import { Dato } from '../components/ResumenCita';
+import { CuadriculaHorarios, CuadriculaHorariosEsqueleto } from '../components/SelectorHorario';
 import {
-  CuadriculaHorarios,
-  CuadriculaHorariosEsqueleto,
-  horaDeSlot,
-} from '../components/SelectorHorario';
-import {
-  fechaLegible,
-  horaLegible,
   useReprogramarCitaViewModel,
   type ReprogramarCitaViewModel,
 } from '../viewmodels/useReprogramarCitaViewModel';
-
-/** Primera letra en mayúscula ("Sábado 18 de octubre"). */
-function conMayuscula(texto: string): string {
-  return texto ? texto.charAt(0).toUpperCase() + texto.slice(1) : texto;
-}
-
-/** 'Sábado 18 de octubre, 6:30 p. m.'; solo lo que se pueda leer. */
-function cuandoLegible(fecha: string, hora: string): string {
-  return [conMayuscula(fecha), hora].filter(Boolean).join(', ');
-}
 
 /** Reprogramar una cita: mismo servicio y especialista, nuevo día y hora. */
 export default function ReprogramarCitaView() {
@@ -117,6 +102,17 @@ export default function ReprogramarCitaView() {
             mensaje="Solo se pueden cambiar las citas pendientes, confirmadas o ya reprogramadas. Si necesitas otro horario, reserva una cita nueva."
             accion={{ titulo: 'Volver a tu cita', onPress: vm.regresar }}
           />
+        </ScrollView>
+      ) : null}
+
+      {vm.estado === 'fueraDeAviso' ? (
+        <ScrollView contentContainerStyle={[styles.estado, relleno]}>
+          <EmptyState
+            titulo="Reagenda con el salón"
+            mensaje={vm.avisoFueraDePlazo}
+            accion={{ titulo: 'Volver a tu cita', onPress: vm.regresar }}
+          />
+          <ContactoSalon vm={vm} />
         </ScrollView>
       ) : null}
 
@@ -223,6 +219,15 @@ function Horarios({ vm }: { vm: ReprogramarCitaViewModel }) {
     return <CuadriculaHorariosEsqueleto />;
   }
 
+  if (vm.estadoHorarios === 'sinAgenda') {
+    return (
+      <View style={styles.mensajeHorarios}>
+        <Text style={[styles.cuerpo, { color: colores.texto }]}>{vm.errorHorarios}</Text>
+        <ContactoSalon vm={vm} />
+      </View>
+    );
+  }
+
   if (vm.estadoHorarios === 'error') {
     return (
       <View style={styles.mensajeHorarios}>
@@ -264,29 +269,54 @@ function Horarios({ vm }: { vm: ReprogramarCitaViewModel }) {
   );
 }
 
-/** "De" el horario actual "A" el elegido; solo cuando ya hay un horario elegido. */
-function ResumenCambio({ vm }: { vm: ReprogramarCitaViewModel }) {
+/** Llamar o escribir al salón (teléfono y WhatsApp de la configuración), si los hay. */
+function ContactoSalon({ vm }: { vm: ReprogramarCitaViewModel }) {
   const { colores } = useTheme();
-  const { cita, slot } = vm;
-  if (!cita || !slot) {
+  if (vm.contacto.length === 0) {
     return null;
   }
-  const antes = cuandoLegible(fechaLegible(cita.fechaHoraInicio), horaLegible(cita.fechaHoraInicio));
-  const despues = cuandoLegible(fechaLegible(slot.inicio), horaDeSlot(slot));
+  return (
+    <View style={styles.contacto}>
+      {vm.contacto.map((contacto) => {
+        const Icono = contacto.tipo === 'telefono' ? Phone : MessageCircle;
+        return (
+          <Button
+            key={contacto.tipo}
+            titulo={contacto.titulo}
+            variante="secundario"
+            onPress={() => vm.abrirContacto(contacto.url)}
+            icono={<Icono color={colores.textoSobreSecundario} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />}
+            posicionIcono="inicio"
+          />
+        );
+      })}
+    </View>
+  );
+}
+
+/** "De" el horario actual "A" el elegido y qué pasa con el anticipo; solo con un horario elegido. */
+function ResumenCambio({ vm }: { vm: ReprogramarCitaViewModel }) {
+  const { colores } = useTheme();
+  const resumen = vm.resumenCambio;
+  if (!resumen) {
+    return null;
+  }
   return (
     <View
-      accessible
-      accessibilityLabel={`Cambio de tu cita. De: ${antes}. A: ${despues}.`}
       style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombraTarjeta }]}
     >
-      <Subtitulo texto="Tu cambio" />
-      <View style={styles.cambio}>
-        <FilaCambio etiqueta="De" valor={antes} />
+      <View accessible accessibilityLabel={`Cambio de tu cita. De: ${resumen.de}. A: ${resumen.a}.`} style={styles.cambio}>
+        <Subtitulo texto="Tu cambio" />
+        <FilaCambio etiqueta="De" valor={resumen.de} />
         <View style={styles.flecha}>
           <ArrowDown color={colores.texto} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
         </View>
-        <FilaCambio etiqueta="A" valor={despues} destacada />
+        <FilaCambio etiqueta="A" valor={resumen.a} destacada />
       </View>
+      {vm.avisoAnticipo ? (
+        <Text style={[styles.cuerpoTexto, { color: colores.texto }]}>{vm.avisoAnticipo}</Text>
+      ) : null}
+      {vm.enlacePolitica ? <EnlacePolitica texto={vm.enlacePolitica} onPress={vm.abrirPolitica} /> : null}
     </View>
   );
 }
@@ -358,6 +388,15 @@ const styles = StyleSheet.create({
     fontFamily: fuente.textoMedio,
     fontSize: tipo.cuerpo.tamano,
     lineHeight: tipo.cuerpo.linea,
+  },
+  cuerpoTexto: {
+    fontFamily: fuente.texto,
+    fontSize: tipo.parrafo.tamano,
+    lineHeight: tipo.parrafo.linea,
+  },
+  contacto: {
+    marginTop: espacio.s,
+    gap: espacio.m,
   },
   nota: {
     fontFamily: fuente.texto,

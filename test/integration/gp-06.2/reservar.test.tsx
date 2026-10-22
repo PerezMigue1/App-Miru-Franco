@@ -5,6 +5,8 @@ import '../../helpers/mocksPantallas';
 
 import { fireEvent, screen, waitFor } from 'expo-router/testing-library';
 
+import { plazoDeOpcion, textoBotonConfirmar } from '@/features/citas/models/formaPagoModel';
+
 import {
   citaCruda,
   CLIENTA_CITAS,
@@ -37,6 +39,7 @@ import {
   horarioEnTelefono,
   llegarAlResumen,
   movimientoReducido,
+  OPCION_PAGO,
   PASO,
   prepararPruebasReserva,
   retener,
@@ -66,8 +69,6 @@ jest.mock('expo-web-browser', () => require('../../helpers/google').navegadorSim
 const SIN_RELACION = null as unknown as never;
 
 const NOTAS = 'Traigo foto de referencia';
-const AVISO_ANTICIPO =
-  'En línea tienes 2 horas para pagarlo. Se descuenta del total el día de tu cita. Si cancelas, el anticipo no se devuelve; si reagendas con aviso, se respeta.';
 
 describe('Reservar una cita con las pantallas reales (GP-06.2)', () => {
   const esperarConsolaLimpia = prepararPruebasReserva();
@@ -220,7 +221,9 @@ describe('Reservar una cita con las pantallas reales (GP-06.2)', () => {
       const boton = screen.getByRole('button', { name: BOTON.confirmar });
       await fireEvent.press(boton);
       await fireEvent.press(boton);
-      await waitFor(() => expect(screen.getByRole('button', { name: BOTON.confirmar })).toBeBusy());
+      // GP-07.4: mientras se envía el botón dice que está confirmando (textoBotonConfirmar).
+      const enviando = textoBotonConfirmar(0, 'salon', true);
+      await waitFor(() => expect(screen.getByRole('button', { name: enviando })).toBeBusy());
       expect(llamadasDeRuta(llamadas, RUTA_CREAR_CITA)).toHaveLength(1);
 
       // Mientras se envía, "Volver" no regresa de paso.
@@ -263,7 +266,7 @@ describe('Reservar una cita con las pantallas reales (GP-06.2)', () => {
   );
 
   it(
-    'con anticipo, el paso 3 muestra el anticipo, el aviso de 2 horas y los dos botones',
+    'con anticipo, el paso 3 muestra el anticipo, el saldo, el plazo en línea y un solo botón para pagar en línea',
     async () => {
       await abrirReserva(`/reservar/${SERVICIO_CON_ANTICIPO.id}`);
       await llegarAlResumen({ tarjeta: TARJETA_DOS });
@@ -272,12 +275,16 @@ describe('Reservar una cita con las pantallas reales (GP-06.2)', () => {
         Servicio: 'Alaciado keratínico',
         Especialista: ESPECIALISTA_DOS.nombre,
         Precio: '$1,200',
-        Anticipo: '$360',
+        'Anticipo para apartar tu cita': '$360',
+        'Pagas en el salón el día de tu cita': '$840',
       });
-      expect(screen.getByText(AVISO_ANTICIPO)).toBeOnTheScreen();
+      // GP-07.4: el plazo sale de las reglas (aquí, las del respaldo) y va bajo la opción en línea.
+      expect(screen.getByRole('radio', { name: OPCION_PAGO.linea })).toBeChecked();
+      expect(screen.getByText(plazoDeOpcion('linea'))).toBeOnTheScreen();
       expect(screen.getByRole('button', { name: BOTON.pagarEnLinea })).toBeEnabled();
-      // "Apartar y pagar en el salón" es de GP-06.5: aquí solo se revisa que aparece.
-      expect(screen.getByRole('button', { name: BOTON.apartarEnSalon })).toBeOnTheScreen();
+      // Pagar en el salón (GP-06.5) es la otra opción, no otro botón.
+      expect(screen.getByRole('radio', { name: OPCION_PAGO.salon })).not.toBeChecked();
+      expect(screen.queryByRole('button', { name: BOTON.apartarEnSalon })).not.toBeOnTheScreen();
       expect(screen.queryByRole('button', { name: BOTON.confirmar })).not.toBeOnTheScreen();
       esperarConsolaLimpia();
     },

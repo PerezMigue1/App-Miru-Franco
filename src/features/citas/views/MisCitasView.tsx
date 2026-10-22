@@ -166,7 +166,7 @@ function ListaMisCitas({
         {aviso}
         {segmento === 'proximas' ? (
           <EmptyState
-            titulo="Aquí verás tus próximas citas"
+            titulo={vm.textoVacio}
             mensaje="Cada cita aparecerá con su fecha, su hora y el estado de su anticipo."
             accion={{ titulo: 'Reservar una cita', onPress: onReservar }}
           />

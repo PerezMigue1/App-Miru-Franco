@@ -122,6 +122,9 @@ function Navegacion({ fuentesListas }: { fuentesListas: boolean }) {
           {/* Notificaciones se abre con la campana de Inicio, encima de las pestañas; sin sesión
               muestra la invitación a iniciar sesión. */}
           <Stack.Screen name="notificaciones" />
+          {/* Visor de un documento legal (GP-07.4): público, se abre desde las casillas de
+              consentimiento con o sin sesión. */}
+          <Stack.Screen name="legal/[slug]" />
           {/* Acceso se abre encima de las pestañas y solo sin sesión: al iniciar sesión el guard lo
               saca de la pila y queda a la vista la pestaña donde estaba la clienta. */}
           <Stack.Protected guard={estado !== 'autenticado'}>

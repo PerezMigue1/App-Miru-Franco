@@ -1,8 +1,10 @@
 import { useFocusEffect, useRouter, type Href } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 import { MENSAJE_SIN_CONEXION, esErrorDeRed } from '@/features/auth/models/AuthModel';
 import { useAuth } from '@/features/auth/viewmodels/useAuth';
+import { obtenerConfiguracion, suscribir } from '@/shared/api/configuracionPublica';
+import { obtenerTexto } from '@/shared/api/textosSitio';
 
 import { listarMisCitas, separarMisCitas, type Cita } from '../models/citaModel';
 import { obtenerServicios } from '../models/servicioModel';
@@ -38,6 +40,8 @@ export interface MisCitasViewModel {
   puedeReservarIgual: (cita: Cita) => boolean;
   /** Abre la reserva del mismo servicio con la misma especialista ya elegida. */
   reservarIgual: (cita: Cita) => void;
+  /** Título de la lista de próximas vacía (citas.lista.vacia del catálogo). */
+  textoVacio: string;
 }
 
 /** Cómo se pide la lista: con skeleton, en silencio (al volver a la pantalla) o con pull to refresh. */
@@ -57,6 +61,7 @@ function mensajeDeError(error: unknown): string {
 export function useMisCitasViewModel(): MisCitasViewModel {
   const router = useRouter();
   const { estado: sesion } = useAuth();
+  const configuracion = useSyncExternalStore(suscribir, obtenerConfiguracion, obtenerConfiguracion);
   const [estado, setEstado] = useState<EstadoMisCitas>('cargando');
   const [proximas, setProximas] = useState<Cita[]>([]);
   const [historial, setHistorial] = useState<Cita[]>([]);
@@ -209,5 +214,6 @@ export function useMisCitasViewModel(): MisCitasViewModel {
     abrirCita,
     puedeReservarIgual,
     reservarIgual,
+    textoVacio: obtenerTexto('citas.lista.vacia', {}, configuracion),
   };
 }
