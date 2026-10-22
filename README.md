@@ -16,7 +16,7 @@ Cada feature vive en `src/features/<feature>/` (auth, inicio, citas, tienda, not
 Fuera de las features:
 
 - `src/app`: solo rutas de Expo Router; cada archivo reexporta una vista (por ejemplo, `src/app/(auth)/login.tsx` exporta `LoginView`).
-- `src/shared/api`: cliente HTTP con renovación de sesión (`apiClient.ts`), sesión en SecureStore (`tokenStorage.ts`) y subida multipart (`subirMultipart.ts`).
+- `src/shared/api`: cliente HTTP con renovación de sesión (`apiClient.ts`), sesión en SecureStore (`tokenStorage.ts`), subida multipart (`subirMultipart.ts`) y configuración pública del salón (`configuracionPublica.ts` con su hook `useConfiguracionPublica.ts`).
 - `src/shared/ui`: colores (`colores.ts`), tokens (`tokens.ts`), tema (`useTheme.ts`, `apariencia.tsx`) y componentes compartidos.
 
 Regla: shared no depende de features. `src/shared` no importa nada de `src/features`; cuando una pieza compartida necesita algo de una feature, se lo inyecta la raíz `src/app/_layout.tsx`. Ejemplo: `AccionesCabecera` recibe la sesión con `SesionCabeceraProvider`, y la implementación real vive en `features/auth/viewmodels/sesionCabecera.ts`. La prueba `test/unit/gp-04/reglas-diseno.test.ts` lo vigila.
@@ -26,6 +26,7 @@ Regla: shared no depende de features. `src/shared` no importa nada de `src/featu
 **Singleton (estado de módulo único)**
 - `src/shared/api/apiClient.ts`: el módulo guarda una sola `renovacionEnCurso`; `renovarEnVuelo()` la crea solo si no existe (`renovacionEnCurso ??= ...`), así varias peticiones a la vez comparten una sola renovación. También guarda un único `manejadorSesionExpirada` y el último `refreshConsumido`.
 - `src/shared/api/tokenStorage.ts`: un solo contador `generacion` (`generacionActual()`, `nuevaGeneracion()`) y una sola cola `cola` (`enCola()`) por la que pasan, una tras otra, todas las lecturas y escrituras de la sesión en SecureStore.
+- `src/shared/api/configuracionPublica.ts`: un solo `estado` en memoria con la configuración pública para toda la app y una sola petición `enVuelo`.
 
 **Factory (función fábrica)**
 - `src/shared/api/apiClient.ts`: `crearErrorApi(datos)` es la única función que crea los errores del cliente HTTP; recibe un tipo y decide la clase, el mensaje, el status y el `code`:
@@ -37,11 +38,16 @@ Regla: shared no depende de features. `src/shared` no importa nada de `src/featu
 
 **Repository**
 - `src/features/*/models/*Model.ts` y `src/features/auth/models/authService.ts`: funciones como `listarMisCitas`, `obtenerCita`, `crearCita` y `cancelarCita` (`citaModel.ts`), `obtenerCatalogo` (`productoModel.ts`) u `obtenerCarrito` (`carritoModel.ts`) ocultan la ruta HTTP y convierten la respuesta cruda en tipos de la feature (`normalizarCita`, `normalizarProducto`, `normalizarItem`). Los viewmodels piden datos a estas funciones sin saber de dónde salen. En `authService.ts`, `obtenerPerfilConToken` pide `GET /api/auth/me` con el token recién emitido tras el inicio con Google.
+- `src/shared/api/configuracionPublica.ts`: lee `GET /api/configuracion-publica` sin sesión (`{ publica: true }`) y la convierte con `normalizarConfiguracion` en `ConfiguracionPublica`; las pantallas no saben si llegó de la red, del archivo o del respaldo. `cargarConfiguracion()` sigue este orden: memoria vigente (`VIGENCIA_CONFIGURACION_MS`, 5 minutos), red, archivo guardado y `RESPALDO_CONFIGURACION` (los valores que la app tenía fijos). El archivo usa expo-file-system en `Paths.document` y no SecureStore, porque SecureStore limita el tamaño por valor y estos datos no son secretos. Dos refrescos a la vez comparten una sola petición. `refrescar()` queda para que las pantallas lo llamen al deslizar para actualizar en GP-07.6.
 
 **Observer**
 - `src/features/tienda/viewmodels/usePiezasCarrito.ts`: estado en memoria con un `Set` de `oyentes`; `suscribir()` agrega y quita oyentes, `fijar()` les avisa cuando cambia el número de piezas y `usePiezasCarrito()` se conecta con `useSyncExternalStore(suscribir, leerPiezas)`. Otras pantallas publican cambios con `avisarCambioCarrito()` y `publicarPiezasCarrito()`.
 - `src/features/auth/viewmodels/useFotoClienta.ts`: el mismo esquema (`oyentes`, `suscribir`, `fijar`, `useSyncExternalStore`) para la foto de la cabecera; Perfil avisa con `fijarFotoClienta()`.
 - `src/shared/api/apiClient.ts`: `alExpirarSesion(manejador)` registra a quien se entera cuando la sesión expira (un solo manejador) y devuelve la función para quitarlo; `AuthProvider` en `useAuth.tsx` se registra ahí para quedar sin sesión y avisarle a la clienta.
+- `src/shared/api/configuracionPublica.ts` y `useConfiguracionPublica.ts`: `suscribir()` registra oyentes que se enteran cuando llega una versión nueva, y `useConfiguracionPublica()` se conecta con `useSyncExternalStore(suscribir, estadoConfiguracion)`. Al volver la app a primer plano, el hook refresca solo si la caché ya venció (`cacheVencida()`).
+
+**Pantalla de carga**
+- `src/app/_layout.tsx`: mantiene el splash nativo hasta que están las fuentes, la sesión, la apariencia y la carga inicial de la configuración pública (`cargarConLimite()`), con un tope de `TIEMPO_MAXIMO_CARGA_MS` (3 segundos). Si se vence el tope o falla la red, abre con lo guardado en el archivo o con el respaldo, y la red termina en segundo plano. Nunca se queda en el splash.
 
 ## Pruebas
 
@@ -61,3 +67,26 @@ Workflow `.github/workflows/pruebas.yml` (se dispara en `pull_request` y `push` 
 
 - Job `pruebas` (Node 22): `npm ci`, `npm run typecheck` y `npx jest --ci --coverage`; publica el resumen de pruebas y cobertura en el resumen del job y sube la cobertura como artefacto.
 - Job `sast`: Semgrep con las reglas `p/javascript`, `p/typescript`, `p/react` y `p/secrets`; resume los hallazgos por severidad y falla si hay alguno de severidad ERROR.
+
+## Flujo de ramas
+
+El repo usa GitHub Flow: cada tarea sale en una rama `feature/*` o `fix/*` desde `main` y regresa a `main` con un PR. Cada tarea lleva un solo commit con Conventional Commits en español y el número de issue (por ejemplo, `feat(citas): elegir día y hora (GP-06.2)`). Las ramas no se borran porque el profesor pide el historial.
+
+GP-07.1 (pantalla de carga y configuración pública) se hizo una sola vez con GitFlow:
+
+1. `develop` sale de `main`.
+2. `feature/pantalla-de-carga` sale de `develop` y se integra a `develop`.
+3. De `develop` sale una rama release (por ejemplo, `release/v0.3.0`) que se integra a `main` con el tag `v0.3.0`.
+4. `main` regresa a `develop` para que las dos queden iguales.
+
+```text
+main      o---------------------------o v0.3.0
+           \                         / \
+release     \              o--------o   \
+             \            /              \
+develop       o----o-----o----------------o
+                    \   /
+feature              o-o
+```
+
+Después de GP-07.1 se sigue con GitHub Flow.
