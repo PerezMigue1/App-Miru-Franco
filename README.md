@@ -16,7 +16,7 @@ Cada feature vive en `src/features/<feature>/` (auth, inicio, citas, tienda, not
 Fuera de las features:
 
 - `src/app`: solo rutas de Expo Router; cada archivo reexporta una vista (por ejemplo, `src/app/(auth)/login.tsx` exporta `LoginView`).
-- `src/shared/api`: cliente HTTP con renovación de sesión (`apiClient.ts`), sesión en SecureStore (`tokenStorage.ts`), subida multipart (`subirMultipart.ts`) y configuración pública del salón (`configuracionPublica.ts` con su hook `useConfiguracionPublica.ts`).
+- `src/shared/api`: cliente HTTP con renovación de sesión (`apiClient.ts`), sesión en SecureStore (`tokenStorage.ts`), subida multipart (`subirMultipart.ts`), flujo de eventos del servidor (`flujoEventos.ts`: `abrirFlujoEventos` abre un SSE con el fetch de `expo/fetch`, que entrega el cuerpo por trozos, y el token solo en el encabezado `Authorization`) y configuración pública del salón (`configuracionPublica.ts` con su hook `useConfiguracionPublica.ts`).
 - `src/shared/ui`: colores (`colores.ts`), tokens (`tokens.ts`), tema (`useTheme.ts`, `apariencia.tsx`) y componentes compartidos.
 
 Regla: shared no depende de features. `src/shared` no importa nada de `src/features`; cuando una pieza compartida necesita algo de una feature, se lo inyecta la raíz `src/app/_layout.tsx`. Ejemplo: `AccionesCabecera` recibe la sesión con `SesionCabeceraProvider`, y la implementación real vive en `features/auth/viewmodels/sesionCabecera.ts`. La prueba `test/unit/gp-04/reglas-diseno.test.ts` lo vigila.
@@ -24,9 +24,10 @@ Regla: shared no depende de features. `src/shared` no importa nada de `src/featu
 ### Patrones de diseño
 
 **Singleton (estado de módulo único)**
-- `src/shared/api/apiClient.ts`: el módulo guarda una sola `renovacionEnCurso`; `renovarEnVuelo()` la crea solo si no existe (`renovacionEnCurso ??= ...`), así varias peticiones a la vez comparten una sola renovación. También guarda un único `manejadorSesionExpirada` y el último `refreshConsumido`.
+- `src/shared/api/apiClient.ts`: el módulo guarda una sola `renovacionEnCurso`; `renovarEnVuelo()` la crea solo si no existe (`renovacionEnCurso ??= ...`), así varias peticiones a la vez comparten una sola renovación. `renovarTrasRechazo(token)` deja que una conexión que no pasa por `request` (el flujo en vivo de avisos) use esa misma renovación tras un 401; si el token rechazado ya no es el guardado, responde `'renovada'` sin enviar nada. También guarda un único `manejadorSesionExpirada` y el último `refreshConsumido`.
 - `src/shared/api/tokenStorage.ts`: un solo contador `generacion` (`generacionActual()`, `nuevaGeneracion()`) y una sola cola `cola` (`enCola()`) por la que pasan, una tras otra, todas las lecturas y escrituras de la sesión en SecureStore.
 - `src/shared/api/configuracionPublica.ts`: un solo `estado` en memoria con la configuración pública para toda la app y una sola petición `enVuelo`.
+- `src/features/notificaciones/viewmodels/avisosEstado.ts` y `useAvisosEnVivo.ts`: un solo estado de avisos para toda la app (con su carga `enVuelo`) y una sola conexión en vivo (`conexionUnica()`), que `src/app/_layout.tsx` monta una sola vez.
 
 **Factory (función fábrica)**
 - `src/shared/api/apiClient.ts`: `crearErrorApi(datos)` es la única función que crea los errores del cliente HTTP; recibe un tipo y decide la clase, el mensaje, el status y el `code`:
@@ -45,9 +46,18 @@ Regla: shared no depende de features. `src/shared` no importa nada de `src/featu
 - `src/features/auth/viewmodels/useFotoClienta.ts`: el mismo esquema (`oyentes`, `suscribir`, `fijar`, `useSyncExternalStore`) para la foto de la cabecera; Perfil avisa con `fijarFotoClienta()`.
 - `src/shared/api/apiClient.ts`: `alExpirarSesion(manejador)` registra a quien se entera cuando la sesión expira (un solo manejador) y devuelve la función para quitarlo; `AuthProvider` en `useAuth.tsx` se registra ahí para quedar sin sesión y avisarle a la clienta.
 - `src/shared/api/configuracionPublica.ts` y `useConfiguracionPublica.ts`: `suscribir()` registra oyentes que se enteran cuando llega una versión nueva, y `useConfiguracionPublica()` se conecta con `useSyncExternalStore(suscribir, estadoConfiguracion)`. Al volver la app a primer plano, el hook refresca solo si la caché ya venció (`cacheVencida()`).
+- `src/features/notificaciones/viewmodels/avisosEstado.ts`: estado de los avisos internos con un `Set` de `oyentes` de la lista y del contador; `suscribir()` los agrega y quita, `fijar()` les avisa y `useAvisos()` y `useNoLeidos()` se conectan con `useSyncExternalStore`. La bandeja (`useNotificaciones`) y la campana (`useNoLeidos`, que la raíz inyecta en `AccionesCabecera`) se suscriben ahí. `alLlegarAviso()` es un canal aparte solo para los avisos nuevos que llegan en vivo: lo escucha el aviso en pantalla (`useAvisoEnPantalla`). La conexión en vivo (`models/conexionAvisos.ts`) publica cada aviso con `agregarAviso()` y no conoce a las pantallas.
 
 **Pantalla de carga**
 - `src/app/_layout.tsx`: mantiene el splash nativo hasta que están las fuentes, la sesión, la apariencia y la carga inicial de la configuración pública (`cargarConLimite()`), con un tope de `TIEMPO_MAXIMO_CARGA_MS` (3 segundos). Si se vence el tope o falla la red, abre con lo guardado en el archivo o con el respaldo, y la red termina en segundo plano. Nunca se queda en el splash.
+
+### Avisos internos
+
+La app no usa notificaciones push. Los avisos (recordatorios de citas, estado de pedidos) son internos: la campana con el número de avisos sin leer, la bandeja de Notificaciones y un aviso breve arriba de la pantalla. Solo llegan con sesión y con la app abierta en primer plano; con la app cerrada no llega nada, y lo que se haya creado mientras tanto aparece en la bandeja la próxima vez que se pida la lista.
+
+- Conexión: `GET /api/notificaciones/stream` (SSE) con `abrirFlujoEventos` de `src/shared/api/flujoEventos.ts`. El token va solo en el encabezado `Authorization`, nunca en la URL. Ante un 401 renueva una vez con `renovarTrasRechazo` y reabre con el token nuevo.
+- Si el flujo se corta o no hay red, reconecta con espera creciente (1 s, 2 s, 4 s... hasta 30 s). Desde el tercer fallo seguido pide la lista cada 30 s como respaldo hasta que el flujo vuelve a abrir.
+- `useAvisosEnVivo` corta la conexión al pasar a segundo plano y al cerrar sesión (y vacía los avisos). Al volver a primer plano reconecta y pide la lista una sola vez.
 
 ## Pruebas
 
@@ -59,8 +69,8 @@ npm run typecheck      # tsc --noEmit
 
 Estructura de `test/`:
 
-- `test/setup.ts`: configuración global. Mocks de `expo-secure-store` (en memoria, se vacía antes de cada prueba), `expo-font`, `expo-splash-screen`, `react-native-reanimated` y `react-native-worklets`; `fetch` simulado que rechaza si la prueba no lo configura; variables de entorno de prueba con la API en `http://api.test`.
-- `test/helpers/`: utilidades compartidas, como `secureStore.ts` para limpiar y leer el almacén simulado de SecureStore.
+- `test/setup.ts`: configuración global. Mocks de `expo-secure-store` (en memoria, se vacía antes de cada prueba), `expo-font`, `expo-splash-screen`, `react-native-reanimated`, `react-native-worklets` y `expo/fetch` (la petición del flujo en vivo queda pendiente hasta que se aborta); `fetch` simulado que rechaza si la prueba no lo configura; variables de entorno de prueba con la API en `http://api.test`.
+- `test/helpers/`: utilidades compartidas, como `secureStore.ts` para limpiar y leer el almacén simulado de SecureStore, o `streamSimulado.ts` y `pantallasAvisos.ts` para controlar el flujo en vivo de avisos simulado.
 - `test/unit/<tarea>/` y `test/integration/<tarea>/`: pruebas unitarias y de integración agrupadas por tarea (por ejemplo, `test/unit/gp-02` y `test/integration/gp-02`).
 
 Workflow `.github/workflows/pruebas.yml` (se dispara en `pull_request` y `push` hacia `main`, `develop` y `release`; no usa secretos):
