@@ -16,8 +16,11 @@ import { HojaBienvenida } from '@/features/auth/components/HojaBienvenida';
 import { sesionCabecera } from '@/features/auth/viewmodels/sesionCabecera';
 import { AuthProvider, useAuth } from '@/features/auth/viewmodels/useAuth';
 import { SesionRequeridaProvider } from '@/features/auth/viewmodels/useRequiereSesion';
+import { AvisoEnPantalla } from '@/features/notificaciones/components/AvisoEnPantalla';
+import { useNoLeidos } from '@/features/notificaciones/viewmodels/avisosEstado';
+import { useAvisosEnVivo } from '@/features/notificaciones/viewmodels/useAvisosEnVivo';
 import { useCargaConfiguracion, useConfiguracionPublica } from '@/shared/api/useConfiguracionPublica';
-import { SesionCabeceraProvider } from '@/shared/ui/AccionesCabecera';
+import { SesionCabeceraProvider, type SesionCabecera } from '@/shared/ui/AccionesCabecera';
 import { AparienciaProvider, useApariencia } from '@/shared/ui/apariencia';
 import { FondoBarraEstado } from '@/shared/ui/FondoBarraEstado';
 import { IntroGrieta } from '@/shared/ui/IntroGrieta';
@@ -26,6 +29,12 @@ import { useTheme } from '@/shared/ui/useTheme';
 SplashScreen.preventAutoHideAsync().catch(() => {
   // Si el splash ya se ocultó no hay nada que mantener.
 });
+
+/**
+ * Lo que la cabecera compartida sabe de la sesión (auth) más el número de avisos sin leer de la
+ * campana (notificaciones). Constante de módulo: el valor del contexto nunca cambia.
+ */
+const sesionConAvisos: SesionCabecera = { ...sesionCabecera, useNoLeidos };
 
 export default function RootLayout() {
   const [fuentesCargadas, errorFuentes] = useFonts({
@@ -43,8 +52,9 @@ export default function RootLayout() {
   // La sesión se restaura en paralelo a la carga de fuentes.
   return (
     <AuthProvider>
-      {/* La raíz compone shared y features: la cabecera compartida recibe la sesión de auth. */}
-      <SesionCabeceraProvider sesion={sesionCabecera}>
+      {/* La raíz compone shared y features: la cabecera compartida recibe la sesión de auth y los
+          avisos sin leer de notificaciones. */}
+      <SesionCabeceraProvider sesion={sesionConAvisos}>
         <AparienciaProvider>
           <Navegacion fuentesListas={fuentesListas} />
         </AparienciaProvider>
@@ -64,6 +74,9 @@ function Navegacion({ fuentesListas }: { fuentesListas: boolean }) {
   const configuracionLista = useCargaConfiguracion();
   // Montado en la raíz para refrescar la configuración al volver a primer plano.
   useConfiguracionPublica();
+  // Avisos internos en vivo (GP-07.2): una sola conexión para toda la app, solo con sesión y con la
+  // app en primer plano. Se monta aquí y en ningún otro lugar.
+  useAvisosEnVivo(estado === 'autenticado');
   // La apariencia guardada se aplica antes de mostrar nada: sin parpadeo de tema.
   const listo = fuentesListas && estado !== 'cargando' && aparienciaLista && configuracionLista;
 
@@ -137,6 +150,9 @@ function Navegacion({ fuentesListas }: { fuentesListas: boolean }) {
       </SesionRequeridaProvider>
       {/* Encima del Stack y debajo de la intro de la grieta (que ya es carbón). */}
       <FondoBarraEstado />
+      {/* Aviso interno que llega en vivo: arriba, bajo la barra de estado, encima del Stack y debajo
+          de la intro. Solo la tarjeta recibe toques. */}
+      <AvisoEnPantalla />
       <IntroGrieta onTerminar={terminarIntro} />
     </GestureHandlerRootView>
   );

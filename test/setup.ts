@@ -73,6 +73,37 @@ jest.mock('react-native-reanimated', () => {
   };
 });
 
+/**
+ * expo/fetch (el flujo en vivo de avisos, GP-07.2): nunca sale a la red. Por omisión la petición
+ * queda pendiente sin temporizadores y solo se rechaza (AbortError) cuando su signal se aborta, así
+ * las pruebas que montan la app con sesión no abren nada real ni dejan handles vivos. Cada prueba
+ * empieza con ese comportamiento (beforeEach de abajo); test/helpers/streamSimulado.ts lo controla.
+ */
+jest.mock('expo/fetch', () => {
+  const pendienteHastaAbortar = (_url: unknown, init?: { signal?: AbortSignal | null }) =>
+    new Promise<never>((_resolver, rechazar) => {
+      const signal = init?.signal;
+      const abortar = () => rechazar(new DOMException('The operation was aborted.', 'AbortError'));
+      if (signal?.aborted) {
+        abortar();
+        return;
+      }
+      signal?.addEventListener('abort', abortar, { once: true });
+    });
+  return { fetch: jest.fn(pendienteHastaAbortar), __pendienteHastaAbortar: pendienteHastaAbortar };
+});
+
+interface ExpoFetchSimulado {
+  fetch: jest.Mock;
+  __pendienteHastaAbortar: (...args: unknown[]) => Promise<never>;
+}
+
+beforeEach(() => {
+  const expoFetch = jest.requireMock<ExpoFetchSimulado>('expo/fetch');
+  expoFetch.fetch.mockReset();
+  expoFetch.fetch.mockImplementation(expoFetch.__pendienteHastaAbortar);
+});
+
 /** fetch por defecto: rechaza para que cada prueba configure la respuesta que necesita. */
 function fetchNoSimulado(): Promise<Response> {
   return Promise.reject(new Error('fetch no simulado en esta prueba'));

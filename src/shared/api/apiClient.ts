@@ -467,6 +467,28 @@ export function renovarSesion(): Promise<ResultadoRenovacion> {
   return renovarEnVuelo({ tipo: 'previo' }).then((renovacion) => renovacion.resultado);
 }
 
+/**
+ * Para conexiones que no pasan por request (por ejemplo, el flujo en vivo de avisos) y recibieron
+ * un 401 con `token`: comparte el vuelo único de renovación como un reintento. Si el token rechazado
+ * ya no es el guardado (otra renovación ganó), responde 'renovada' sin enviar nada. Si el servidor
+ * rechaza la sesión, queda cerrada y avisada al manejador de alExpirarSesion (las sesiones móviles ya
+ * lo hacen al renovar; las clásicas se cierran aquí, solo si siguen siendo la misma). Nunca lanza.
+ */
+export async function renovarTrasRechazo(token: string): Promise<ResultadoRenovacion> {
+  const generacion = generacionActual();
+  // Si la lectura falla, decide la renovación (que lee de nuevo y responde 'fallida' sin lanzar).
+  const actual = await getToken().catch(() => null);
+  if (actual && actual !== token) {
+    return 'renovada';
+  }
+  const { resultado } = await renovarEnVuelo({ tipo: 'reintento', token });
+  if (resultado === 'rechazada') {
+    // Idempotente: si la renovación móvil ya la cerró (o cambió la sesión), no toca nada.
+    await expirarSesion(token, generacion);
+  }
+  return resultado;
+}
+
 /** Espera la renovación en curso, si la hay (por ejemplo, antes de cerrar sesión). Nunca lanza. */
 export async function esperarRenovacionEnCurso(): Promise<void> {
   try {
