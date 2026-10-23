@@ -16,8 +16,8 @@ Cada feature vive en `src/features/<feature>/` (auth, inicio, citas, tienda, sal
 Fuera de las features:
 
 - `src/app`: solo rutas de Expo Router; cada archivo reexporta una vista (por ejemplo, `src/app/(auth)/login.tsx` exporta `LoginView`).
-- `src/shared/api`: cliente HTTP con renovación de sesión (`apiClient.ts`), sesión en SecureStore (`tokenStorage.ts`), subida multipart (`subirMultipart.ts`), flujo de eventos del servidor (`flujoEventos.ts`: `abrirFlujoEventos` abre un SSE con el fetch de `expo/fetch`, que entrega el cuerpo por trozos, y el token solo en el encabezado `Authorization`) y configuración pública del salón (`configuracionPublica.ts` con su hook `useConfiguracionPublica.ts`).
-- `src/shared/ui`: colores (`colores.ts`), tokens (`tokens.ts`), tema (`useTheme.ts`, `apariencia.tsx`) y componentes compartidos.
+- `src/shared/api`: cliente HTTP con renovación de sesión (`apiClient.ts`), sesión en SecureStore (`tokenStorage.ts`), subida multipart (`subirMultipart.ts`), flujo de eventos del servidor (`flujoEventos.ts`: `abrirFlujoEventos` abre un SSE con el fetch de `expo/fetch`, que entrega el cuerpo por trozos, y el token solo en el encabezado `Authorization`) y configuración pública del salón (`configuracionPublica.ts` con su hook `useConfiguracionPublica.ts`), documentos legales vigentes (`documentosLegales.ts` con su hook `useDocumentoLegal.ts`) y consentimientos (`consentimientos.ts`).
+- `src/shared/ui`: colores (`colores.ts`), tokens (`tokens.ts`), tema (`useTheme.ts`, `apariencia.tsx`) y componentes compartidos (entre ellos `Casilla.tsx` y `VisorDocumentoLegal.tsx`).
 
 Regla: shared no depende de features. `src/shared` no importa nada de `src/features`; cuando una pieza compartida necesita algo de una feature, se lo inyecta la raíz `src/app/_layout.tsx`. Ejemplo: `AccionesCabecera` recibe la sesión con `SesionCabeceraProvider`, y la implementación real vive en `features/auth/viewmodels/sesionCabecera.ts`. La prueba `test/unit/gp-04/reglas-diseno.test.ts` lo vigila.
 
@@ -28,6 +28,7 @@ Regla: shared no depende de features. `src/shared` no importa nada de `src/featu
 - `src/shared/api/tokenStorage.ts`: un solo contador `generacion` (`generacionActual()`, `nuevaGeneracion()`) y una sola cola `cola` (`enCola()`) por la que pasan, una tras otra, todas las lecturas y escrituras de la sesión en SecureStore.
 - `src/shared/api/configuracionPublica.ts`: un solo `estado` en memoria con la configuración pública para toda la app y una sola petición `enVuelo`.
 - `src/features/notificaciones/viewmodels/avisosEstado.ts` y `useAvisosEnVivo.ts`: un solo estado de avisos para toda la app (con su carga `enVuelo`) y una sola conexión en vivo (`conexionUnica()`), que `src/app/_layout.tsx` monta una sola vez.
+- `src/shared/api/documentosLegales.ts`: una sola caché de documentos legales vigentes para toda la app.
 
 **Factory (función fábrica)**
 - `src/shared/api/apiClient.ts`: `crearErrorApi(datos)` es la única función que crea los errores del cliente HTTP; recibe un tipo y decide la clase, el mensaje, el status y el `code`:
@@ -42,6 +43,7 @@ Regla: shared no depende de features. `src/shared` no importa nada de `src/featu
 - `src/shared/api/configuracionPublica.ts`: lee `GET /api/configuracion-publica` sin sesión (`{ publica: true }`) y la convierte con `normalizarConfiguracion` en `ConfiguracionPublica`; las pantallas no saben si llegó de la red, del archivo o del respaldo. Además del salón, el horario y las reglas, trae el contenido de las pantallas (`contenido.inicio`, `contenido.sobreNosotros` con sus valores y `contenido.contacto`) y los textos del sitio (`textos`); lo que falte o venga con otro tipo toma el respaldo campo por campo. `cargarConfiguracion()` sigue este orden: memoria vigente (`VIGENCIA_CONFIGURACION_MS`, 5 minutos), red, archivo guardado y `RESPALDO_CONFIGURACION` (los valores que la app tenía fijos). El archivo usa expo-file-system en `Paths.document` y no SecureStore, porque SecureStore limita el tamaño por valor y estos datos no son secretos. Dos refrescos a la vez comparten una sola petición. Inicio y El salón llaman a `refrescar()` al deslizar para actualizar.
 - `src/shared/api/textosSitio.ts`: catálogo de textos. `obtenerTexto(clave, contexto)` no hace peticiones: lee la misma caché en memoria de la configuración pública. Usa el texto del servidor (`textos`) si viene completo y, si no, el de `RESPALDO_TEXTOS`; llena las variables de reglas (`variablesDeReglas`, por ejemplo `{minutosLlegadaAntes}` o `{nombreSalon}`) y las de contexto que pasa la pantalla (`{fecha}`, `{motivo}`...), y nunca devuelve llaves: si falta una variable, usa el respaldo o quita lo que sobra.
 - `src/features/salon/models/contenidoSalonModel.ts`: `obtenerPromociones`, `obtenerPreguntasFrecuentes`, `obtenerEquipo` y `obtenerGaleria` leen sin sesión las promociones, las preguntas frecuentes, el equipo y la galería, y las normalizan (`normalizarPromociones`, `normalizarPreguntas`, `normalizarEquipo`, `normalizarGaleria`): descartan lo que no trae los campos obligatorios, recortan los textos y solo dejan URLs https.
+- `src/shared/api/documentosLegales.ts`: lee `GET /api/documentos-legales/:slug/vigente` con caché en memoria y en archivo. Sin red usa lo guardado y nunca inventa una versión.
 
 **Observer**
 - `src/features/tienda/viewmodels/usePiezasCarrito.ts`: estado en memoria con un `Set` de `oyentes`; `suscribir()` agrega y quita oyentes, `fijar()` les avisa cuando cambia el número de piezas y `usePiezasCarrito()` se conecta con `useSyncExternalStore(suscribir, leerPiezas)`. Otras pantallas publican cambios con `avisarCambioCarrito()` y `publicarPiezasCarrito()`.
@@ -50,6 +52,7 @@ Regla: shared no depende de features. `src/shared` no importa nada de `src/featu
 - `src/shared/api/useTextos.ts`: `useTextos()` se conecta con `useSyncExternalStore(suscribir, obtenerConfiguracion)` y devuelve la función `texto`, que cambia solo cuando llega otra configuración. Así Inicio (`usePantallaInicio` y `useContenidoInicio`), El salón (`useSalonViewModel`) y el calendario de citas (`useCalendarioCitas`) se vuelven a pintar con los textos, el contenido, el horario y los días sin servicio nuevos sin pedir nada por su cuenta. Al deslizar para actualizar, Inicio pide a la vez la configuración, las cuatro listas de contenido y los dos catálogos; El salón pide la configuración; si falla la red, se queda lo que ya estaba a la vista.
 - `src/shared/api/configuracionPublica.ts` y `useConfiguracionPublica.ts`: `suscribir()` registra oyentes que se enteran cuando llega una versión nueva, y `useConfiguracionPublica()` se conecta con `useSyncExternalStore(suscribir, estadoConfiguracion)`. Al volver la app a primer plano, el hook refresca solo si la caché ya venció (`cacheVencida()`).
 - `src/features/notificaciones/viewmodels/avisosEstado.ts`: estado de los avisos internos con un `Set` de `oyentes` de la lista y del contador; `suscribir()` los agrega y quita, `fijar()` les avisa y `useAvisos()` y `useNoLeidos()` se conectan con `useSyncExternalStore`. La bandeja (`useNotificaciones`) y la campana (`useNoLeidos`, que la raíz inyecta en `AccionesCabecera`) se suscriben ahí. `alLlegarAviso()` es un canal aparte solo para los avisos nuevos que llegan en vivo: lo escucha el aviso en pantalla (`useAvisoEnPantalla`). La conexión en vivo (`models/conexionAvisos.ts`) publica cada aviso con `agregarAviso()` y no conoce a las pantallas.
+- `src/shared/api/useDocumentoLegal.ts`: las pantallas se suscriben al documento legal vigente y se vuelven a pintar cuando llega.
 
 **Pantalla de carga**
 - `src/app/_layout.tsx`: mantiene el splash nativo hasta que están las fuentes, la sesión, la apariencia y la carga inicial de la configuración pública (`cargarConLimite()`), con un tope de `TIEMPO_MAXIMO_CARGA_MS` (3 segundos). Si se vence el tope o falla la red, abre con lo guardado en el archivo o con el respaldo, y la red termina en segundo plano. Nunca se queda en el splash.
@@ -61,6 +64,22 @@ La app no usa notificaciones push. Los avisos (recordatorios de citas, estado de
 - Conexión: `GET /api/notificaciones/stream` (SSE) con `abrirFlujoEventos` de `src/shared/api/flujoEventos.ts`. El token va solo en el encabezado `Authorization`, nunca en la URL. Ante un 401 renueva una vez con `renovarTrasRechazo` y reabre con el token nuevo.
 - Si el flujo se corta o no hay red, reconecta con espera creciente (1 s, 2 s, 4 s... hasta 30 s). Desde el tercer fallo seguido pide la lista cada 30 s como respaldo hasta que el flujo vuelve a abrir.
 - `useAvisosEnVivo` corta la conexión al pasar a segundo plano y al cerrar sesión (y vacía los avisos). Al volver a primer plano reconecta y pide la lista una sola vez.
+
+### Documentos legales, consentimientos y forma de pago (GP-07.4)
+
+**Visor de documentos legales**
+- `src/shared/api/documentosLegales.ts` (Repository y Singleton): `GET /api/documentos-legales/:slug/vigente` con caché en memoria y en archivo, sin inventar versiones sin red.
+- `src/shared/api/useDocumentoLegal.ts` (Observer), `src/shared/ui/VisorDocumentoLegal.tsx` y la ruta `src/app/legal/[slug].tsx`.
+- En la app muestra el título, la versión y la fecha de vigencia, y abre el texto completo con expo-web-browser en la página pública de la web (`EXPO_PUBLIC_WEB_URL` + `ruta`). El contenido es HTML de página completa (índice, tablas, secciones desplegables) que no se puede mostrar bien con componentes nativos sin agregar dependencias.
+- Lo reutilizan la tienda (GP-07.5) y el registro (GP-10).
+
+**Consentimientos de citas**
+- `src/shared/api/consentimientos.ts`: `POST /api/consentimientos`.
+- Al confirmar una cita con anticipo se registra primero la aceptación de la Política de anticipos y cancelación con la versión vigente y su hash. Si la clienta marcó la casilla opcional de fotos del resultado, se registra después. Solo entonces se crea la cita; si un registro falla, la cita no se crea.
+- La casilla (`src/shared/ui/Casilla.tsx` y `src/features/citas/components/CasillaPoliticaAnticipos.tsx`) empieza sin marcar.
+
+**Forma de pago de citas**
+- `src/features/citas/models/formaPagoModel.ts`: textos y opciones de la forma de pago con las reglas de la configuración o con las guardadas en cada cita.
 
 ## Pruebas
 

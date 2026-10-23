@@ -520,6 +520,9 @@ describe('normalización de la cita creada', () => {
       servicioDuracionMinutos: 0,
       servicioPrecio: null,
       pagos: [],
+      // GP-07.4: sin `reglas` en la cita quedan las de omisión (las mismas de la cita ficticia).
+      reglas: CITA_SIN_ANTICIPO_NORMALIZADA.reglas,
+      reglasGuardadas: false,
     });
   });
 
@@ -756,8 +759,11 @@ describe('fechaLegible y horaLegible', () => {
 });
 
 describe('limiteAnticipo y limitePagoCorto', () => {
-  /** Hoy a las 10:00 del teléfono, para que el día y la hora no dependan de la zona. */
-  const ahoraLocal = enHoraLocal(HOY, '10:00');
+  /**
+   * Hoy a las 0:30 del teléfono, para que el día y la hora no dependan de la zona y todos los plazos
+   * de hoy queden por delante (GP-07.4: un plazo que ya pasó no muestra hora límite).
+   */
+  const ahoraLocal = enHoraLocal(HOY, '00:30');
   const venceHoy = (hora: string) => enHoraLocal(HOY, hora).toISOString();
 
   it.each<[string, string, string]>([
@@ -787,6 +793,11 @@ describe('limiteAnticipo y limitePagoCorto', () => {
   ])('sin plazo válido (%s) da null', (_caso, venceEn) => {
     expect(limiteAnticipo(venceEn, ahoraLocal)).toBeNull();
     expect(limitePagoCorto(venceEn, ahoraLocal)).toBeNull();
+  });
+
+  it('GP-07.4: un plazo que ya pasó en el teléfono da null (sin hora límite pasada)', () => {
+    expect(limiteAnticipo(venceHoy('00:15'), ahoraLocal)).toBeNull();
+    expect(limitePagoCorto(venceHoy('00:30'), ahoraLocal)).toBeNull();
   });
 
   it('sin ahora usa el reloj del teléfono', () => {

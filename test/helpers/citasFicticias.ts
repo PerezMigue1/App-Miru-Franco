@@ -1,6 +1,7 @@
 /// <reference types="jest" />
 
 import type { Cita, EstadoAnticipo, PagoCita, Slot } from '@/features/citas/models/citaModel';
+import { reglasDeCita } from '@/features/citas/models/formaPagoModel';
 
 import { RUTAS_DE_FONDO, USUARIO } from './datosClienta';
 import {
@@ -363,6 +364,8 @@ export interface CitaCruda {
   especialista: { id: string; nombre: string; rol: string };
   servicio: { id: number; nombre: string; duracionMinutos: number; precio: string };
   pagos: PagoCrudo[];
+  /** Reglas guardadas al crear la cita (GP-07.4); las citas anteriores no las traen. */
+  reglas?: unknown;
 }
 
 function especialistaDeCita(persona: PersonaFicticia): CitaCruda['especialista'] {
@@ -483,6 +486,9 @@ export const CITA_SIN_ANTICIPO_NORMALIZADA: Cita = {
   servicioDuracionMinutos: 45,
   servicioPrecio: '$350',
   pagos: [],
+  // Las citas ficticias no traen `reglas`: quedan las de omisión.
+  reglas: reglasDeCita(null),
+  reglasGuardadas: false,
 };
 
 /** CITA_CON_ANTICIPO tal como la entrega el modelo (escrita a mano). */

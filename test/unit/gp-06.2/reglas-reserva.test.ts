@@ -90,10 +90,11 @@ describe('Regla 1: vistas y rutas de la reserva no importan nada de models/', ()
   });
 
   it.each([
-    ['AnticipoView', VISTA_ANTICIPO, '../viewmodels/useAnticipoViewModel', VM_ANTICIPO],
-    ['CitaConfirmadaView', VISTA_CONFIRMADA, '../viewmodels/useCitaConfirmadaViewModel', VM_CONFIRMADA],
-  ])('corrección GP-06.2: %s toma el tipo Cita de su viewmodel', (_nombre, vista, moduloVm, viewmodel) => {
-    expect(sinComentarios(leer(vista))).toMatch(/\btype Cita\b/);
+    // GP-07.4: AnticipoView recibe todo el viewmodel (type AnticipoViewModel), que trae la cita.
+    ['AnticipoView', VISTA_ANTICIPO, '../viewmodels/useAnticipoViewModel', VM_ANTICIPO, /\btype AnticipoViewModel\b/],
+    ['CitaConfirmadaView', VISTA_CONFIRMADA, '../viewmodels/useCitaConfirmadaViewModel', VM_CONFIRMADA, /\btype Cita\b/],
+  ])('corrección GP-06.2: %s toma sus tipos de su viewmodel', (_nombre, vista, moduloVm, viewmodel, tipo) => {
+    expect(sinComentarios(leer(vista))).toMatch(tipo);
     expect(importaciones(leer(vista))).toContainEqual(expect.objectContaining({ modulo: moduloVm }));
     // El viewmodel lo vuelve a exportar solo como tipo.
     expect(sinComentarios(leer(viewmodel))).toMatch(/export\s+type\s*\{\s*Cita\s*\}\s*from\s*'\.\.\/models\/citaModel'/);
@@ -138,9 +139,10 @@ describe('Regla 4: citaModel habla con el servidor solo por apiClient', () => {
     expect(sinComentarios(texto)).not.toMatch(/\bfetch\s*\(|XMLHttpRequest/);
   });
 
-  it('las nueve llamadas de citas y anticipos van a /api y con sesión (ninguna es pública)', () => {
+  // GP-07.4: diez con el cambio a pago en el salón (el estado y la política comparten una lectura).
+  it('las diez llamadas de citas y anticipos van a /api y con sesión (ninguna es pública)', () => {
     const llamadas = llamadasApi(texto);
-    expect(llamadas).toHaveLength(9);
+    expect(llamadas).toHaveLength(10);
     expect(llamadas.filter((args) => !/^\s*[`']\/api\//.test(args))).toEqual([]);
     expect(llamadas.filter((args) => /publica:\s*true/.test(args))).toEqual([]);
   });

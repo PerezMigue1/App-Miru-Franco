@@ -115,7 +115,8 @@ async function cambiarA(fecha: string, hora: string): Promise<void> {
   await tocar(horaDelServidor(fecha, hora));
   expect(await screen.findByRole('header', { name: 'Tu cambio' })).toBeOnTheScreen();
   const de = `${diaConMayuscula(DIA_CITA)}, ${horaEnTelefono(INICIO_CITA_ISO)}`;
-  const a = `${diaConMayuscula(fecha)}, ${horaDelServidor(fecha, hora)}`;
+  // GP-07.4: "De" y "A" con el mismo formato y la hora del teléfono (antes "A" usaba la horaLocal del servidor).
+  const a = `${diaConMayuscula(fecha)}, ${horaEnTelefono(isoMexico(fecha, hora))}`;
   expect(screen.getByLabelText(`Cambio de tu cita. De: ${de}. A: ${a}.`)).toBeOnTheScreen();
   await tocar('Confirmar cambio');
 }

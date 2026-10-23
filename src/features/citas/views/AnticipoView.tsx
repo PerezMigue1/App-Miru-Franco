@@ -21,8 +21,10 @@ import {
 import { useTheme } from '@/shared/ui/useTheme';
 
 import { BadgeEstado } from '../components/BadgeEstado';
+import { CasillaPoliticaAnticipos } from '../components/CasillaPoliticaAnticipos';
+import { EnlacePolitica } from '../components/EnlacePolitica';
 import { ResumenCita } from '../components/ResumenCita';
-import { useAnticipoViewModel, type Cita, type EstadoPago } from '../viewmodels/useAnticipoViewModel';
+import { useAnticipoViewModel, type AnticipoViewModel, type EstadoPago } from '../viewmodels/useAnticipoViewModel';
 
 function tituloBoton(pago: EstadoPago, enSalon: boolean): string {
   switch (pago.tipo) {
@@ -67,12 +69,7 @@ export default function AnticipoView() {
       {listo && vm.cita ? (
         <>
           <ScrollView contentContainerStyle={styles.contenido}>
-            <Contenido
-              cita={vm.cita}
-              pago={vm.pago}
-              limite={vm.limite}
-              avisoSalon={vm.avisoSalon}
-            />
+            <Contenido vm={vm} />
           </ScrollView>
           <View style={[styles.pie, { paddingBottom: bottom + espacio.l }]}>
             <Button
@@ -127,19 +124,12 @@ export default function AnticipoView() {
   );
 }
 
-function Contenido({
-  cita,
-  pago,
-  limite,
-  avisoSalon,
-}: {
-  cita: Cita;
-  pago: EstadoPago;
-  limite: string | null;
-  /** Anticipo pendiente en el salón: reemplaza la introducción. */
-  avisoSalon: string | null;
-}) {
+function Contenido({ vm }: { vm: AnticipoViewModel }) {
   const { colores } = useTheme();
+  const { cita, pago, limite, avisoSalon } = vm;
+  if (!cita) {
+    return null;
+  }
   const cerrada = pago.tipo === 'cerrada';
   const enProceso = pago.tipo === 'noCompletado' && pago.enProceso;
   const monto = cita.anticipoMonto ?? `$${cita.anticipoRequerido}`;
@@ -153,12 +143,14 @@ function Contenido({
           </Text>
           <Text style={[styles.intro, { color: colores.textoSuave }]}>{avisoSalon}</Text>
         </View>
-      ) : !cerrada ? (
+      ) : null}
+      {!avisoSalon && !cerrada ? (
         <Text style={[styles.intro, { color: colores.textoSuave }]}>
           Tu cita queda apartada mientras pagas. Si el anticipo no se paga a tiempo, la cita se
           cancela sola.
         </Text>
       ) : null}
+      {vm.plazo ? <Text style={[styles.intro, { color: colores.textoSuave }]}>{vm.plazo}</Text> : null}
 
       <ResumenCita cita={cita}>
         <View
@@ -187,6 +179,19 @@ function Contenido({
           </View>
         ) : null}
       </ResumenCita>
+
+      {vm.consecuencia ? <Text style={[styles.intro, { color: colores.textoSuave }]}>{vm.consecuencia}</Text> : null}
+
+      {!cerrada ? <EnlacePolitica texto={vm.enlacePolitica} onPress={vm.abrirPolitica} /> : null}
+
+      {vm.pideCasilla ? (
+        <CasillaPoliticaAnticipos
+          marcada={vm.casilla.marcada}
+          onCambiar={vm.casilla.cambiar}
+          error={vm.casilla.error}
+          reglas={cita.reglas}
+        />
+      ) : null}
 
       <View accessibilityLiveRegion="polite" style={styles.aviso}>
         <AvisoPago pago={pago} />

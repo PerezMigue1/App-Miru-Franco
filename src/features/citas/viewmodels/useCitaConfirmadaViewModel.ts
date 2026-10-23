@@ -1,8 +1,10 @@
 import { useFocusEffect, useRouter, type Href } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { BackHandler } from 'react-native';
 
 import { ApiError } from '@/shared/api/apiClient';
+import { obtenerConfiguracion, suscribir } from '@/shared/api/configuracionPublica';
+import { obtenerTexto } from '@/shared/api/textosSitio';
 
 import {
   avisoAnticipoEnSalon,
@@ -12,6 +14,7 @@ import {
   pideAnticipo,
   type Cita,
 } from '../models/citaModel';
+import { textoAnticipoPendiente } from '../models/gestionCitaModel';
 
 // La vista no importa de models/: recibe este tipo del viewmodel.
 export type { Cita } from '../models/citaModel';
@@ -35,6 +38,10 @@ export interface CitaConfirmadaViewModel {
   limite: string | null;
   /** Anticipo pendiente que se paga en el salón: texto con la hora límite, o null. */
   avisoSalon: string | null;
+  /** Anticipo pendiente en línea: cómo pagarlo y su plazo (regla de la cita), o null. */
+  textoPendiente: string | null;
+  /** Aviso de recordatorios (citas.recordatorio). */
+  recordatorio: string;
   recargar: () => void;
   /** Anticipo pendiente: abre la pantalla del anticipo, que lanza Mercado Pago al llegar. */
   pagarAnticipo: () => void;
@@ -45,6 +52,7 @@ export interface CitaConfirmadaViewModel {
 /** Confirmación de una cita recién reservada (GP-06.2; también desde Mis citas en GP-06.3). */
 export function useCitaConfirmadaViewModel(citaId: string | undefined): CitaConfirmadaViewModel {
   const router = useRouter();
+  const configuracion = useSyncExternalStore(suscribir, obtenerConfiguracion, obtenerConfiguracion);
   const [estado, setEstado] = useState<EstadoCitaConfirmada>('cargando');
   const [cita, setCita] = useState<Cita | null>(null);
   const [anticipo, setAnticipo] = useState<AnticipoConfirmacion>('noAplica');
@@ -147,7 +155,11 @@ export function useCitaConfirmadaViewModel(citaId: string | undefined): CitaConf
     cita,
     anticipo,
     limite: limite ? `Paga ${limite}` : null,
-    avisoSalon: enSalon ? avisoAnticipoEnSalon(cita.anticipoVenceEn) : null,
+    avisoSalon: enSalon
+      ? avisoAnticipoEnSalon(cita.anticipoVenceEn, new Date(), cita.reglas.minutosAntesPagoSalon, configuracion)
+      : null,
+    textoPendiente: pendiente && !enSalon ? textoAnticipoPendiente(cita, new Date(), configuracion) : null,
+    recordatorio: obtenerTexto('citas.recordatorio', {}, configuracion),
     recargar,
     pagarAnticipo,
     verMisCitas,

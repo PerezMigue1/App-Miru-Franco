@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EncabezadoVolver } from '@/features/auth/components/EncabezadoVolver';
 import { Button } from '@/shared/ui/Button';
+import { Casilla } from '@/shared/ui/Casilla';
 import { EmptyState } from '@/shared/ui/EmptyState';
 import { Input } from '@/shared/ui/Input';
 import { EASE_SALIDA, useEntradaContenido } from '@/shared/ui/movimiento';
@@ -36,7 +37,9 @@ import { useMovimientoReducido } from '@/shared/ui/useMovimientoReducido';
 import { useTheme } from '@/shared/ui/useTheme';
 
 import { CalendarioMensual } from '../components/CalendarioMensual';
+import { CasillaPoliticaAnticipos } from '../components/CasillaPoliticaAnticipos';
 import { IndicadorPasos } from '../components/IndicadorPasos';
+import { SeccionFormaPago } from '../components/SeccionFormaPago';
 import {
   CuadriculaHorarios,
   CuadriculaHorariosEsqueleto,
@@ -44,6 +47,7 @@ import {
 } from '../components/SelectorHorario';
 import { TarjetaEspecialista, TarjetaEspecialistaEsqueleto } from '../components/TarjetaEspecialista';
 import {
+  AVISO_RESERVA_RECUPERADA,
   fechaLegible,
   PASOS_RESERVA,
   useReservarCitaViewModel,
@@ -299,7 +303,7 @@ function Horarios({ vm }: { vm: ReservarCitaViewModel }) {
   );
 }
 
-/** Paso 3: resumen, notas y confirmar. */
+/** Paso 3: resumen, notas, fotos, forma de pago y confirmar. */
 function PasoConfirmar({ vm }: { vm: ReservarCitaViewModel }) {
   const { colores } = useTheme();
   const { servicio, especialista, slot } = vm;
@@ -308,7 +312,16 @@ function PasoConfirmar({ vm }: { vm: ReservarCitaViewModel }) {
   }
   return (
     <>
-      <Subtitulo texto="Confirma tu cita" />
+      <Subtitulo texto={vm.tituloConfirmar} />
+
+      {vm.recuperada ? (
+        <View accessible style={styles.aviso}>
+          <View importantForAccessibility="no-hide-descendants">
+            <Info color={colores.aviso} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
+          </View>
+          <Text style={[styles.textoAviso, { color: colores.aviso }]}>{AVISO_RESERVA_RECUPERADA}</Text>
+        </View>
+      ) : null}
 
       <View
         style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombraTarjeta }]}
@@ -318,15 +331,6 @@ function PasoConfirmar({ vm }: { vm: ReservarCitaViewModel }) {
         <Dato etiqueta="Fecha" valor={conMayuscula(fechaLegible(slot.inicio))} />
         <Dato etiqueta="Hora" valor={horaDeSlot(slot)} cifra />
         <Dato etiqueta="Precio" valor={servicio.precio ?? SIN_PRECIO} cifra={servicio.precio != null} />
-        {servicio.anticipo ? (
-          <View style={styles.anticipo}>
-            <Dato etiqueta="Anticipo" valor={servicio.anticipo} cifra />
-            <Text style={[styles.parrafo, { color: colores.texto }]}>
-              En línea tienes 2 horas para pagarlo. Se descuenta del total el día de tu cita. Si
-              cancelas, el anticipo no se devuelve; si reagendas con aviso, se respeta.
-            </Text>
-          </View>
-        ) : null}
       </View>
 
       <Input
@@ -338,53 +342,50 @@ function PasoConfirmar({ vm }: { vm: ReservarCitaViewModel }) {
         ayuda={`Algo que el salón deba saber antes de tu cita. Hasta ${reserva.largoNotas} caracteres.`}
       />
 
+      {/* Opcional y aparte de la Política de anticipos: solo se registra si la marca. */}
+      <Casilla
+        marcada={vm.autorizaFotos}
+        onCambiar={vm.cambiarAutorizaFotos}
+        etiquetaAccesible={vm.textoFotos}
+        deshabilitada={vm.enviando}
+      >
+        {vm.textoFotos}
+      </Casilla>
+
+      <SeccionFormaPago
+        formaPago={vm.formaPago}
+        opcion={vm.opcionPago}
+        onElegir={vm.elegirOpcion}
+        deshabilitada={vm.enviando}
+        casilla={
+          <CasillaPoliticaAnticipos
+            marcada={vm.aceptaPolitica}
+            onCambiar={vm.cambiarAceptaPolitica}
+            error={vm.errorPolitica}
+            deshabilitada={vm.enviando}
+          />
+        }
+      />
+
       <View collapsable={false} accessibilityLiveRegion="polite">
         {vm.errorEnvio ? (
           <Text style={[styles.nota, { color: colores.peligro }]}>{vm.errorEnvio}</Text>
         ) : null}
       </View>
 
-      {servicio.anticipo ? (
-        // Con anticipo, dos caminos; mientras uno se envía, el otro queda deshabilitado.
-        <View style={styles.acciones}>
-          <Button
-            titulo={
-              vm.modoEnvio === 'linea' ? 'Abriendo Mercado Pago…' : 'Pagar anticipo con Mercado Pago'
-            }
-            onPress={() => vm.confirmar('linea')}
-            cargando={vm.modoEnvio === 'linea'}
-            deshabilitado={vm.modoEnvio === 'salon'}
-            accessibilityHint="Reserva tu cita y abre Mercado Pago en el navegador"
-          />
-          <View style={styles.opcionSalon}>
-            <Button
-              titulo={vm.modoEnvio === 'salon' ? 'Apartando…' : 'Apartar y pagar en el salón'}
-              variante="contorno"
-              onPress={() => vm.confirmar('salon')}
-              cargando={vm.modoEnvio === 'salon'}
-              deshabilitado={vm.modoEnvio === 'linea'}
-            />
-            <Text style={[styles.nota, { color: colores.textoSuave }]}>
-              Llega entre 20 y 15 minutos antes para pagarlo. Si a 15 minutos de tu cita no se ha
-              pagado, se cancela.
-            </Text>
-          </View>
-        </View>
-      ) : (
-        <Button
-          titulo="Confirmar cita"
-          onPress={() => vm.confirmar('salon')}
-          cargando={vm.enviando}
-          icono={
-            <CalendarCheck
-              color={colores.textoSobreAccion}
-              size={icono.tamanoPequeno}
-              strokeWidth={icono.trazo}
-            />
-          }
-          posicionIcono="inicio"
-        />
-      )}
+      {/* Un solo botón principal: su texto dice cómo se paga (en línea, en el salón o sin anticipo). */}
+      <Button
+        titulo={vm.textoBoton}
+        onPress={vm.confirmar}
+        cargando={vm.enviando}
+        accessibilityHint={
+          vm.anticipo && vm.opcionPago === 'linea' ? 'Reserva tu cita y abre Mercado Pago en el navegador' : undefined
+        }
+        icono={
+          <CalendarCheck color={colores.textoSobreAccion} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
+        }
+        posicionIcono="inicio"
+      />
     </>
   );
 }
@@ -440,12 +441,6 @@ const styles = StyleSheet.create({
     fontSize: tipo.pequeno.tamano,
     lineHeight: tipo.pequeno.linea,
   },
-  // Aviso extenso del anticipo: interlineado de párrafo largo.
-  parrafo: {
-    fontFamily: fuente.texto,
-    fontSize: tipo.parrafo.tamano,
-    lineHeight: tipo.parrafo.linea,
-  },
   aviso: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -494,15 +489,6 @@ const styles = StyleSheet.create({
   cifra: {
     fontFamily: fuente.textoFuerte,
     fontVariant: ['tabular-nums'],
-  },
-  anticipo: {
-    gap: espacio.xs,
-  },
-  acciones: {
-    gap: espacio.m,
-  },
-  opcionSalon: {
-    gap: espacio.xs,
   },
   indicadorEsqueleto: {
     height: esqueleto.lineaGrande,

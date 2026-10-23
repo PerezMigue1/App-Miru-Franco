@@ -4,6 +4,9 @@ import * as SecureStore from 'expo-secure-store';
 import { act, fireEvent, screen, waitFor } from 'expo-router/testing-library';
 import type { TestInstance } from 'test-renderer';
 
+import { consecuenciaNoAsistir, conUnidad, reglasDeCita } from '@/features/citas/models/formaPagoModel';
+import { obtenerTexto, RESPALDO_TEXTOS } from '@/shared/api/textosSitio';
+
 import {
   AHORA,
   citaCruda,
@@ -44,6 +47,46 @@ import { respuesta, type Llamada, type Manejador } from './servidorSimulado';
  * manejar la hoja de cancelar. Las horas que dependen del teléfono se calculan con la zona con la
  * que corre Jest (horaEnTelefono); los días, con fechas de calendario (diaConMayuscula).
  */
+
+// ── Textos del catálogo (GP-07.4) ────────────────────────────────────────────────────────────
+
+/**
+ * Lo que ve la clienta en Mis citas y el detalle con el catálogo de respaldo y las reglas de omisión
+ * (las citas ficticias no guardan reglas).
+ */
+export const TEXTOS_DETALLE = {
+  /** Título de la lista de próximas vacía (citas.lista.vacia). */
+  listaVacia: RESPALDO_TEXTOS['citas.lista.vacia'],
+  /** Etiqueta del monto del anticipo en la forma de pago. */
+  etiquetaAnticipo: RESPALDO_TEXTOS['citas.formaPago.anticipoEtiqueta'],
+  botonLinea: RESPALDO_TEXTOS['anticipos.botonMercadoPago'],
+  botonSalon: RESPALDO_TEXTOS['anticipos.botonSalon'],
+  pagado: RESPALDO_TEXTOS['anticipos.pagado'],
+  /** Qué pasa si no llega, con las reglas de omisión. */
+  consecuencia: consecuenciaNoAsistir(reglasDeCita(null)),
+  /** Casilla obligatoria de la Política de anticipos. */
+  casilla: RESPALDO_TEXTOS['citas.politicaAnticipos.casilla'],
+  /** Anticipo no pagado a tiempo (la barrida canceló la cita). */
+  liberada: RESPALDO_TEXTOS['anticipos.liberada'],
+  /** Confirmación con el anticipo pendiente en línea: las dos formas de pago y el plazo de omisión. */
+  pendienteConfirmacion: obtenerTexto('anticipos.pendiente', {
+    formasPago: 'en línea o en el salón',
+    plazoAnticipo: conUnidad(reglasDeCita(null).plazoAnticipoHoras, 'hora', 'horas'),
+  }),
+} as const;
+
+/** Marca la casilla de la Política de anticipos (antes de pagar con el botón o cambiar a pago en el salón). */
+export async function marcarCasillaPolitica(): Promise<void> {
+  await fireEvent.press(screen.getByRole('checkbox', { name: TEXTOS_DETALLE.casilla }));
+}
+
+/** Plazo del anticipo en el salón en la forma de pago del detalle, con el límite en el teléfono. */
+export function plazoSalonEnDetalle(limite: string, minutos = reglasDeCita(null).minutosAntesPagoSalon): string {
+  return `${obtenerTexto('citas.anticipoSalon.plazo', { limite, minutosAntesPagoSalon: minutos })} ${RESPALDO_TEXTOS['anticipos.salonSeLibera']}`;
+}
+
+/** "Anticipo para apartar tu cita: $360" del detalle. */
+export const etiquetaMontoAnticipo = (monto: string) => `${TEXTOS_DETALLE.etiquetaAnticipo}: ${monto}`;
 
 // ── Citas de la lista ────────────────────────────────────────────────────────────────────────
 
@@ -287,11 +330,14 @@ export async function esperarDetalle(app: App, id: number | string): Promise<voi
 /** Título de la hoja de cancelar. */
 export const TITULO_HOJA = '¿Cancelar tu cita?';
 
-/** Toca "Cancelar cita" del detalle y espera la hoja con su aviso. */
+/**
+ * Toca "Cancelar cita" del detalle y espera la hoja con su aviso (con anticipo pagado, el aviso
+ * final llega cuando el backend responde la política del anticipo).
+ */
 export async function abrirHojaCancelar(aviso: string): Promise<void> {
   await fireEvent.press(screen.getByRole('button', { name: 'Cancelar cita' }));
   expect(await screen.findByRole('header', { name: TITULO_HOJA })).toBeOnTheScreen();
-  expect(screen.getByText(aviso)).toBeOnTheScreen();
+  expect(await screen.findByText(aviso)).toBeOnTheScreen();
 }
 
 /**

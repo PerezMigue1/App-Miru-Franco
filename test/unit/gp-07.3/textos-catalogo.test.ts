@@ -54,16 +54,32 @@ beforeEach(() => {
   reiniciarConfiguracionPublica();
 });
 
+/**
+ * Variables de contexto que pueden usar las plantillas del respaldo: las de GP-07.3 y, desde GP-07.4,
+ * las de citas y forma de pago del catálogo del backend. Las de reglas salen de variablesDeReglas.
+ */
+const VARIABLES_CONTEXTO = [
+  'fecha', 'telefono', 'correo', 'abre', 'cierra', 'motivo',
+  'saldo', 'precio', 'plazoAnticipo', 'horasAviso', 'metodosSalon', 'mesesSoloLinea', 'anticipo',
+  'diasExcepcion', 'diasReembolso', 'fechaLimite', 'formasPago', 'limite',
+];
+
 describe('RESPALDO_TEXTOS', () => {
-  it('trae exactamente las claves de las pantallas y está congelado', () => {
-    expect(Object.keys(RESPALDO_TEXTOS).sort()).toEqual([...CLAVES].sort());
+  // GP-07.4 agrega las claves de citas y forma de pago: aquí se revisa que sigan las de GP-07.3 (las
+  // nuevas las revisa test/unit/gp-07.4/textos-reglas.test.ts).
+  it('trae las claves de las pantallas de GP-07.3 y está congelado', () => {
+    expect(Object.keys(RESPALDO_TEXTOS)).toEqual(expect.arrayContaining(CLAVES));
     expect(Object.isFrozen(RESPALDO_TEXTOS)).toBe(true);
   });
 
-  it('cada plantilla tiene texto, solo variables bien escritas y nunca el guion largo', () => {
+  it('cada plantilla tiene texto, solo variables conocidas bien escritas y nunca el guion largo', () => {
+    const variables = {
+      ...variablesDeReglas(RESPALDO_CONFIGURACION),
+      ...Object.fromEntries(VARIABLES_CONTEXTO.map((nombre) => [nombre, 'x'])),
+    };
     for (const plantilla of Object.values(RESPALDO_TEXTOS)) {
       expect(plantilla.trim()).not.toBe('');
-      expect(llenarVariables(plantilla, { fecha: 'x', telefono: 'x', correo: 'x', abre: 'x', cierra: 'x', motivo: 'x' }).completo).toBe(true);
+      expect(llenarVariables(plantilla, variables).completo).toBe(true);
       expect(plantilla.includes(GUION_LARGO)).toBe(false);
     }
   });
@@ -106,6 +122,9 @@ describe('variablesDeReglas', () => {
       minutosLlegadaAntes: '10',
       toleranciaLlegadaMinutos: '5',
       horasAvisoCancelarReagendar: '24',
+      mesesSoloPagoEnLinea: '3',
+      diasHabilesExcepcionAnticipo: '7',
+      diasHabilesCancelarConReembolso: '8',
       plazoPagoLineaHoras: '12',
       diasCancelarNoRecogido: '10',
       diasResguardo: '20',

@@ -1,4 +1,5 @@
 import { apiGet } from '@/shared/api/apiClient';
+import type { ConfiguracionPublica } from '@/shared/api/configuracionPublica';
 import { precioParaMostrar } from '@/features/inicio/models/FluidoModel';
 import {
   esObjeto,
@@ -125,6 +126,25 @@ function normalizarServicio(crudo: Crudo): Servicio {
     recomendaciones: listaDeTextos(crudo.recomendaciones),
     especialistas,
   };
+}
+
+/**
+ * El anticipo que hoy se pide al reservar el servicio, o null. Aunque el servicio traiga monto, sin
+ * la fecha de inicio de anticipos en el panel (configuración pública `anticiposActivos` en false) no
+ * se pide anticipo: así la app no promete un anticipo que el backend no va a cobrar.
+ */
+export function anticipoVigente(
+  servicio: Pick<Servicio, 'anticipo'> | null | undefined,
+  config: ConfiguracionPublica,
+): string | null {
+  return servicio?.anticipo && config.anticiposActivos ? servicio.anticipo : null;
+}
+
+/** Número de un precio para mostrar ("$1,200" a 1200): quita "$" y comas antes de Number. 0 si no se lee. */
+export function montoDePrecio(precio: string | null | undefined): number {
+  const limpio = (precio ?? '').replaceAll('$', '').replaceAll(',', '').trim();
+  const numero = limpio ? Number(limpio) : Number.NaN;
+  return Number.isFinite(numero) ? numero : 0;
 }
 
 /** Lectura pública del catálogo de servicios: GET /api/servicios. */

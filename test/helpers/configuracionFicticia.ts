@@ -77,6 +77,11 @@ export function respuestaCompleta(): Record<string, unknown> {
         maxCitasPorPagarEnSalon: 2,
         permitirAnticipoEnSalon: false,
         intervaloHorariosMinutos: 15,
+        porcentajeAnticipoSugerido: 30,
+        recordatoriosHorasAntes: [24, 2],
+        diasHabilesExcepcionAnticipo: 7,
+        diasHabilesCancelarConReembolso: 8,
+        noAsistio: { pierdeAnticipo: false, mesesSoloPagoEnLinea: 3 },
       },
       tienda: {
         plazoPagoLineaHoras: 12,
@@ -156,6 +161,10 @@ export const CONFIGURACION_COMPLETA: ConfiguracionPublica = {
       maxCitasPorPagarEnSalon: 2,
       intervaloHorariosMinutos: 15,
       horasAvisoCancelarReagendar: 24,
+      diasHabilesExcepcionAnticipo: 7,
+      diasHabilesCancelarConReembolso: 8,
+      pierdeAnticipoSiNoAsiste: false,
+      mesesSoloPagoEnLinea: 3,
     },
     tienda: {
       plazoPagoLineaHoras: 12,

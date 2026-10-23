@@ -1,15 +1,22 @@
 import { useRouter, type Href } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { Linking } from 'react-native';
 
 import { esErrorDeRed, MENSAJE_SIN_CONEXION } from '@/features/auth/models/AuthModel';
 import { ApiError } from '@/shared/api/apiClient';
+import { obtenerConfiguracion, suscribir } from '@/shared/api/configuracionPublica';
+import { rutaVisorDocumento } from '@/shared/api/documentosLegales';
+import { obtenerTexto } from '@/shared/api/textosSitio';
 import { useCandado } from '@/shared/ui/useCandado';
 
 import {
   admiteCambios,
   compararMeses,
+  esAvisoReagendar,
   esHorarioOcupado,
   esHorarioPasado,
+  estadoAnticipo,
+  fechaHoraLegible,
   fechaLocal,
   mensajeReprogramacion,
   mesDe,
@@ -23,14 +30,32 @@ import {
   type MesCalendario,
   type Slot,
 } from '../models/citaModel';
+import {
+  avisoAnticipoAlReprogramar,
+  avisoFueraDePlazo,
+  contactoSalon,
+  dentroDelAviso,
+  esEspecialistaInactiva,
+  type ContactoSalon,
+} from '../models/gestionCitaModel';
 import { useCalendarioCitas, type BloqueosCalendario } from './useCalendarioCitas';
 
-// La vista no importa de models/: recibe estas funciones del viewmodel.
-export { fechaLegible, horaLegible } from '../models/citaModel';
+// La vista no importa de models/: recibe este tipo del viewmodel.
+export type { ContactoSalon } from '../models/gestionCitaModel';
 
-/** 'sinCambios': la cita ya no se puede reprogramar (terminó, se canceló o está en curso). */
-export type EstadoReprogramar = 'cargando' | 'listo' | 'error' | 'noEncontrado' | 'sinCambios';
-export type EstadoHorariosReprogramar = 'inactivo' | 'cargando' | 'listo' | 'error';
+/**
+ * 'sinCambios': la cita ya no se puede reprogramar (terminó, se canceló o está en curso).
+ * 'fueraDeAviso': faltan menos horas que las de aviso de la regla de la cita; se reagenda con el salón.
+ */
+export type EstadoReprogramar = 'cargando' | 'listo' | 'error' | 'noEncontrado' | 'sinCambios' | 'fueraDeAviso';
+/** 'sinAgenda': la especialista ya no atiende (404 de la disponibilidad); se reagenda con el salón. */
+export type EstadoHorariosReprogramar = 'inactivo' | 'cargando' | 'listo' | 'error' | 'sinAgenda';
+
+/** "De" y "A" del cambio, con el mismo formato y la misma zona horaria. */
+export interface ResumenCambio {
+  de: string;
+  a: string;
+}
 
 const ERROR_HORARIOS = 'No pudimos cargar los horarios de este día.';
 
@@ -73,6 +98,19 @@ export interface ReprogramarCitaViewModel {
   errorEnvio: string | null;
   /** Mueve la cita al horario elegido y regresa al detalle. */
   confirmar: () => void;
+
+  /** "De" el horario actual "A" el elegido, o null sin horario elegido. */
+  resumenCambio: ResumenCambio | null;
+  /** Qué pasa con el anticipo al reprogramar (regla de la cita), o null si no aplica. */
+  avisoAnticipo: string | null;
+  /** Texto del enlace a la Política de anticipos y cancelación si la cita pide anticipo, o null. */
+  enlacePolitica: string | null;
+  abrirPolitica: () => void;
+  /** "Para reagendar con menos de N horas de anticipación, comunícate con el salón." (regla de la cita). */
+  avisoFueraDePlazo: string;
+  /** Teléfono y WhatsApp del salón para reagendar con el salón. */
+  contacto: ContactoSalon[];
+  abrirContacto: (url: string) => void;
 }
 
 /** Milisegundos de un ISO; NaN si no se puede leer. */
@@ -103,6 +141,7 @@ function diaInicial(cita: Cita, ahora: Date): string {
 export function useReprogramarCitaViewModel(citaId: string | undefined): ReprogramarCitaViewModel {
   const router = useRouter();
   const candado = useCandado();
+  const configuracion = useSyncExternalStore(suscribir, obtenerConfiguracion, obtenerConfiguracion);
 
   const [estado, setEstado] = useState<EstadoReprogramar>('cargando');
   const [cita, setCita] = useState<Cita | null>(null);
@@ -116,6 +155,8 @@ export function useReprogramarCitaViewModel(citaId: string | undefined): Reprogr
 
   const [enviando, setEnviando] = useState(false);
   const [errorEnvio, setErrorEnvio] = useState<string | null>(null);
+  // Aviso mínimo que mandó el backend al confirmar (con sus horas), si el teléfono no lo vio venir.
+  const [avisoDelServidor, setAvisoDelServidor] = useState<string | null>(null);
 
   // Solo la última solicitud escribe el estado (reintentos rápidos, cambio de día o pantalla desmontada).
   const solicitudCita = useRef(0);
@@ -165,6 +206,12 @@ export function useReprogramarCitaViewModel(citaId: string | undefined): Reprogr
           if (actual !== solicitudHorarios.current) {
             return;
           }
+          // La especialista ya no atiende: no sirve reintentar, se reagenda con el salón.
+          if (esEspecialistaInactiva(error)) {
+            setErrorHorarios(obtenerTexto('citas.reprogramar.especialistaInactiva'));
+            setEstadoHorarios('sinAgenda');
+            return;
+          }
           setErrorHorarios(esErrorDeRed(error) ? MENSAJE_SIN_CONEXION : ERROR_HORARIOS);
           setEstadoHorarios('error');
         });
@@ -197,6 +244,11 @@ export function useReprogramarCitaViewModel(citaId: string | undefined): Reprogr
         const sinDatos = String(respuesta.especialistaId) === '' || String(respuesta.servicioId) === '';
         if (!admiteCambios(respuesta) || sinDatos) {
           setEstado('sinCambios');
+          return;
+        }
+        // Con menos aviso del que pide la regla de la cita no se elige horario (el backend lo rechaza).
+        if (dentroDelAviso(respuesta)) {
+          setEstado('fueraDeAviso');
           return;
         }
         // Si el día de la cita (o hoy) ya no tiene citas por la configuración, el siguiente libre.
@@ -308,6 +360,13 @@ export function useReprogramarCitaViewModel(citaId: string | undefined): Reprogr
           return;
         }
         setEnviando(false);
+        // El backend contó menos horas de aviso que el teléfono: se explica y se ofrece el salón.
+        if (esAvisoReagendar(error)) {
+          setAvisoDelServidor(mensajeReprogramacion(error));
+          setSlot(null);
+          setEstado('fueraDeAviso');
+          return;
+        }
         setErrorEnvio(mensajeReprogramacion(error));
         if (esHorarioOcupado(error) || esHorarioPasado(error)) {
           // Alguien más tomó ese horario o ya empezó: se limpia y se recarga la disponibilidad del día.
@@ -323,6 +382,16 @@ export function useReprogramarCitaViewModel(citaId: string | undefined): Reprogr
       salir();
     });
   }, [candado, cita, slot, fecha, cargarHorarios, salir]);
+
+  const abrirPolitica = useCallback(() => {
+    router.push(rutaVisorDocumento('anticipos'));
+  }, [router]);
+
+  const abrirContacto = useCallback((url: string) => {
+    Linking.openURL(url).catch(() => {
+      // Sin una app que abra el enlace no hay nada más que hacer aquí.
+    });
+  }, []);
 
   return {
     estado,
@@ -344,5 +413,15 @@ export function useReprogramarCitaViewModel(citaId: string | undefined): Reprogr
     enviando,
     errorEnvio,
     confirmar,
+    // Una sola función de formato para los dos: componentes locales de la fecha ISO, nunca la
+    // horaLocal del servidor (podría venir en otra zona que la del teléfono).
+    resumenCambio: cita && slot ? { de: fechaHoraLegible(cita.fechaHoraInicio), a: fechaHoraLegible(slot.inicio) } : null,
+    avisoAnticipo: cita ? avisoAnticipoAlReprogramar(cita, new Date(), configuracion) : null,
+    enlacePolitica:
+      cita && estadoAnticipo(cita) !== 'no_requiere' ? obtenerTexto('anticipos.enlacePolitica', {}, configuracion) : null,
+    abrirPolitica,
+    avisoFueraDePlazo: avisoDelServidor ?? (cita ? avisoFueraDePlazo(cita) : ''),
+    contacto: contactoSalon(configuracion),
+    abrirContacto,
   };
 }

@@ -3,7 +3,7 @@
 // Primero los mocks: tienen que quedar registrados antes de cargar expo-router/testing-library.
 import '../../helpers/mocksPantallas';
 
-import { screen, waitFor } from 'expo-router/testing-library';
+import { fireEvent, screen, waitFor } from 'expo-router/testing-library';
 
 import {
   AHORA,
@@ -41,6 +41,9 @@ import {
   TARJETAS,
   verPestana,
   type TarjetaEsperada,
+  etiquetaMontoAnticipo,
+  plazoSalonEnDetalle,
+  TEXTOS_DETALLE,
 } from '../../helpers/pantallasMisCitas';
 import {
   diaConMayuscula,
@@ -155,7 +158,7 @@ describe('Mis citas con las pantallas reales (GP-06.3)', () => {
     async () => {
       movimientoReducido(true);
       const { app } = await abrirConCitas('/mis-citas', { citas: [] });
-      expect(await screen.findByRole('header', { name: 'Aquí verás tus próximas citas' })).toBeOnTheScreen();
+      expect(await screen.findByRole('header', { name: TEXTOS_DETALLE.listaVacia })).toBeOnTheScreen();
       expect(screen.getByText('Cada cita aparecerá con su fecha, su hora y el estado de su anticipo.')).toBeOnTheScreen();
 
       await verPestana('Historial');
@@ -224,12 +227,13 @@ describe('Mis citas con las pantallas reales (GP-06.3)', () => {
         Hora: horarioEnTelefono(INICIO_CITA_ISO, FIN_CITA_CON_ANTICIPO_ISO),
         Especialista: ESPECIALISTA_UNO.nombre,
         'Precio del servicio': '$1,200',
-        Anticipo: '$360',
+        [TEXTOS_DETALLE.etiquetaAnticipo]: '$360',
       });
       expect(screen.getByText('Alaciado keratínico')).toBeOnTheScreen();
       expect(screen.getByLabelText(plazoEsperado(VENCE_ANTICIPO_ISO))).toBeOnTheScreen();
-      expect(screen.getByText('Si el anticipo no se paga a tiempo, la cita se cancela sola.')).toBeOnTheScreen();
-      for (const boton of ['Pagar anticipo', 'Reprogramar', 'Cancelar cita']) {
+      // GP-07.4: la forma de pago dice qué pasa si no llega, con la regla de la cita.
+      expect(screen.getByText(TEXTOS_DETALLE.consecuencia)).toBeOnTheScreen();
+      for (const boton of [TEXTOS_DETALLE.botonLinea, TEXTOS_DETALLE.botonSalon, 'Reprogramar', 'Cancelar cita']) {
         expect(screen.getByRole('button', { name: boton })).toBeEnabled();
       }
 
@@ -247,10 +251,8 @@ describe('Mis citas con las pantallas reales (GP-06.3)', () => {
       await abrirTarjeta(app, 502);
 
       revisarInsignias('Confirmada', 'Anticipo pagado');
-      expect(
-        screen.getByText('Recibimos tu anticipo. Si reprogramas tu cita con aviso, tu anticipo se respeta.'),
-      ).toBeOnTheScreen();
-      expect(screen.queryByRole('button', { name: 'Pagar anticipo' })).not.toBeOnTheScreen();
+      expect(screen.getByText(TEXTOS_DETALLE.pagado)).toBeOnTheScreen();
+      expect(screen.queryByRole('button', { name: TEXTOS_DETALLE.botonLinea })).not.toBeOnTheScreen();
       expect(screen.getByRole('button', { name: 'Reprogramar' })).toBeOnTheScreen();
       sinTextos(/Paga antes/);
       esperarConsolaLimpia();
@@ -266,14 +268,10 @@ describe('Mis citas con las pantallas reales (GP-06.3)', () => {
       await esperarTarjetas([tarjeta]);
 
       await abrirTarjeta(app, 506, tarjeta);
-      expect(
-        screen.getByText(
-          `Paga tu anticipo en el salón ${LIMITE_EN_SALON} (15 minutos antes de tu cita). También puedes pagarlo en línea.`,
-        ),
-      ).toBeOnTheScreen();
+      expect(screen.getByText(plazoSalonEnDetalle(LIMITE_EN_SALON))).toBeOnTheScreen();
       expect(screen.getByRole('header', { name: 'Tus notas' })).toBeOnTheScreen();
       expect(screen.getByText('Traigo foto de referencia')).toBeOnTheScreen();
-      expect(screen.getByRole('button', { name: 'Pagar anticipo' })).toBeOnTheScreen();
+      expect(screen.getByRole('button', { name: TEXTOS_DETALLE.botonLinea })).toBeOnTheScreen();
       esperarConsolaLimpia();
     },
     LIMITE_MS,
@@ -283,7 +281,7 @@ describe('Mis citas con las pantallas reales (GP-06.3)', () => {
     'una cita del historial sin especialista se anuncia sin ella y ofrece reservar el mismo servicio',
     async () => {
       await abrirConCitas('/mis-citas', { citas: [CITA_SIN_ESPECIALISTA] });
-      expect(await screen.findByRole('header', { name: 'Aquí verás tus próximas citas' })).toBeOnTheScreen();
+      expect(await screen.findByRole('header', { name: TEXTOS_DETALLE.listaVacia })).toBeOnTheScreen();
 
       await verPestana('Historial');
       await esperarTarjetas([
@@ -308,22 +306,24 @@ describe('Mis citas con las pantallas reales (GP-06.3)', () => {
       const { app } = await abrirConCitas('/cita/508', { citas: [EN_CURSO_POR_COBRAR] });
       await esperarDetalle(app, 508);
       revisarInsignias('En curso', 'Anticipo pendiente');
-      expect(screen.getByLabelText('Anticipo: $360')).toBeOnTheScreen();
-      for (const boton of ['Pagar anticipo', 'Reprogramar', 'Cancelar cita']) {
+      expect(screen.getByLabelText(etiquetaMontoAnticipo('$360'))).toBeOnTheScreen();
+      for (const boton of [TEXTOS_DETALLE.botonLinea, TEXTOS_DETALLE.botonSalon, 'Reprogramar', 'Cancelar cita']) {
         expect(screen.queryByRole('button', { name: boton })).not.toBeOnTheScreen();
       }
-      sinTextos(/Paga antes/, 'Si el anticipo no se paga a tiempo, la cita se cancela sola.');
+      sinTextos(/Paga antes/, TEXTOS_DETALLE.casilla);
       esperarConsolaLimpia();
     },
     LIMITE_MS,
   );
 
   it(
-    'desde el detalle con el anticipo pendiente, "Pagar anticipo" abre la pantalla del pago',
+    // GP-07.4: antes de pagar se marca la casilla de la política y se registra el consentimiento.
+    'desde el detalle con el anticipo pendiente, la casilla y "Pagar anticipo con Mercado Pago" abren la pantalla del pago',
     async () => {
       const { app } = await abrirConCitas(`/cita/${ID_CITA}`);
       await esperarDetalle(app, ID_CITA);
-      await tocarYEsperar(app, 'Pagar anticipo', `/anticipo/${ID_CITA}`);
+      await fireEvent.press(screen.getByRole('checkbox', { name: TEXTOS_DETALLE.casilla }));
+      await tocarYEsperar(app, TEXTOS_DETALLE.botonLinea, `/anticipo/${ID_CITA}`);
       expect(await screen.findByRole('header', { name: 'Paga tu anticipo' })).toBeOnTheScreen();
       esperarConsolaLimpia();
     },

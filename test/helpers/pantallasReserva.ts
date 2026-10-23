@@ -1,6 +1,8 @@
 /// <reference types="jest" />
 
 import * as SecureStore from 'expo-secure-store';
+
+import { reiniciarReservaPendiente } from '@/features/citas/models/reservaPendiente';
 import { act, fireEvent, screen, waitFor } from 'expo-router/testing-library';
 import { AccessibilityInfo, AppState } from 'react-native';
 
@@ -32,6 +34,7 @@ import {
 import { abrirSesionSimulada } from './google';
 import { RUTAS_DE_FONDO } from './datosClienta';
 import { abrirApp, cerrarIntroSiAparece, prepararPruebasDePantalla, type App } from './pantallas';
+import { rutasConsentimientos } from './reservaFicticia';
 import { enSecuencia } from './pantallasServicios';
 import { CATALOGO_CRUDO, ESPECIALISTA_DOS, ESPECIALISTA_UNO, rutasServicios } from './serviciosFicticios';
 import { respuesta, servidorConRutas, type Llamada, type Manejador } from './servidorSimulado';
@@ -61,15 +64,28 @@ export const TARJETA_DOS = ESPECIALISTA_DOS.nombre;
 /** Uñas acrílicas (id 3): sin precio ("0.00") y sin anticipo. */
 export const SERVICIO_SIN_PRECIO = CATALOGO_CRUDO[2];
 
-/** Botones del paso 3 y de la confirmación. */
+/**
+ * Botones del paso 3 y de la confirmación. Desde GP-07.4 el paso 3 tiene un solo botón principal y
+ * su texto dice cómo se paga: sin anticipo, en línea o en el salón (la opción elegida en "Forma de
+ * pago").
+ */
 export const BOTON = {
   confirmar: 'Confirmar cita',
-  pagarEnLinea: 'Pagar anticipo con Mercado Pago',
-  apartarEnSalon: 'Apartar y pagar en el salón',
+  pagarEnLinea: 'Confirmar y pagar anticipo',
+  apartarEnSalon: 'Confirmar y pagar en el salón',
   verMisCitas: 'Ver mis citas',
   volverAlInicio: 'Volver al inicio',
   volver: 'Volver',
 } as const;
+
+/** Opciones de "Forma de pago" (radios): su nombre empieza con la etiqueta y sigue con el plazo. */
+export const OPCION_PAGO = {
+  linea: /^Pagar anticipo en línea\./,
+  salon: /^Pagar anticipo en el salón\./,
+} as const;
+
+/** Casilla obligatoria de la Política de anticipos. */
+export const CASILLA_POLITICA = 'Leí la Política de anticipos y cancelación';
 
 const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 const MESES = [
@@ -145,6 +161,8 @@ const simularServidor = servidorConRutas({
   ...RUTAS_DE_FONDO,
   ...rutasServicios(),
   ...rutasReserva({ disponibilidades: DISPONIBILIDADES }),
+  // GP-07.4: con anticipo, la reserva registra la Política de anticipos vigente antes de crear la cita.
+  ...rutasConsentimientos(),
   [RUTA_MIS_CITAS]: () => respuesta({ success: true, count: 0, data: [] }),
 });
 
@@ -208,13 +226,15 @@ export async function abrirReserva(ruta: string, opciones: OpcionesReserva = {})
 }
 
 /**
- * prepararPruebasDePantalla más el reinicio del navegador simulado (cancel por omisión) y del
- * movimiento reducido antes de cada prueba. Va dentro del describe.
+ * prepararPruebasDePantalla más el reinicio del navegador simulado (cancel por omisión), del
+ * movimiento reducido y de la reserva recuperada antes de cada prueba. Va dentro del describe.
  */
 export function prepararPruebasReserva(): () => void {
   beforeEach(() => {
     abrirSesionSimulada().mockReset().mockResolvedValue({ type: 'cancel' });
     movimientoReducido(false);
+    // Lo que guardó una sesión vencida en otra prueba no se recupera en esta (memoria del módulo).
+    reiniciarReservaPendiente();
   });
   return prepararPruebasDePantalla();
 }
@@ -322,6 +342,29 @@ export function sinTextos(...textos: (string | RegExp)[]): void {
   }
 }
 
+/** Elige cómo pagar el anticipo en "Forma de pago". */
+export async function elegirOpcionPago(opcion: keyof typeof OPCION_PAGO): Promise<void> {
+  await fireEvent.press(await screen.findByRole('radio', { name: OPCION_PAGO[opcion] }));
+}
+
+/** Marca la casilla de la Política de anticipos (si ya está marcada, la deja así). */
+export async function marcarPolitica(): Promise<void> {
+  const casilla = await screen.findByRole('checkbox', { name: CASILLA_POLITICA });
+  if (casilla.props.accessibilityState?.checked !== true) {
+    await fireEvent.press(casilla);
+  }
+}
+
+/**
+ * Con anticipo: elige la opción, marca la Política de anticipos y toca el botón final ("Confirmar y
+ * pagar anticipo" o "Confirmar y pagar en el salón").
+ */
+export async function confirmarConAnticipo(opcion: keyof typeof OPCION_PAGO): Promise<void> {
+  await elegirOpcionPago(opcion);
+  await marcarPolitica();
+  await tocar(opcion === 'linea' ? BOTON.pagarEnLinea : BOTON.apartarEnSalon);
+}
+
 /** Toca el botón y espera la ruta. */
 export async function tocarYEsperar(app: App, nombre: string, ruta: string): Promise<void> {
   await tocar(nombre);
@@ -386,14 +429,15 @@ export async function esperarPantallaDePago(abierta: PantallaReserva): Promise<v
 }
 
 /**
- * Reserva el alaciado (con anticipo) a las 11:00 del martes con "Pagar anticipo con Mercado Pago"
- * y espera la pantalla del anticipo, que llega con ?pagar=1 y abre el checkout sola. Es el único
- * camino a ?pagar=1: +native-intent.tsx lo quita de cualquier URL que llegue de fuera.
+ * Reserva el alaciado (con anticipo) a las 11:00 del martes pagando en línea (opción en línea,
+ * Política de anticipos marcada y "Confirmar y pagar anticipo") y espera la pantalla del anticipo,
+ * que llega con ?pagar=1 y abre el checkout sola. Es el único camino a ?pagar=1:
+ * +native-intent.tsx lo quita de cualquier URL que llegue de fuera.
  */
 export async function reservarYPagar(opciones: OpcionesReserva = {}): Promise<PantallaReserva> {
   const abierta = await abrirReserva(`/reservar/${SERVICIO_CON_ANTICIPO.id}`, opciones);
   await llegarAlResumen();
-  await tocar(BOTON.pagarEnLinea);
+  await confirmarConAnticipo('linea');
   await esperarPantallaDePago(abierta);
   return abierta;
 }

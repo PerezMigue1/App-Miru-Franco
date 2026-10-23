@@ -31,6 +31,7 @@ import { useTheme } from '@/shared/ui/useTheme';
 
 import {
   useDetalleServicioViewModel,
+  type AvisoAnticipo,
   type Especialista,
   type Servicio,
 } from '../viewmodels/useDetalleServicioViewModel';
@@ -66,6 +67,8 @@ export default function DetalleServicioView() {
               sesion={vm.sesion}
               invitacionVisible={vm.invitacionVisible}
               onReservar={vm.reservar}
+              anticipo={vm.anticipo}
+              beneficioInvitacion={vm.beneficioInvitacion}
             />
           </ScrollView>
         </>
@@ -134,11 +137,15 @@ function Contenido({
   sesion,
   invitacionVisible,
   onReservar,
+  anticipo,
+  beneficioInvitacion,
 }: {
   servicio: Servicio;
   sesion: boolean;
   invitacionVisible: boolean;
   onReservar: () => void;
+  anticipo: AvisoAnticipo | null;
+  beneficioInvitacion: string;
 }) {
   const { colores } = useTheme();
   const descripcion = servicio.descripcionLarga.trim() || servicio.descripcion.trim();
@@ -207,11 +214,11 @@ function Contenido({
           </Text>
         )}
 
-        {servicio.anticipo ? (
+        {anticipo ? (
           <Text style={[styles.nota, { color: colores.textoSuave }]}>
-            Este servicio pide un anticipo de{' '}
-            <Text style={[styles.cifra, { color: colores.texto }]}>{servicio.anticipo}</Text> al
-            reservar.
+            {anticipo.antes}
+            <Text style={[styles.cifra, { color: colores.texto }]}>{anticipo.monto}</Text>
+            {anticipo.despues}
           </Text>
         ) : null}
 
@@ -225,7 +232,7 @@ function Contenido({
       {!sesion && invitacionVisible ? (
         <InvitacionSesion
           titulo="Inicia sesión para reservar"
-          beneficio="Con tu cuenta eliges día y hora y pagas tu anticipo desde la app."
+          beneficio={beneficioInvitacion}
         />
       ) : (
         <View style={styles.accion}>

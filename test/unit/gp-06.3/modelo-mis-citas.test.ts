@@ -200,7 +200,7 @@ describe('obtenerCita: detalle de Mis citas', () => {
         pagos: [{ ...PAGO_APROBADO, retenidoEn: RETENIDO_EN_ISO }],
       }),
     );
-    expect(estadoAnticipo(cita, AHORA)).toBe('retenido');
+    expect(estadoAnticipo(cita)).toBe('retenido');
   });
 
   it('una cita ajena o que no existe responde 404 y la clienta lee "No encontramos esta cita."', async () => {
@@ -329,17 +329,19 @@ describe('estadoAnticipo y etiquetaEstadoAnticipo', () => {
     ['pendiente con el plazo por delante', {}, 'pendiente'],
     ['pendiente aunque el pago se rechazó', { pagos: [pagoNormalizado({ estado: 'rechazado' })] }, 'pendiente'],
     ['pendiente sin plazo', { anticipoVenceEn: null }, 'pendiente'],
-    ['vencido: el plazo ya pasó', { anticipoVenceEn: masMinutos(AHORA, -1).toISOString() }, 'vencido'],
-    ['vencido justo al llegar el plazo', { anticipoVenceEn: AHORA_ISO }, 'vencido'],
+    // GP-07.4: el plazo vencido lo decide el backend (estado y motivo), no el reloj del teléfono.
+    ['vigente con el plazo ya pasado sigue pendiente', { anticipoVenceEn: masMinutos(AHORA, -1).toISOString() }, 'pendiente'],
+    ['vigente justo al llegar el plazo sigue pendiente', { anticipoVenceEn: AHORA_ISO }, 'pendiente'],
+    ['vencido: la barrida la canceló por no pagar', { estado: 'cancelada', motivoCancelacion: 'anticipo_no_pagado' }, 'vencido'],
   ])('%s da %p', (_caso, cambios, esperado) => {
-    expect(estadoAnticipo(citaNormalizada(cambios), AHORA)).toBe(esperado);
+    expect(estadoAnticipo(citaNormalizada(cambios))).toBe(esperado);
   });
 
-  it('sin ahora usa el reloj: pendiente antes del plazo y vencido después', () => {
+  it('el reloj no cambia el estado: pendiente antes y después del plazo', () => {
     const cita = citaNormalizada();
     expect(estadoAnticipo(cita)).toBe('pendiente');
     jest.setSystemTime(masMinutos(VENCE_ANTICIPO_ISO, 1));
-    expect(estadoAnticipo(cita)).toBe('vencido');
+    expect(estadoAnticipo(cita)).toBe('pendiente');
   });
 
   it.each<[EstadoAnticipoCita, EtiquetaEstado]>([

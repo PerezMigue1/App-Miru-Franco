@@ -69,15 +69,15 @@ describe('GP-06.5: archivos revisados', () => {
 
 describe('Regla 1: los textos del salón siguen en su archivo y en ningún otro', () => {
   it.each<[string, string[]]>([
-    ['Apartar y pagar en el salón', [VISTA_RESERVA]],
-    [
-      'Llega entre 20 y 15 minutos antes para pagarlo. Si a 15 minutos de tu cita no se ha pagado, se cancela.',
-      [VISTA_RESERVA],
-    ],
+    // GP-07.4: la reserva ya no escribe estos textos; la opción y su plazo salen del catálogo
+    // (citas.formaPago.opcionSalon, llegadaSalon y plazoSalon) con las reglas de la configuración.
+    ['Apartar y pagar en el salón', []],
+    ['Llega entre 20 y 15 minutos antes para pagarlo', []],
     ['Tu horario está apartado', [VISTA_ANTICIPO, VISTA_CONFIRMADA]],
     ['Paga en salón', [TARJETA]],
-    // El aviso con el plazo lo arma citaModel (avisoAnticipoEnSalon); las vistas no lo copian.
-    ['Paga tu anticipo en el salón', [CITA_MODEL]],
+    // El aviso con el plazo lo arma citaModel (avisoAnticipoEnSalon) con el texto del catálogo
+    // (GP-07.4: citas.anticipoSalon.* de textosSitio); ningún archivo de aquí lo copia.
+    ['Paga tu anticipo en el salón', []],
   ])('"%s"', (texto, rutas) => {
     expect(archivosDonde((codigoArchivo) => codigoArchivo.includes(texto))).toEqual(nombres(rutas));
   });
@@ -85,8 +85,9 @@ describe('Regla 1: los textos del salón siguen en su archivo y en ningún otro'
 
 describe('Regla 2: las funciones del salón de citaModel solo aparecen donde se usan', () => {
   it.each<[string, string[]]>([
-    ['avisoAnticipoEnSalon', [VM_ANTICIPO, VM_CONFIRMADA, VM_DETALLE, VISTA_DETALLE]],
-    ['montoPagadoAnticipo', [VM_DETALLE]],
+    // GP-07.4: el detalle arma su forma de pago y su aviso de cancelar con gestionCitaModel.
+    ['avisoAnticipoEnSalon', [VM_ANTICIPO, VM_CONFIRMADA]],
+    ['montoPagadoAnticipo', []],
     ['mensajeAnticipoParaClienta', [VM_RESERVA]],
   ])('%s', (funcion, rutas) => {
     const patron = new RegExp(String.raw`\b${funcion}\b`);
@@ -100,7 +101,7 @@ describe('Regla 3: los viewmodels toman de citaModel lo del salón y las vistas 
     ['useReservarCitaViewModel', ['mensajeAnticipoParaClienta']],
     ['useAnticipoViewModel', ['avisoAnticipoEnSalon']],
     ['useCitaConfirmadaViewModel', ['avisoAnticipoEnSalon']],
-    ['useDetalleCitaViewModel', ['avisoAnticipoEnSalon', 'montoPagadoAnticipo']],
+    ['useDetalleCitaViewModel', ['cambiarAnticipoASalon', 'mensajeAnticipoEnSalon']],
   ])('%s toma %p de citaModel', (archivo, funciones) => {
     const texto = leer(viewmodel(archivo));
     const deCitaModel = (['import', 'export'] as const).flatMap((palabra) => piezasDe(texto, palabra, MODULO_CITA).valores);

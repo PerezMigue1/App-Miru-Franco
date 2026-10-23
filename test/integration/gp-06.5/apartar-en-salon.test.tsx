@@ -5,6 +5,8 @@ import '../../helpers/mocksPantallas';
 
 import { fireEvent, screen, waitFor } from 'expo-router/testing-library';
 
+import { plazoDeOpcion } from '@/features/citas/models/formaPagoModel';
+
 import {
   avisoEnSalonEsperado,
   citaCanceladaPorAnticipo,
@@ -30,7 +32,11 @@ import {
   abrirConCitas,
   abrirTarjeta,
   esperarTarjetas,
+  etiquetaMontoAnticipo,
+  marcarCasillaPolitica,
+  plazoSalonEnDetalle,
   revisarInsignias,
+  TEXTOS_DETALLE,
   verPestana,
   type TarjetaEsperada,
 } from '../../helpers/pantallasMisCitas';
@@ -39,10 +45,13 @@ import {
   AVISO_APARTADA,
   BOTON,
   diaLegible,
+  elegirOpcionPago,
   esperarRuta,
   horaEnTelefono,
   llegarAlResumen,
+  marcarPolitica,
   navegadorQuedaAbierto,
+  OPCION_PAGO,
   prepararPruebasReserva,
   retener,
   revisarCheckout,
@@ -64,9 +73,6 @@ jest.mock('expo-web-browser', () => require('../../helpers/google').navegadorSim
  * cita apartada en el salón, y la cita ya pagada en efectivo o cancelada por no pagar a tiempo.
  */
 
-/** Nota del paso 3 debajo de "Apartar y pagar en el salón". */
-const NOTA_SALON =
-  'Llega entre 20 y 15 minutos antes para pagarlo. Si a 15 minutos de tu cita no se ha pagado, se cancela.';
 
 /** Hora límite de la cita del martes a las 11:00 de México pagando en el salón (10:45), en la hora del teléfono. */
 const LIMITE_EN_SALON = `antes del ${diaLegible(DIA_CITA)}, ${horaEnTelefono(VENCE_EN_SALON_ISO)}`;
@@ -76,7 +82,7 @@ const AVISO_SALON = avisoEnSalonEsperado(LIMITE_EN_SALON);
 const MENSAJES_EN_LINEA = [
   'Tu cita está reservada',
   'Tu lugar queda apartado mientras pagas el anticipo.',
-  'Págalo en línea o en el salón. Si no se paga a tiempo, el horario se libera.',
+  TEXTOS_DETALLE.pendienteConfirmacion,
 ];
 
 /** Lo común de la tarjeta del alaciado del martes a las 11:00 en Mis citas. */
@@ -101,7 +107,7 @@ describe('Apartar la cita y pagar el anticipo en el salón con las pantallas rea
   const esperarConsolaLimpia = prepararPruebasReserva();
 
   it(
-    '"Apartar y pagar en el salón" aparta sin abrir Mercado Pago (un doble toque crea una sola cita) y la cita llega a Mis citas y su detalle',
+    '"Confirmar y pagar en el salón" aparta sin abrir Mercado Pago (un doble toque crea una sola cita) y la cita llega a Mis citas y su detalle',
     async () => {
       const retenida = retener();
       const lista = listaConLaCitaCreada();
@@ -111,17 +117,19 @@ describe('Apartar la cita y pagar el anticipo en el salón con las pantallas rea
       });
       await llegarAlResumen();
 
-      // Paso 3: el anticipo, los dos caminos y cuándo llegar al salón para pagarlo.
-      revisarDatos({ Anticipo: '$360' });
+      // Paso 3 (GP-07.4): el anticipo, las dos opciones y, con las reglas, cuándo llegar al salón.
+      revisarDatos({ 'Anticipo para apartar tu cita': '$360' });
       expect(screen.getByRole('button', { name: BOTON.pagarEnLinea })).toBeEnabled();
-      expect(screen.getByText(NOTA_SALON)).toBeOnTheScreen();
+      expect(screen.getByText(plazoDeOpcion('salon'))).toBeOnTheScreen();
 
+      await elegirOpcionPago('salon');
+      await marcarPolitica();
       const apartar = screen.getByRole('button', { name: BOTON.apartarEnSalon });
       await fireEvent.press(apartar);
       await fireEvent.press(apartar);
       expect(await screen.findByRole('button', { name: 'Apartando…' })).toBeBusy();
-      expect(screen.getByRole('button', { name: BOTON.pagarEnLinea })).toBeDisabled();
-      expect(vecesEn(abierta, RUTA_CREAR_CITA)).toBe(1);
+      expect(screen.getByRole('radio', { name: OPCION_PAGO.linea })).toBeDisabled();
+      await waitFor(() => expect(vecesEn(abierta, RUTA_CREAR_CITA)).toBe(1));
       await retenida.soltar();
 
       // Confirmación: horario apartado con la hora límite en el salón, en lugar del pago en línea.
@@ -150,9 +158,10 @@ describe('Apartar la cita y pagar el anticipo en el salón con las pantallas rea
 
       // Detalle: el aviso del salón con su plazo, el monto y la opción de pagarlo en línea.
       await abrirTarjeta(abierta.app, ID_CITA, tarjeta);
-      expect(screen.getByText(AVISO_SALON)).toBeOnTheScreen();
-      expect(screen.getByLabelText('Anticipo: $360')).toBeOnTheScreen();
-      expect(screen.getByRole('button', { name: 'Pagar anticipo' })).toBeEnabled();
+      // GP-07.4: el plazo del salón va en la forma de pago con la regla de la cita.
+      expect(screen.getByText(plazoSalonEnDetalle(LIMITE_EN_SALON))).toBeOnTheScreen();
+      expect(screen.getByLabelText(etiquetaMontoAnticipo('$360'))).toBeOnTheScreen();
+      expect(screen.getByRole('button', { name: TEXTOS_DETALLE.botonLinea })).toBeEnabled();
       expect(abrirSesionSimulada()).not.toHaveBeenCalled();
       esperarConsolaLimpia();
     },
@@ -175,6 +184,8 @@ describe('Apartar la cita y pagar el anticipo en el salón con las pantallas rea
       // Sin ?pagar=1 no abre nada hasta que la clienta lo pide.
       expect(abrirSesionSimulada()).not.toHaveBeenCalled();
 
+      // GP-07.4: pagar con el botón pide antes la casilla de la política.
+      await marcarCasillaPolitica();
       await tocar('Pagar anticipo');
       await waitFor(() => revisarCheckout(1, initPointFicticio()));
       expect(vecesEn(abierta, rutaPreferencia())).toBe(1);
@@ -190,7 +201,7 @@ describe('Apartar la cita y pagar el anticipo en el salón con las pantallas rea
       'Próximas',
       'Confirmada',
       'Anticipo pagado',
-      'Recibimos tu anticipo. Si reprogramas tu cita con aviso, tu anticipo se respeta.',
+      TEXTOS_DETALLE.pagado,
     ],
     [
       'cancelada porque el anticipo no se pagó a tiempo',
@@ -198,14 +209,14 @@ describe('Apartar la cita y pagar el anticipo en el salón con las pantallas rea
       'Historial',
       'Cancelada',
       'Anticipo vencido',
-      'No recibimos tu anticipo a tiempo y el horario quedó libre.',
+      TEXTOS_DETALLE.liberada,
     ],
   ])(
     'una cita del salón %s ya no pide pagar: ni "Paga en salón" ni plazo en Mis citas ni en el detalle',
     async (_caso, cita, pestana, estado, anticipo, explicacion) => {
       const { app } = await abrirConCitas('/mis-citas', { citas: [cita] });
       if (pestana === 'Historial') {
-        expect(await screen.findByRole('header', { name: 'Aquí verás tus próximas citas' })).toBeOnTheScreen();
+        expect(await screen.findByRole('header', { name: TEXTOS_DETALLE.listaVacia })).toBeOnTheScreen();
         await verPestana('Historial');
       }
       const tarjeta: TarjetaEsperada = { ...ALACIADO_DEL_MARTES, estado, anticipo };
@@ -213,9 +224,9 @@ describe('Apartar la cita y pagar el anticipo en el salón con las pantallas rea
 
       await abrirTarjeta(app, ID_CITA, tarjeta);
       revisarInsignias(estado, anticipo);
-      expect(screen.getByLabelText('Anticipo: $360')).toBeOnTheScreen();
+      expect(screen.getByLabelText(etiquetaMontoAnticipo('$360'))).toBeOnTheScreen();
       expect(screen.getByText(explicacion)).toBeOnTheScreen();
-      expect(screen.queryByRole('button', { name: 'Pagar anticipo' })).not.toBeOnTheScreen();
+      expect(screen.queryByRole('button', { name: TEXTOS_DETALLE.botonLinea })).not.toBeOnTheScreen();
       sinTextos(/Paga tu anticipo en el salón/, /^Paga antes/, 'Paga en salón', 'anticipo_no_pagado');
       esperarConsolaLimpia();
     },

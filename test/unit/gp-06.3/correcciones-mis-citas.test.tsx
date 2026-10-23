@@ -13,6 +13,7 @@ import {
   motivoCancelacionParaClienta,
 } from '@/features/citas/models/citaModel';
 import { ApiError } from '@/shared/api/apiClient';
+import { RESPALDO_TEXTOS } from '@/shared/api/textosSitio';
 
 import {
   AHORA,
@@ -69,10 +70,11 @@ jest.mock('expo-web-browser', () => require('../../helpers/google').navegadorSim
  */
 
 const MOTIVO_DEL_SISTEMA = 'anticipo_no_pagado';
-const MOTIVO_PARA_CLIENTA = 'No recibimos tu anticipo a tiempo y el horario quedó libre.';
-const EXPLICACION_VENCIDO = 'El plazo para pagar el anticipo terminó. Sin el pago, el horario se libera.';
-const EXPLICACION_VENCIDO_CANCELADA =
-  'El plazo para pagar el anticipo terminó. Como el anticipo no llegó a tiempo, el horario quedó libre.';
+// GP-07.4: los textos del anticipo salen del catálogo (anticipos.liberada y citas.detalle.revisandoPago).
+const MOTIVO_PARA_CLIENTA = RESPALDO_TEXTOS['anticipos.liberada'];
+const EXPLICACION_VENCIDO = RESPALDO_TEXTOS['citas.detalle.revisandoPago'];
+const EXPLICACION_VENCIDO_CANCELADA = RESPALDO_TEXTOS['anticipos.liberada'];
+const LISTA_VACIA = RESPALDO_TEXTOS['citas.lista.vacia'];
 const EXPLICACION_LIBERADA = 'La cita se canceló antes de pagar el anticipo, así que no hay nada que pagar.';
 const MOTIVO_DE_LA_CLIENTA = 'Me surgió un viaje';
 
@@ -93,13 +95,13 @@ const error400 = (mensaje: string) => new ApiError(400, mensaje);
 describe('C. Anticipo no pagado a tiempo (modelo)', () => {
   it('la cita cancelada por el backend con anticipo_no_pagado tiene el anticipo vencido', () => {
     const cita = citaNormalizada({ estado: 'cancelada', motivoCancelacion: MOTIVO_DEL_SISTEMA });
-    expect(estadoAnticipo(cita, AHORA)).toBe('vencido');
-    expect(etiquetaEstadoAnticipo(estadoAnticipo(cita, AHORA)).texto).toBe('Anticipo vencido');
+    expect(estadoAnticipo(cita)).toBe('vencido');
+    expect(etiquetaEstadoAnticipo(estadoAnticipo(cita)).texto).toBe('Anticipo vencido');
   });
 
   it('una cancelación de la clienta sin pago sigue como anticipo liberado', () => {
     const cita = citaNormalizada({ estado: 'cancelada', motivoCancelacion: MOTIVO_DE_LA_CLIENTA });
-    expect(estadoAnticipo(cita, AHORA)).toBe('liberada');
+    expect(estadoAnticipo(cita)).toBe('liberada');
   });
 
   it('motivoCancelacionParaClienta traduce el motivo del sistema y deja igual los demás', () => {
@@ -178,11 +180,12 @@ describe('Pantallas de Mis citas', () => {
 
   describe('C. Anticipo vencido en la lista y en el detalle', () => {
     it(
-      'lista: la vigente con el plazo vencido sale como "Anticipo vencido" sin plazo para pagar',
+      // GP-07.4: el reloj del teléfono no la vence (lo decide el backend): sigue pendiente, sin hora pasada.
+      'lista: la vigente con el plazo vencido en el teléfono sigue "Anticipo pendiente" sin plazo para pagar',
       async () => {
         await abrirReserva('/mis-citas', { rutas: lista(VIGENTE_VENCIDA) });
         const etiqueta = await etiquetaDeTarjeta();
-        expect(etiqueta).toContain('Pendiente, Anticipo vencido');
+        expect(etiqueta).toContain('Pendiente, Anticipo pendiente');
         expect(etiqueta).not.toMatch(/Paga antes/);
         revisarConsola();
       },
@@ -193,7 +196,7 @@ describe('Pantallas de Mis citas', () => {
       'lista: la cancelada por anticipo no pagado sale en Historial como "Anticipo vencido"',
       async () => {
         await abrirReserva('/mis-citas', { rutas: lista(CANCELADA_SIN_PAGO) });
-        expect(await screen.findByText('Aquí verás tus próximas citas')).toBeOnTheScreen();
+        expect(await screen.findByText(LISTA_VACIA)).toBeOnTheScreen();
         await fireEvent.press(screen.getByRole('tab', { name: 'Historial' }));
         const etiqueta = await etiquetaDeTarjeta();
         expect(etiqueta).toContain('Cancelada, Anticipo vencido');
@@ -209,10 +212,10 @@ describe('Pantallas de Mis citas', () => {
         await abrirReserva(`/cita/${ID_CITA}`, { cita: CANCELADA_SIN_PAGO });
         expect(await screen.findByLabelText('Estado: Anticipo vencido')).toBeOnTheScreen();
         expect(screen.getByLabelText('Estado: Cancelada')).toBeOnTheScreen();
-        // G: ya canceló el backend, así que el horario quedó libre (no "se libera").
+        // G: ya canceló el backend, así que el horario quedó libre (no "se libera"). La forma de pago
+        // ya lo explica: el motivo del sistema no se repite debajo.
         expect(screen.getByText(EXPLICACION_VENCIDO_CANCELADA)).toBeOnTheScreen();
-        expect(screen.getByRole('header', { name: 'Motivo de la cancelación' })).toBeOnTheScreen();
-        expect(screen.getByText(MOTIVO_PARA_CLIENTA)).toBeOnTheScreen();
+        expect(screen.queryByRole('header', { name: 'Motivo de la cancelación' })).not.toBeOnTheScreen();
         sinTextos(MOTIVO_DEL_SISTEMA, 'Anticipo liberado', EXPLICACION_LIBERADA, /el horario se libera/);
         expect(screen.queryByRole('button', { name: 'Pagar anticipo' })).not.toBeOnTheScreen();
         revisarConsola();
@@ -221,13 +224,12 @@ describe('Pantallas de Mis citas', () => {
     );
 
     it(
-      'detalle: la vigente con el plazo vencido explica el plazo y no ofrece pagar',
+      'detalle: la vigente con el plazo vencido en el teléfono dice que se revisa el pago, sin hora pasada',
       async () => {
         await abrirReserva(`/cita/${ID_CITA}`, { cita: VIGENTE_VENCIDA });
-        expect(await screen.findByLabelText('Estado: Anticipo vencido')).toBeOnTheScreen();
+        expect(await screen.findByLabelText('Estado: Anticipo pendiente')).toBeOnTheScreen();
         expect(screen.getByText(EXPLICACION_VENCIDO)).toBeOnTheScreen();
-        expect(screen.queryByRole('button', { name: 'Pagar anticipo' })).not.toBeOnTheScreen();
-        sinTextos(/Paga antes/);
+        sinTextos(/Paga antes/, /antes de las/);
         expect(screen.getByRole('button', { name: 'Reprogramar' })).toBeOnTheScreen();
         revisarConsola();
       },
@@ -330,7 +332,7 @@ describe('Pantallas de Mis citas', () => {
       'abierta sin pantalla anterior, Volver lleva a Perfil',
       async () => {
         const { app } = await abrirReserva('/mis-citas');
-        expect(await screen.findByText('Aquí verás tus próximas citas')).toBeOnTheScreen();
+        expect(await screen.findByText(LISTA_VACIA)).toBeOnTheScreen();
         await tocar('Volver');
         await esperarRuta(app, '/perfil');
         revisarConsola();

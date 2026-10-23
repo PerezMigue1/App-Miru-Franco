@@ -1,10 +1,13 @@
 import { useFocusEffect, useRouter, type Href } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { BackHandler } from 'react-native';
 
 import { esErrorDeRed, MENSAJE_SIN_CONEXION } from '@/features/auth/models/AuthModel';
 import { useAuth } from '@/features/auth/viewmodels/useAuth';
 import { ApiError } from '@/shared/api/apiClient';
+import { obtenerConfiguracion, suscribir as suscribirConfiguracion } from '@/shared/api/configuracionPublica';
+import { obtenerDocumentoVigente } from '@/shared/api/documentosLegales';
+import { obtenerTexto } from '@/shared/api/textosSitio';
 import { useCandado } from '@/shared/ui/useCandado';
 
 import {
@@ -25,21 +28,44 @@ import {
   type PagoAnticipo,
   type Slot,
 } from '../models/citaModel';
-import { obtenerServicio, type Servicio } from '../models/servicioModel';
+import {
+  ErrorConsentimiento,
+  esSesionTerminada,
+  esVersionNoPublicada,
+  MENSAJE_SESION_RESERVA,
+  mensajeConsentimiento,
+  registrarConsentimientosReserva,
+} from '../models/consentimientosReserva';
+import { textoFaltaPolitica, textoPoliticaActualizada } from '../models/formaPagoModel';
+import { guardarReservaPendiente, tomarReservaPendiente, type ReservaPendiente } from '../models/reservaPendiente';
+import { anticipoVigente, obtenerServicio, type Servicio } from '../models/servicioModel';
+import {
+  botonConfirmar,
+  formaPagoReserva,
+  opcionVigente,
+  type FormaPagoReserva,
+  type OpcionAnticipo,
+} from './formaPagoReserva';
+import { usePoliticaVista } from './useAceptacionAnticipos';
 import { useCalendarioCitas, type BloqueosCalendario } from './useCalendarioCitas';
 
 // La vista no importa de models/: recibe esta función del viewmodel.
 export { fechaLegible } from '../models/citaModel';
+export type { FormaPagoReserva, OpcionFormaPago } from './formaPagoReserva';
 
 export type PasoReserva = 1 | 2 | 3;
 export type EstadoReserva = 'cargando' | 'listo' | 'error' | 'noEncontrado';
 export type EstadoHorarios = 'inactivo' | 'cargando' | 'listo' | 'error';
 /**
  * Cómo se aparta la cita: 'linea' abre el pago del anticipo con Mercado Pago al reservar;
- * 'salon' solo aparta y lleva a la confirmación (también es el botón único sin anticipo).
+ * 'salon' solo aparta y lleva a la confirmación (también es el envío sin anticipo).
  * Solo si el servicio pide anticipo se manda al backend como pagoAnticipo.
  */
 export type ModoReserva = PagoAnticipo;
+
+/** Aviso al recuperar lo elegido después de que la sesión terminó. */
+export const AVISO_RESERVA_RECUPERADA =
+  'Conservamos lo que elegiste antes de que terminara tu sesión. Revisa los datos y confirma tu cita.';
 
 /** Nombres de los pasos, en orden, para el indicador. */
 export const PASOS_RESERVA = ['Especialista', 'Día y hora', 'Confirmar'] as const;
@@ -90,12 +116,38 @@ export interface ReservarCitaViewModel {
 
   notas: string;
   setNotas: (texto: string) => void;
+
+  /** "Confirma tu cita" del catálogo de textos. */
+  tituloConfirmar: string;
+  /** El anticipo que hoy se pide ("$360"), o null (sin monto, anticipoAplica o anticiposActivos en false). */
+  anticipo: string | null;
+  /** Textos de la sección "Forma de pago". */
+  formaPago: FormaPagoReserva;
+  /** Cómo se pagará el anticipo: la elegida si sigue activa o la primera activa. */
+  opcionPago: OpcionAnticipo;
+  elegirOpcion: (opcion: OpcionAnticipo) => void;
+  /** Casilla obligatoria de la Política de anticipos (solo con anticipo); empieza sin marcar. */
+  aceptaPolitica: boolean;
+  cambiarAceptaPolitica: (marcada: boolean) => void;
+  /** Mensaje en la casilla de la política si se intentó confirmar sin marcarla, o null. */
+  errorPolitica: string | null;
+  /** Casilla opcional de fotos del resultado; empieza sin marcar. */
+  autorizaFotos: boolean;
+  cambiarAutorizaFotos: (marcada: boolean) => void;
+  /** Texto de la casilla de fotos del resultado. */
+  textoFotos: string;
+  /** Texto del botón final según el anticipo y la opción (con su texto de espera). */
+  textoBoton: string;
+  /** Lo elegido se recuperó después de que la sesión terminó. */
+  recuperada: boolean;
+
   enviando: boolean;
-  /** Botón que se está enviando ('linea' o 'salon'), o null si no se envía nada. */
+  /** Lo que se está enviando ('linea' o 'salon'; 'salon' sin anticipo), o null si no se envía nada. */
   modoEnvio: ModoReserva | null;
   /** Mensaje propio del último intento de reservar, o null. */
   errorEnvio: string | null;
-  confirmar: (modo: ModoReserva) => void;
+  /** Registra los consentimientos marcados y, solo si se guardaron, crea la cita. */
+  confirmar: () => void;
 
   /** Paso anterior; en el primero sale al detalle. No hace nada mientras se envía. */
   atras: () => void;
@@ -152,10 +204,31 @@ export function useReservarCitaViewModel(
   const enviando = modoEnvio !== null;
   const [errorEnvio, setErrorEnvio] = useState<string | null>(null);
 
+  // Forma de pago y consentimientos: las casillas empiezan sin marcar.
+  const configuracion = useSyncExternalStore(suscribirConfiguracion, obtenerConfiguracion, obtenerConfiguracion);
+  const [opcionElegida, setOpcionElegida] = useState<OpcionAnticipo | null>(null);
+  const [aceptaPolitica, setAceptaPolitica] = useState(false);
+  const [errorPolitica, setErrorPolitica] = useState<string | null>(null);
+  const [autorizaFotos, setAutorizaFotos] = useState(false);
+  const [recuperada, setRecuperada] = useState(false);
+  const anticipo = anticipoVigente(servicio, configuracion);
+  const opcionPago = opcionVigente(opcionElegida, configuracion);
+  // La versión de la política que se registra es la que la casilla mostraba al marcarla; si cambia
+  // con la casilla marcada, se desmarca y se avisa.
+  const alCambiarPolitica = useCallback(() => {
+    setAceptaPolitica(false);
+    setErrorPolitica(textoPoliticaActualizada(obtenerConfiguracion()));
+  }, []);
+  const politicaVista = usePoliticaVista(aceptaPolitica, alCambiarPolitica);
+
   // Solo la última solicitud escribe el estado (reintentos rápidos, cambio de día o pantalla desmontada).
   const solicitudServicio = useRef(0);
   const solicitudHorarios = useRef(0);
   const montado = useRef(true);
+  // Horario que se recupera (inicio ISO) cuando llegan los horarios del día recuperado.
+  const horarioPorRecuperar = useRef<string | null>(null);
+  const usuarioId = useRef<string | null>(null);
+  usuarioId.current = usuario ? String(usuario.id) : null;
 
   useEffect(() => {
     montado.current = true;
@@ -180,6 +253,15 @@ export function useReservarCitaViewModel(
           }
           setDisponibilidad(respuesta);
           setEstadoHorarios('listo');
+          // Horario recuperado tras volver a iniciar sesión: si sigue libre, de vuelta a Confirmar.
+          const inicioRecuperado = horarioPorRecuperar.current;
+          horarioPorRecuperar.current = null;
+          const libre = inicioRecuperado ? respuesta.slots.find((item) => item.inicio === inicioRecuperado) : undefined;
+          if (libre) {
+            setSlot(libre);
+            setDireccion(1);
+            setPaso(3);
+          }
         })
         .catch((error: unknown) => {
           if (actual !== solicitudHorarios.current) {
@@ -238,7 +320,38 @@ export function useReservarCitaViewModel(
     [cargarHorarios, primerDiaLibre, sinDia],
   );
 
-  // La especialista de la ruta se aplica una sola vez, en la primera carga que sale bien.
+  /**
+   * Lo que la clienta eligió antes de que terminara su sesión: la especialista, el día (si todavía
+   * tiene citas; si no, el primer día libre), el horario (si sigue libre al llegar los horarios) y
+   * las notas. false si la especialista ya no está entre las del servicio.
+   */
+  const recuperarReserva = useCallback(
+    (pendiente: ReservaPendiente, disponibles: Especialista[], idServicio: string | number): boolean => {
+      const elegida = disponibles.find((item) => String(item.id) === pendiente.especialistaId);
+      if (!elegida) {
+        return false;
+      }
+      if (pendiente.fecha < fechaLocal(new Date()) || estaBloqueado(pendiente.fecha)) {
+        empezarDiaHora(elegida, idServicio);
+      } else {
+        setEspecialista(elegida);
+        setMesVisible(mesDeFecha(pendiente.fecha));
+        setSlot(null);
+        setHorarioOcupado(false);
+        setFecha(pendiente.fecha);
+        horarioPorRecuperar.current = pendiente.inicio;
+        cargarHorarios(elegida.id, pendiente.fecha, idServicio);
+      }
+      setNotas(pendiente.notas);
+      setRecuperada(true);
+      setDireccion(1);
+      setPaso(2);
+      return true;
+    },
+    [cargarHorarios, empezarDiaHora, estaBloqueado],
+  );
+
+  // La especialista de la ruta (o lo recuperado) se aplica una sola vez, en la primera carga que sale bien.
   const especialistaInicialAplicada = useRef(false);
 
   const recargar = useCallback(() => {
@@ -279,13 +392,17 @@ export function useReservarCitaViewModel(
         setEspecialistas(disponibles);
         if (!especialistaInicialAplicada.current) {
           especialistaInicialAplicada.current = true;
+          // La sesión terminó al confirmar: se recupera lo elegido (solo la misma clienta).
+          const pendiente = usuarioId.current ? tomarReservaPendiente(usuarioId.current, idLimpio) : null;
           // "Reservar lo mismo": si la especialista sigue entre las del servicio, se empieza en Día y
           // hora con ella elegida; atrás regresa al paso de especialista para cambiarla.
           const idInicial = especialistaIdInicial?.trim() ?? '';
           const inicial = idInicial
             ? disponibles.find((item) => String(item.id) === idInicial)
             : undefined;
-          if (inicial) {
+          // Lo recuperado manda sobre la especialista de la ruta.
+          const seRecupero = pendiente ? recuperarReserva(pendiente, disponibles, respuesta.id) : false;
+          if (!seRecupero && inicial) {
             empezarDiaHora(inicial, respuesta.id);
             setDireccion(1);
             setPaso(2);
@@ -300,7 +417,7 @@ export function useReservarCitaViewModel(
         setServicio(null);
         setEstado(error instanceof ApiError && error.status === 404 ? 'noEncontrado' : 'error');
       });
-  }, [servicioId, especialistaIdInicial, empezarDiaHora]);
+  }, [servicioId, especialistaIdInicial, empezarDiaHora, recuperarReserva]);
 
   useEffect(() => {
     recargar();
@@ -413,64 +530,155 @@ export function useReservarCitaViewModel(
     }, []),
   );
 
-  const confirmar = useCallback(
-    (modo: ModoReserva) => {
-      // Un solo candado para los dos botones: el segundo toque se ignora mientras se envía.
-      candado(async () => {
-        // Sin sesión la ruta no existe; aun así, sin clienta no se envía nada.
-        if (!usuario || !servicio || !especialista || !slot || !fecha) {
+  const elegirOpcion = useCallback(
+    (opcion: OpcionAnticipo) => {
+      if (!enviando) {
+        setOpcionElegida(opcion);
+      }
+    },
+    [enviando],
+  );
+
+  const cambiarAceptaPolitica = useCallback(
+    (marcada: boolean) => {
+      if (enviando) {
+        return;
+      }
+      setAceptaPolitica(marcada);
+      if (marcada) {
+        setErrorPolitica(null);
+      }
+    },
+    [enviando],
+  );
+
+  const cambiarAutorizaFotos = useCallback(
+    (marcada: boolean) => {
+      if (!enviando) {
+        setAutorizaFotos(marcada);
+      }
+    },
+    [enviando],
+  );
+
+  const confirmar = useCallback(() => {
+    // Candado inmediato: un segundo toque se ignora mientras se envía.
+    candado(async () => {
+      // Sin sesión la ruta no existe; aun así, sin clienta no se envía nada.
+      if (!usuario || !servicio || !especialista || !slot || !fecha) {
+        return;
+      }
+      const conAnticipo = anticipo !== null;
+      // Pagar en línea y apartar para pagar en el salón piden la misma casilla: sin ella no hay red.
+      if (conAnticipo && !aceptaPolitica) {
+        setErrorPolitica(textoFaltaPolitica(configuracion));
+        return;
+      }
+      const modo: ModoReserva = conAnticipo ? opcionPago : 'salon';
+      setModoEnvio(modo);
+      setErrorEnvio(null);
+      setErrorPolitica(null);
+      setRecuperada(false);
+      try {
+        // Las casillas se registran antes de apartar el horario: si un registro falla, la cita no se crea.
+        await registrarConsentimientosReserva({ conAnticipo, autorizaFotos, politicaVista: politicaVista() });
+        const cita = await crearCita({
+          clienteId: usuario.id,
+          especialistaId: especialista.id,
+          servicioId: servicio.id,
+          fechaHoraInicio: slot.inicio,
+          fechaHoraFin: slot.fin,
+          notas,
+          // Sin anticipo no se manda: no debe quedar una cita por pagar en el salón si el backend sí
+          // lo pidiera (usa 'linea' por omisión).
+          pagoAnticipo: conAnticipo ? modo : undefined,
+        });
+        if (!montado.current) {
           return;
         }
-        setModoEnvio(modo);
-        setErrorEnvio(null);
-        try {
-          const cita = await crearCita({
-            clienteId: usuario.id,
-            especialistaId: especialista.id,
-            servicioId: servicio.id,
-            fechaHoraInicio: slot.inicio,
-            fechaHoraFin: slot.fin,
-            notas,
-            // Sin anticipo en el servicio no se manda: el botón único no debe dejar una cita por pagar
-            // en el salón si el backend sí lo pidiera (usa 'linea' por omisión).
-            pagoAnticipo: servicio.anticipo ? modo : undefined,
-          });
-          if (!montado.current) {
-            return;
-          }
-          const citaId = encodeURIComponent(String(cita.id));
-          // Pagar en línea abre Mercado Pago al llegar (pagar=1); si la cita ya no pide anticipo, o se
-          // paga en el salón, va directo a la confirmación.
-          // Las rutas de anticipo y confirmación aún no están en los tipos generados de Expo Router.
-          router.replace(
-            (modo === 'linea' && pideAnticipo(cita)
-              ? `/anticipo/${citaId}?pagar=1`
-              : `/cita-confirmada/${citaId}`) as Href,
-          );
-        } catch (error: unknown) {
-          if (!montado.current) {
-            return;
-          }
-          setModoEnvio(null);
-          if (esHorarioOcupado(error)) {
-            // Alguien más tomó ese horario: de vuelta a elegir hora con la disponibilidad al día.
-            setSlot(null);
-            setHorarioOcupado(true);
-            irAPaso(2, -1);
-            cargarHorarios(especialista.id, fecha, servicio.id);
-            return;
-          }
-          // Los 400 del anticipo traen un texto ya escrito para la clienta; cualquier otro, el genérico.
-          const mensajeAnticipo = mensajeAnticipoParaClienta(error);
-          if (mensajeAnticipo) {
-            setErrorEnvio(mensajeAnticipo);
-            return;
-          }
-          setErrorEnvio(esErrorDeRed(error) ? MENSAJE_SIN_CONEXION : ERROR_RESERVA);
+        const citaId = encodeURIComponent(String(cita.id));
+        // Pagar en línea abre Mercado Pago al llegar (pagar=1): la política ya se aceptó aquí. Si la
+        // cita pide un anticipo que la app no anunció (sin casilla ni consentimiento), va a la
+        // pantalla del anticipo sin pagar=1, que pide la casilla antes de abrir el pago. Sin anticipo o
+        // en el salón, a la confirmación. Las rutas de anticipo y confirmación aún no están en los
+        // tipos generados de Expo Router.
+        let destino = `/cita-confirmada/${citaId}`;
+        if (pideAnticipo(cita) && !conAnticipo) {
+          destino = `/anticipo/${citaId}`;
+        } else if (pideAnticipo(cita) && modo === 'linea') {
+          destino = `/anticipo/${citaId}?pagar=1`;
         }
-      });
-    },
-    [candado, usuario, servicio, especialista, slot, fecha, notas, router, irAPaso, cargarHorarios],
+        router.replace(destino as Href);
+      } catch (error: unknown) {
+        const causa = error instanceof ErrorConsentimiento ? error.causa : error;
+        if (esSesionTerminada(causa)) {
+          // apiClient ya cerró la sesión: lo elegido se guarda en memoria (aunque la pantalla ya se
+          // haya desmontado) para recuperarlo al volver a iniciar sesión.
+          guardarReservaPendiente({
+            usuarioId: String(usuario.id),
+            servicioId: String(servicio.id),
+            especialistaId: String(especialista.id),
+            fecha,
+            inicio: slot.inicio,
+            notas,
+          });
+        }
+        if (!montado.current) {
+          return;
+        }
+        setModoEnvio(null);
+        if (esSesionTerminada(causa)) {
+          setErrorEnvio(MENSAJE_SESION_RESERVA);
+          return;
+        }
+        if (error instanceof ErrorConsentimiento) {
+          if (esVersionNoPublicada(error)) {
+            // La versión que vio ya no es la publicada: se pide la vigente y se vuelve a marcar.
+            setAceptaPolitica(false);
+            void obtenerDocumentoVigente('anticipos', { forzarRed: true });
+          }
+          setErrorEnvio(mensajeConsentimiento(error));
+          return;
+        }
+        if (esHorarioOcupado(error)) {
+          // Alguien más tomó ese horario: de vuelta a elegir hora con la disponibilidad al día.
+          setSlot(null);
+          setHorarioOcupado(true);
+          irAPaso(2, -1);
+          cargarHorarios(especialista.id, fecha, servicio.id);
+          return;
+        }
+        // Los 400 del anticipo traen un texto ya escrito para la clienta; cualquier otro, el genérico.
+        const mensajeAnticipo = mensajeAnticipoParaClienta(error);
+        if (mensajeAnticipo) {
+          setErrorEnvio(mensajeAnticipo);
+          return;
+        }
+        setErrorEnvio(esErrorDeRed(error) ? MENSAJE_SIN_CONEXION : ERROR_RESERVA);
+      }
+    });
+  }, [
+    candado,
+    usuario,
+    servicio,
+    especialista,
+    slot,
+    fecha,
+    notas,
+    anticipo,
+    aceptaPolitica,
+    autorizaFotos,
+    politicaVista,
+    opcionPago,
+    configuracion,
+    router,
+    irAPaso,
+    cargarHorarios,
+  ]);
+
+  const formaPago = useMemo(
+    () => formaPagoReserva({ precio: servicio?.precio ?? null }, anticipo, configuracion),
+    [servicio?.precio, anticipo, configuracion],
   );
 
   return {
@@ -498,6 +706,19 @@ export function useReservarCitaViewModel(
     elegirHorario,
     notas,
     setNotas,
+    tituloConfirmar: obtenerTexto('citas.crear.tituloConfirmar', {}, configuracion),
+    anticipo,
+    formaPago,
+    opcionPago,
+    elegirOpcion,
+    aceptaPolitica,
+    cambiarAceptaPolitica,
+    errorPolitica,
+    autorizaFotos,
+    cambiarAutorizaFotos,
+    textoFotos: obtenerTexto('citas.reserva.fotosResultado', {}, configuracion),
+    textoBoton: botonConfirmar(anticipo, opcionPago, enviando, configuracion),
+    recuperada,
     enviando,
     modoEnvio,
     errorEnvio,

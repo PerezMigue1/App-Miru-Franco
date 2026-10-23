@@ -5,6 +5,8 @@ import '../../helpers/mocksPantallas';
 
 import { fireEvent, screen, waitFor } from 'expo-router/testing-library';
 
+import { obtenerTexto, RESPALDO_TEXTOS } from '@/shared/api/textosSitio';
+
 import {
   conError,
   ERRORES_MIS_CITAS,
@@ -51,10 +53,11 @@ jest.mock('expo-web-browser', () => require('../../helpers/google').navegadorSim
  * la hoja sin cancelar, los errores en palabras de la clienta y el paso a reprogramar.
  */
 
-const RECOMENDACION = 'Te recomendamos reprogramar tu cita en lugar de cancelarla.';
-const AVISO_PAGADO =
-  'El anticipo de $360 que pagaste no se devuelve si cancelas. Si reprogramas tu cita con aviso, tu anticipo se respeta.';
-const CONFIRMACION = 'Cancelamos tu cita.';
+// GP-07.4: los avisos salen del catálogo con la regla de la cita (estas citas no guardan reglas: las
+// de omisión). Con anticipo pagado y sin `cancelacion` del backend, el aviso es el de sin datos.
+const RECOMENDACION = RESPALDO_TEXTOS['citas.cancelar.sinAnticipo'];
+const AVISO_PAGADO = `${obtenerTexto('citas.cancelar.anticipoSinDatos', { anticipo: '$360', diasExcepcion: 10, diasReembolso: 5 })} ${RESPALDO_TEXTOS['citas.cancelar.reprogramar']}`;
+const CONFIRMACION = RESPALDO_TEXTOS['citas.cancelar.toast'];
 const ID_PAGADA = 502;
 
 /** Cuerpos que recibió PATCH /api/citas/:id/cancelar. */
@@ -114,7 +117,7 @@ describe('Cancelar una cita con las pantallas reales (GP-06.3)', () => {
       // La respuesta de cancelar no trae la retención: la app vuelve a leer la cita.
       expect(vecesEn(abierta, rutaCita(ID_PAGADA))).toBe(2);
       revisarInsignias('Cancelada', 'Anticipo retenido');
-      expect(screen.getByText('El salón conservó tu anticipo, así que ya no se devuelve.')).toBeOnTheScreen();
+      expect(screen.getByText(RESPALDO_TEXTOS['anticipos.retenido'])).toBeOnTheScreen();
       expect(screen.getByText(MOTIVO_CANCELACION)).toBeOnTheScreen();
       sinTextos('Anticipo pagado');
       esperarConsolaLimpia();
