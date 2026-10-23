@@ -677,8 +677,8 @@ export function useReservarCitaViewModel(
   ]);
 
   const formaPago = useMemo(
-    () => formaPagoReserva({ precio: servicio?.precio ?? null }, anticipo, configuracion),
-    [servicio?.precio, anticipo, configuracion],
+    () => formaPagoReserva({ precio: servicio?.precio ?? null }, anticipo, configuracion, opcionPago),
+    [servicio?.precio, anticipo, configuracion, opcionPago],
   );
 
   return {

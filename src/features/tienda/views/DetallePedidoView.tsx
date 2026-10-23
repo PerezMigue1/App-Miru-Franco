@@ -1,12 +1,14 @@
 import { useLocalSearchParams } from 'expo-router';
-import { CalendarDays, CircleCheck, Hourglass, Info, type LucideIcon } from 'lucide-react-native';
+import { CalendarDays, Hourglass } from 'lucide-react-native';
 import type { ReactNode } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EncabezadoVolver } from '@/features/auth/components/EncabezadoVolver';
+import { BadgeEstado } from '@/features/citas/components/BadgeEstado';
 import { Button } from '@/shared/ui/Button';
+import { DatosTransferencia } from '@/shared/ui/DatosTransferencia';
 import { EmptyState } from '@/shared/ui/EmptyState';
 import { useEntradaContenido } from '@/shared/ui/movimiento';
 import { Skeleton } from '@/shared/ui/Skeleton';
@@ -16,7 +18,6 @@ import {
   esqueleto,
   fuente,
   icono,
-  insignia,
   pantalla,
   radio,
   sombra,
@@ -27,31 +28,26 @@ import {
 } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
-import { BadgePedido } from '../components/BadgePedido';
+import { AvisoTienda } from '../components/AvisoTienda';
 import { DatosRecogerSalon } from '../components/DatosRecogerSalon';
 import { FilaArticuloPedido } from '../components/FilaArticuloPedido';
 import { HojaCancelarPedido } from '../components/HojaCancelarPedido';
-import {
-  etiquetaMetodoPago,
-  fechaPedido,
-  formatoPrecio,
-  limitePagoPedido,
-  pidePagoEnLinea,
-  puedeCancelar,
-  textoCancelarPedido,
-  textoPiezas,
-  textoQueSigueConPago,
-} from '../viewmodels/presentacionTienda';
+import { HojaRetirarDevolucion } from '../components/HojaRetirarDevolucion';
+import { HojaRevocarCompra } from '../components/HojaRevocarCompra';
+import { HojaSolicitarDevolucion } from '../components/HojaSolicitarDevolucion';
+import { SeccionDevoluciones } from '../components/SeccionDevoluciones';
+import { formatoPrecio, textoPiezas } from '../viewmodels/presentacionTienda';
 import {
   useDetallePedidoViewModel,
-  type AvisoPedido,
+  type DetallePedidoViewModel,
   type Pedido,
+  type PresentacionDetalle,
 } from '../viewmodels/useDetallePedidoViewModel';
 
-/** Estados en los que ya no hay nada que recoger en el salón. */
-const SIN_RECOGER: readonly string[] = ['cancelado', 'entregado', 'enviado'];
-
-/** Detalle de un pedido de la clienta: estado, qué sigue, artículos, pago, dónde recoger y cancelar. */
+/**
+ * Detalle de un pedido de la clienta: estado, qué sigue, artículos, pago, dónde recoger, cancelar,
+ * revocar la compra y sus devoluciones y reembolsos.
+ */
 export default function DetallePedidoView() {
   const { colores } = useTheme();
   const { bottom } = useSafeAreaInsets();
@@ -65,16 +61,9 @@ export default function DetallePedidoView() {
     <View style={[styles.raiz, { backgroundColor: colores.fondo }]}>
       <EncabezadoVolver titulo={titulo} onVolver={vm.regresar} />
 
-      {vm.estado === 'listo' && vm.pedido ? (
+      {vm.estado === 'listo' && vm.pedido && vm.detalle ? (
         <ScrollView contentContainerStyle={[styles.contenido, { paddingBottom: bottom + espacio.x3 }]}>
-          <Contenido
-            pedido={vm.pedido}
-            aviso={vm.aviso}
-            pagoEnProceso={vm.pagoEnProceso}
-            onPagar={vm.completarPago}
-            onRevisarPago={vm.revisarPago}
-            onCancelar={vm.abrirCancelar}
-          />
+          <Contenido pedido={vm.pedido} detalle={vm.detalle} vm={vm} />
         </ScrollView>
       ) : null}
 
@@ -104,88 +93,91 @@ export default function DetallePedidoView() {
         visible={vm.hojaCancelarVisible}
         onCerrar={vm.cerrarCancelar}
         numero={numero ?? ''}
-        texto={vm.pedido ? textoCancelarPedido(vm.pedido) : ''}
+        texto={vm.detalle?.textoCancelar ?? ''}
         cancelando={vm.cancelando}
         error={vm.errorCancelacion}
-        puedeConfirmar={vm.pedido ? puedeCancelar(vm.pedido) : false}
+        puedeConfirmar={vm.detalle?.puedeCancelar ?? false}
         onCancelar={vm.cancelar}
       />
+
+      <HojaRevocarCompra
+        visible={vm.hojaRevocarVisible}
+        onCerrar={vm.cerrarRevocar}
+        textos={vm.textosRevocar}
+        parrafos={vm.detalle?.textosRevocar ?? []}
+        motivo={vm.motivoRevocacion}
+        onCambiarMotivo={vm.cambiarMotivoRevocacion}
+        largoMotivo={vm.largoMotivoRevocacion}
+        revocando={vm.revocando}
+        error={vm.errorRevocacion}
+        onRevocar={vm.revocar}
+      />
+
+      <HojaSolicitarDevolucion solicitud={vm.solicitud} />
+      <HojaRetirarDevolucion solicitud={vm.solicitud} />
     </View>
   );
 }
 
 function Contenido({
   pedido,
-  aviso,
-  pagoEnProceso,
-  onPagar,
-  onRevisarPago,
-  onCancelar,
+  detalle,
+  vm,
 }: {
   pedido: Pedido;
-  aviso: AvisoPedido | null;
-  /** Mercado Pago procesa o revisa el pago: sin plazo y solo revisar el pago, nunca pagar otra vez. */
-  pagoEnProceso: boolean;
-  onPagar: () => void;
-  onRevisarPago: () => void;
-  onCancelar: () => void;
+  detalle: PresentacionDetalle;
+  vm: DetallePedidoViewModel;
 }) {
   const { colores } = useTheme();
   // Aparece una vez al terminar de cargar; las recargas al enfocar no la repiten.
   const entrada = useEntradaContenido();
 
-  const fecha = fechaPedido(pedido);
-  const queSigue = textoQueSigueConPago(pedido, pagoEnProceso);
-  const pagar = pidePagoEnLinea(pedido);
-  const limite = pagar && !pagoEnProceso ? limitePagoPedido(pedido) : null;
   const total = formatoPrecio(pedido.totalCentavos);
-  const recoger = !SIN_RECOGER.includes(pedido.estado);
+  const { aviso } = vm;
+  const llamar = aviso?.llamarSalon && vm.textoLlamar ? { texto: vm.textoLlamar, onPress: vm.llamarSalon } : null;
+  const acciones = detalle.puedeCancelar || detalle.puedeRevocar;
 
   return (
     <Animated.View entering={entrada} style={styles.bloques}>
-      {/* Aviso tras cancelar (o si el pedido cambió): la hoja se cierra y TalkBack lo anuncia. */}
+      {/* Aviso tras cancelar o revocar (o si el servidor no lo permitió): la hoja se cierra y TalkBack lo anuncia. */}
       <View collapsable={false} accessibilityLiveRegion="polite">
-        {aviso ? <PanelAviso aviso={aviso} /> : null}
+        {aviso ? <AvisoTienda tipo={aviso.tipo} textos={[aviso.texto]} llamar={llamar} /> : null}
       </View>
 
       <View style={styles.resumen}>
         <View style={styles.insignias}>
-          <BadgePedido pedido={pedido} pagoEnProceso={pagoEnProceso} />
+          <BadgeEstado texto={detalle.etiqueta.texto} tono={detalle.etiqueta.tono} />
         </View>
-        {fecha ? (
-          <View style={styles.filaIcono} accessible accessibilityLabel={`Pedido hecho el ${fecha}`}>
+        {detalle.fecha ? (
+          <View style={styles.filaIcono} accessible accessibilityLabel={`Pedido hecho el ${detalle.fecha}`}>
             <View style={styles.iconoLinea}>
               <CalendarDays color={colores.textoSuave} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
             </View>
             {/* Fecha en el secundario: 8.9:1 sobre lino (6:1 sobre carbón en oscuro). */}
-            <Text style={[styles.cuerpo, { color: colores.textoSuave }]}>Hecho el {fecha}</Text>
+            <Text style={[styles.cuerpo, { color: colores.textoSuave }]}>Hecho el {detalle.fecha}</Text>
           </View>
         ) : null}
       </View>
 
-      {queSigue ? (
+      {detalle.queSigue ? (
         <Tarjeta>
           <Text accessibilityRole="header" style={[styles.tituloTarjeta, { color: colores.texto }]}>
             Qué sigue
           </Text>
-          <Text style={[styles.parrafo, { color: colores.texto }]}>{queSigue}</Text>
-          {pagar ? (
-            <>
-              {limite ? (
-                <View style={styles.filaIcono}>
-                  <View style={styles.iconoLinea}>
-                    <Hourglass color={colores.texto} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
-                  </View>
-                  <Text style={[styles.textoFuerte, { color: colores.texto }]}>Paga antes del {limite}.</Text>
-                </View>
-              ) : null}
-              {pagoEnProceso ? (
-                <Button titulo="Revisar mi pago" onPress={onRevisarPago} />
-              ) : (
-                <Button titulo="Completar el pago" onPress={onPagar} />
-              )}
-            </>
+          <Text style={[styles.parrafo, { color: colores.texto }]}>{detalle.queSigue}</Text>
+          {detalle.plazo ? (
+            <View style={styles.filaIcono}>
+              <View style={styles.iconoLinea}>
+                <Hourglass color={colores.texto} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
+              </View>
+              <Text style={[styles.textoFuerte, { color: colores.texto }]}>{detalle.plazo}</Text>
+            </View>
           ) : null}
+          {/* Con el pago en proceso solo se revisa: nunca se ofrece pagar otra vez. */}
+          {detalle.accionPago === 'revisar' ? <Button titulo="Revisar mi pago" onPress={vm.revisarPago} /> : null}
+          {detalle.accionPago === 'completar' ? <Button titulo="Completar el pago" onPress={vm.completarPago} /> : null}
+          {/* Apartado listo para pagar en el salón: la cuenta para transferir (si está activa). */}
+          <DatosTransferencia datos={detalle.transferencia} />
         </Tarjeta>
       ) : null}
 
@@ -214,17 +206,13 @@ function Contenido({
           </View>
           <Text style={[styles.cifra, { color: colores.texto }]}>{total}</Text>
         </View>
-        <View
-          style={styles.pago}
-          accessible
-          accessibilityLabel={`Forma de pago: ${etiquetaMetodoPago(pedido.metodoPago)}`}
-        >
+        <View style={styles.pago} accessible accessibilityLabel={`Forma de pago: ${detalle.formaPago}`}>
           <Text style={[styles.etiquetaMonto, { color: colores.texto }]}>Forma de pago</Text>
-          <Text style={[styles.cuerpo, { color: colores.texto }]}>{etiquetaMetodoPago(pedido.metodoPago)}</Text>
+          <Text style={[styles.cuerpo, { color: colores.texto }]}>{detalle.formaPago}</Text>
         </View>
       </Tarjeta>
 
-      {recoger ? (
+      {detalle.recoger ? (
         <Tarjeta>
           <Text accessibilityRole="header" style={[styles.tituloTarjeta, { color: colores.texto }]}>
             Recoger en el salón
@@ -233,40 +221,38 @@ function Contenido({
         </Tarjeta>
       ) : null}
 
-      {puedeCancelar(pedido) ? (
+      <Tarjeta>
+        <Text accessibilityRole="header" style={[styles.tituloTarjeta, { color: colores.texto }]}>
+          {vm.textosDevoluciones.titulo}
+        </Text>
+        <SeccionDevoluciones
+          estado={vm.estadoDevoluciones}
+          devoluciones={vm.devoluciones}
+          pagos={vm.pagos}
+          textos={vm.textosDevoluciones}
+          onReintentar={vm.reintentarDevoluciones}
+          textoRetirar={vm.solicitud.textosRetirar.boton}
+          onRetirar={vm.solicitud.abrirRetiro}
+        />
+        {vm.solicitud.disponible && vm.estadoDevoluciones === 'listo' ? (
+          <Button titulo={vm.solicitud.textos.boton} variante="secundario" onPress={vm.solicitud.abrir} />
+        ) : null}
+      </Tarjeta>
+
+      {acciones ? (
         <View style={styles.acciones}>
-          <Button titulo="Cancelar pedido" variante="peligro" onPress={onCancelar} />
+          {detalle.cancelarORevocar ? (
+            <Text style={[styles.nota, { color: colores.texto }]}>{detalle.cancelarORevocar}</Text>
+          ) : null}
+          {detalle.puedeCancelar ? (
+            <Button titulo="Cancelar pedido" variante="peligro" onPress={vm.abrirCancelar} />
+          ) : null}
+          {detalle.puedeRevocar ? (
+            <Button titulo={vm.textosRevocar.boton} variante="peligro" onPress={vm.abrirRevocar} />
+          ) : null}
         </View>
       ) : null}
     </Animated.View>
-  );
-}
-
-const ICONOS_AVISO: Record<AvisoPedido['tipo'], LucideIcon> = {
-  exito: CircleCheck,
-  aviso: Hourglass,
-  info: Info,
-};
-
-/**
- * Aviso con el lenguaje de las insignias (.mf-badge): base teñida del color del estado, filete del
- * mismo color al 30 % y texto oscuro de su familia (7:1 o más en claro, 4.7:1 o más en oscuro).
- * Éxito: cancelado (y devolución pedida); aviso: la devolución quedó en revisión; info: el pedido cambió.
- */
-function PanelAviso({ aviso }: { aviso: AvisoPedido }) {
-  const { oscuro } = useTheme();
-  const tono = (oscuro ? insignia.oscuro : insignia.claro)[aviso.tipo];
-  const Icono = ICONOS_AVISO[aviso.tipo];
-  return (
-    <View
-      accessible
-      style={[styles.panelAviso, { backgroundColor: tono.fondo, borderColor: insignia.borde[aviso.tipo] }]}
-    >
-      <View style={styles.iconoLinea} importantForAccessibility="no-hide-descendants">
-        <Icono color={tono.texto} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
-      </View>
-      <Text style={[styles.textoFuerte, { color: tono.texto }]}>{aviso.texto}</Text>
-    </View>
   );
 }
 
@@ -378,14 +364,6 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: espacio.m,
   },
-  panelAviso: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: espacio.m,
-    padding: espacio.l,
-    borderRadius: radio.campo,
-    borderWidth: borde.hairline,
-  },
   iconoLinea: {
     // Centra el ícono con la primera línea del texto.
     paddingTop: (tipo.cuerpo.linea - icono.tamanoPequeno) / 2,
@@ -413,6 +391,11 @@ const styles = StyleSheet.create({
   acciones: {
     marginTop: espacio.s,
     gap: espacio.m,
+  },
+  nota: {
+    fontFamily: fuente.texto,
+    fontSize: tipo.pequeno.tamano,
+    lineHeight: tipo.pequeno.linea,
   },
   estado: {
     flexGrow: 1,

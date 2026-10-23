@@ -1,6 +1,8 @@
 import * as WebBrowser from 'expo-web-browser';
 import { AppState } from 'react-native';
 
+import { RESPALDO_TEXTOS } from '@/shared/api/textosSitio';
+
 import { REDIRECCION_PEDIDO } from '../models/pedidoModel';
 
 /**
@@ -8,8 +10,11 @@ import { REDIRECCION_PEDIDO } from '../models/pedidoModel';
  * adaptada del pago del anticipo (citas/viewmodels/useAnticipoViewModel.ts), que no se comparte.
  */
 
-export const MENSAJE_SIN_NAVEGADOR =
-  'No encontramos un navegador para abrir Mercado Pago. Activa Chrome u otro navegador e intenta de nuevo.';
+/** Respaldo del aviso sin navegador; la pantalla lo toma del catálogo (tienda.pago.sinNavegador). */
+export const MENSAJE_SIN_NAVEGADOR = RESPALDO_TEXTOS['tienda.pago.sinNavegador'];
+
+/** Hay una sesión de Mercado Pago abierta: no se abre otra encima (evita un doble cobro). */
+let navegadorAbierto = false;
 
 /**
  * Respaldo del regreso desde el navegador: se resuelve cuando la app pasa a segundo plano y vuelve
@@ -37,13 +42,16 @@ export function esperarRegreso(): { promesa: Promise<void>; soltar: () => void }
   return { promesa, soltar };
 }
 
-export type ResultadoApertura = 'regreso' | 'sinNavegador';
+/** 'ocupado': ya había un pago abierto en el navegador y no se abrió otro. */
+export type ResultadoApertura = 'regreso' | 'sinNavegador' | 'ocupado';
 
 /**
  * Abre Mercado Pago en una sesión del navegador y espera a que la clienta regrese. La sesión
  * termina sola con el regreso (appmirufranco://pedido/<id>?retorno=mp) o al cerrar la pestaña; el
  * regreso a primer plano es el respaldo, porque si el backend no tiene BACKEND_URL Mercado Pago
  * regresa a la web y la sesión nunca ve la dirección de la app. Lo que llegue primero gana.
+ *
+ * Si ya hay un pago abierto en el navegador devuelve 'ocupado' sin abrir otro.
  *
  * `registrarSoltar` recibe la función que suelta la espera mientras el navegador está abierto (y
  * null al terminar), para que la pantalla la llame si se desmonta.
@@ -52,6 +60,10 @@ export async function abrirPagoEnNavegador(
   initPoint: string,
   registrarSoltar: (soltar: (() => void) | null) => void,
 ): Promise<ResultadoApertura> {
+  if (navegadorAbierto) {
+    return 'ocupado';
+  }
+  navegadorAbierto = true;
   // Se escucha el regreso a primer plano antes de abrir para no perder el paso a segundo plano.
   const espera = esperarRegreso();
   registrarSoltar(espera.soltar);
@@ -61,6 +73,7 @@ export async function abrirPagoEnNavegador(
   } catch {
     return 'sinNavegador';
   } finally {
+    navegadorAbierto = false;
     espera.soltar();
     registrarSoltar(null);
   }

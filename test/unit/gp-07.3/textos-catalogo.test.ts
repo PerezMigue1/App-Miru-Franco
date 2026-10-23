@@ -62,6 +62,11 @@ const VARIABLES_CONTEXTO = [
   'fecha', 'telefono', 'correo', 'abre', 'cierra', 'motivo',
   'saldo', 'precio', 'plazoAnticipo', 'horasAviso', 'metodosSalon', 'mesesSoloLinea', 'anticipo',
   'diasExcepcion', 'diasReembolso', 'fechaLimite', 'formasPago', 'limite',
+  // GP-07.5: {total} de checkout.avisoSalon y checkout.avisoLinea del catálogo del backend.
+  'total',
+  // GP-07.5: {plazoPago}, {diasRevocacion}, {monto} y {pedido} de pedidos.* del catálogo del backend
+  // (VARIABLES_CONTEXTO), y {producto} de los avisos propios del carrito (tienda.carrito.*).
+  'plazoPago', 'diasRevocacion', 'monto', 'pedido', 'producto',
 ];
 
 describe('RESPALDO_TEXTOS', () => {
@@ -126,7 +131,12 @@ describe('variablesDeReglas', () => {
       diasHabilesExcepcionAnticipo: '7',
       diasHabilesCancelarConReembolso: '8',
       plazoPagoLineaHoras: '12',
+      // GP-07.5: apartados, recordatorio para recoger y revocación (mismos nombres que el backend).
+      diasPrepararApartado: '4',
+      diaRecordatorioRecoger: '3',
       diasCancelarNoRecogido: '10',
+      diasRestantesRecoger: '7',
+      diasHabilesRevocacion: '6',
       diasResguardo: '20',
       tiempoPreparacion: 'Listo en un día hábil',
       diasCambioProducto: '5',

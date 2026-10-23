@@ -2,38 +2,97 @@ import { useFocusEffect, useRouter, type Href } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { esErrorDeRed } from '@/features/auth/models/AuthModel';
+import { enlaceTelefono } from '@/features/salon/models/salonModel';
 import { ApiError } from '@/shared/api/apiClient';
+import { obtenerTexto } from '@/shared/api/textosSitio';
+import { useConfiguracionPublica } from '@/shared/api/useConfiguracionPublica';
 import { useCandado } from '@/shared/ui/useCandado';
+import { tiendaCompra } from '@/shared/ui/tokens';
 
+import {
+  listarDevolucionesPedido,
+  listarPagosPedido,
+  tieneRevocacion,
+  type Devolucion,
+  type PagoPedido,
+} from '../models/devolucionesModel';
 import {
   cancelarPedido,
   esPedidoNoEncontrado,
   mensajeCancelarPedido,
-  obtenerEstadoPagoPedido,
+  motivoErrorCancelar,
   obtenerPedido,
   pidePagoEnLinea,
   type Pedido,
-  type ReembolsoCancelacion,
 } from '../models/pedidoModel';
-import { formatoPrecio } from '../models/productoModel';
+import {
+  mensajeRevocar,
+  montoRevocable,
+  motivoErrorRevocar,
+  revocarCompra,
+  textoResultadoRevocacion,
+  type MotivoErrorRevocar,
+} from '../models/revocacionModel';
+import { abrirEnlace } from './checkoutTienda';
+import {
+  avisoCancelado,
+  pagoEnProcesoDe,
+  presentarDetalle,
+  presentarDevoluciones,
+  presentarPagos,
+  type AvisoPedido,
+  type DevolucionVisible,
+  type PagoVisible,
+  type PresentacionDetalle,
+} from './detallePedido';
+import { useSolicitudDevolucion, type SolicitudDevolucionViewModel } from './useSolicitudDevolucion';
+import {
+  mantenerVerificacion,
+  suscribirVerificacion,
+  useEstadoPagoConocido,
+  verificarPago,
+} from './useVerificacionPago';
 
-// La vista no importa de models/: recibe este tipo del viewmodel.
+// La vista no importa de models/: recibe estos tipos del viewmodel.
 export type { Pedido } from '../models/pedidoModel';
+export type { AvisoPedido, DevolucionVisible, PagoVisible, PresentacionDetalle } from './detallePedido';
+export type {
+  OpcionSolicitud,
+  SolicitudDevolucionViewModel,
+  TextosRetirar,
+  TextosSolicitud,
+} from './useSolicitudDevolucion';
 
 export type EstadoDetallePedido = 'cargando' | 'listo' | 'error' | 'noEncontrado';
+export type EstadoDevoluciones = 'cargando' | 'listo' | 'error';
 
-/**
- * Aviso en la pantalla tras cancelar, o cuando el pedido cambió mientras se cancelaba. 'aviso':
- * cancelado, pero la devolución del pago quedó en revisión.
- */
-export interface AvisoPedido {
-  tipo: 'exito' | 'aviso' | 'info';
-  texto: string;
+/** Textos de la sección de devoluciones y reembolsos, del catálogo. */
+export interface TextosDevoluciones {
+  titulo: string;
+  cargando: string;
+  vacia: string;
+  error: string;
+  reintentar: string;
+  pagosTitulo: string;
+  notaTitulo: string;
+}
+
+/** Textos de la hoja para revocar, del catálogo. */
+export interface TextosRevocar {
+  boton: string;
+  titulo: string;
+  motivo: string;
+  motivoAyuda: string;
+  confirmar: string;
+  revocando: string;
+  conservar: string;
 }
 
 export interface DetallePedidoViewModel {
   estado: EstadoDetallePedido;
   pedido: Pedido | null;
+  /** Lo que se pinta del pedido (textos, acciones y plazos); null sin pedido. */
+  detalle: PresentacionDetalle | null;
   /** Número del pedido para el título (el del parámetro mientras carga); null si no es válido. */
   numero: string | null;
   /** Vuelve a cargar con skeleton (botón Reintentar). */
@@ -42,13 +101,13 @@ export interface DetallePedidoViewModel {
   verMisPedidos: () => void;
   /** Abre la confirmación del pedido con el pago de Mercado Pago. */
   completarPago: () => void;
-  /**
-   * Mercado Pago procesa o revisa el pago en línea de este pedido (se consulta al cargarlo): no se
-   * pide pagar otra vez, solo revisar el pago.
-   */
-  pagoEnProceso: boolean;
   /** Abre la confirmación del pedido solo para consultar su pago (sin abrir Mercado Pago). */
   revisarPago: () => void;
+  /**
+   * El pago en línea está en proceso (registro de la verificación): no se pide pagar otra vez ni se
+   * ofrece cancelar.
+   */
+  pagoEnProceso: boolean;
   hojaCancelarVisible: boolean;
   abrirCancelar: () => void;
   /** Cierra la hoja; mientras cancela no hace nada para no perder el resultado. */
@@ -57,29 +116,27 @@ export interface DetallePedidoViewModel {
   cancelando: boolean;
   /** Mensaje para la clienta dentro de la hoja si la cancelación falla, o null. */
   errorCancelacion: string | null;
+  hojaRevocarVisible: boolean;
+  abrirRevocar: () => void;
+  cerrarRevocar: () => void;
+  motivoRevocacion: string;
+  cambiarMotivoRevocacion: (motivo: string) => void;
+  largoMotivoRevocacion: number;
+  revocar: () => void;
+  revocando: boolean;
+  errorRevocacion: string | null;
+  textosRevocar: TextosRevocar;
   aviso: AvisoPedido | null;
-}
-
-const MENSAJE_CANCELADO = 'Tu pedido quedó cancelado.';
-
-/** Aviso tras cancelar con lo que respondió el backend sobre la devolución del pago. */
-function avisoCancelado(reembolso: ReembolsoCancelacion | null): AvisoPedido {
-  if (reembolso?.estado === 'reembolsado') {
-    return {
-      tipo: 'exito',
-      // Sin monto válido no se escribe "$0": se dice la devolución sin cifra.
-      texto: `${MENSAJE_CANCELADO} Ya pedimos a Mercado Pago la devolución${
-        reembolso.montoCentavos > 0 ? ` de ${formatoPrecio(reembolso.montoCentavos)}` : ''
-      } al mismo medio con que pagaste. Puede tardar unos días en reflejarse, según tu banco.`,
-    };
-  }
-  if (reembolso?.estado === 'en_revision') {
-    return {
-      tipo: 'aviso',
-      texto: `${MENSAJE_CANCELADO} La devolución de tu pago quedó en revisión: el salón la hará y te avisará.`,
-    };
-  }
-  return { tipo: 'exito', texto: MENSAJE_CANCELADO };
+  /** "Llamar al ..." si hay un teléfono del salón para marcar; null si no. */
+  textoLlamar: string | null;
+  llamarSalon: () => void;
+  estadoDevoluciones: EstadoDevoluciones;
+  devoluciones: DevolucionVisible[];
+  pagos: PagoVisible[];
+  textosDevoluciones: TextosDevoluciones;
+  reintentarDevoluciones: () => void;
+  /** Pedir una solicitud de cambio o reembolso y retirar una pendiente. */
+  solicitud: SolicitudDevolucionViewModel;
 }
 
 /** Id numérico positivo del parámetro de la ruta, en texto; null si no es válido. */
@@ -88,56 +145,90 @@ function numeroValido(id: string | undefined): string | null {
   return /^[1-9]\d*$/.test(limpio) ? limpio : null;
 }
 
+/** 409 y 404 de revocar que cierran la hoja y se avisan en la pantalla (el pedido se vuelve a leer). */
+const REVOCAR_EN_PANTALLA: readonly MotivoErrorRevocar[] = [
+  'yaRevocada',
+  'cancelado',
+  'sinPago',
+  'plazoTerminado',
+  'devolucionActiva',
+  'yaReembolsado',
+  'cambio',
+  'noEncontrado',
+];
+
+/** Estos piden comunicarse con el salón. */
+const REVOCAR_CON_SALON: readonly MotivoErrorRevocar[] = ['plazoTerminado', 'devolucionActiva'];
+
+/** Sin respuesta del servidor: antes de decir que no se pudo, se vuelve a leer el pedido. */
+function sinRespuesta(error: unknown): boolean {
+  return esErrorDeRed(error) || (error instanceof ApiError && error.status === 0);
+}
+
 /**
- * Detalle de un pedido de la clienta y su cancelación (GP-06.4). Recarga en silencio cada vez que
- * la pantalla vuelve a estar enfocada (por ejemplo, al regresar de pagar en Mercado Pago).
+ * Detalle de un pedido de la clienta (GP-06.4, GP-07.5): estado y qué sigue con las reglas guardadas
+ * en el pedido, cancelar (nunca con el pago en línea en proceso), revocar la compra (art. 56 LFPC) y
+ * sus devoluciones y reembolsos. Recarga en silencio cada vez que la pantalla vuelve a estar
+ * enfocada; el pago en línea lo sigue el registro de la verificación (useVerificacionPago).
  */
 export function useDetallePedidoViewModel(pedidoId: string | undefined): DetallePedidoViewModel {
   const router = useRouter();
   const candado = useCandado();
+  const { configuracion } = useConfiguracionPublica();
   const [estado, setEstado] = useState<EstadoDetallePedido>('cargando');
   const [pedido, setPedido] = useState<Pedido | null>(null);
   const [hojaCancelarVisible, setHojaCancelarVisible] = useState(false);
   const [cancelando, setCancelando] = useState(false);
   const [errorCancelacion, setErrorCancelacion] = useState<string | null>(null);
+  const [hojaRevocarVisible, setHojaRevocarVisible] = useState(false);
+  const [motivoRevocacion, setMotivoRevocacion] = useState('');
+  const [revocando, setRevocando] = useState(false);
+  const [errorRevocacion, setErrorRevocacion] = useState<string | null>(null);
   const [aviso, setAviso] = useState<AvisoPedido | null>(null);
-  const [pagoEnProceso, setPagoEnProceso] = useState(false);
+  const [estadoDevoluciones, setEstadoDevoluciones] = useState<EstadoDevoluciones>('cargando');
+  const [devoluciones, setDevoluciones] = useState<Devolucion[]>([]);
+  const [pagos, setPagos] = useState<PagoPedido[]>([]);
   // Solo la última solicitud escribe el estado (recargas al enfocar, reintentos o pantalla desmontada).
   const solicitud = useRef(0);
+  const solicitudDevoluciones = useRef(0);
   const montada = useRef(true);
   const hayDatos = useRef(false);
+  const hayDevoluciones = useRef(false);
+  // El estado del pedido a la vista, al momento (el oyente del registro lo compara sin esperar a pintar).
+  const estadoVisto = useRef('');
   // Un doble toque no abre dos pantallas; se libera al volver a enfocar.
   const navegando = useRef(false);
 
   const numero = numeroValido(pedidoId);
+  const idNumero = numero === null ? null : Number(numero);
+  const conocido = useEstadoPagoConocido(idNumero);
+  const pagoEnProceso = pagoEnProcesoDe(conocido);
 
-  /**
-   * Con el pedido en línea por pagar y dentro de su plazo, pregunta una vez y en silencio si
-   * Mercado Pago ya procesa un pago. Si la consulta falla, el detalle queda como estaba. Solo
-   * escribe si sigue siendo la última solicitud (y la pantalla está montada).
-   */
-  const consultarPago = useCallback((cargado: Pedido, actual: number) => {
-    if (!pidePagoEnLinea(cargado)) {
-      setPagoEnProceso(false);
-      return;
+  /** Devoluciones y pagos del pedido, en paralelo. Si fallan, el detalle sigue y la sección lo dice. */
+  const cargarDevoluciones = useCallback((id: number) => {
+    solicitudDevoluciones.current += 1;
+    const actual = solicitudDevoluciones.current;
+    if (!hayDevoluciones.current) {
+      setEstadoDevoluciones('cargando');
     }
-    obtenerEstadoPagoPedido(cargado.id)
-      .then(({ estado: estadoPago, pedidoEstado }) => {
-        if (actual !== solicitud.current) {
+    Promise.all([listarDevolucionesPedido(id), listarPagosPedido(id)])
+      .then(([listaDevoluciones, listaPagos]) => {
+        if (actual !== solicitudDevoluciones.current) {
           return;
         }
-        setPagoEnProceso(estadoPago === 'pendiente' || estadoPago === 'revision');
-        // Pagado o cancelado del lado del servidor: se muestra el estado real del pedido.
-        if ((estadoPago === 'aprobado' || estadoPago === 'cancelado') && pedidoEstado) {
-          setPedido((previo) =>
-            previo && previo.id === cargado.id && previo.estado !== pedidoEstado
-              ? { ...previo, estado: pedidoEstado }
-              : previo,
-          );
-        }
+        hayDevoluciones.current = true;
+        setDevoluciones(listaDevoluciones);
+        setPagos(listaPagos);
+        setEstadoDevoluciones('listo');
       })
       .catch(() => {
-        // En silencio: sin respuesta, el detalle sigue como lo mandó el pedido.
+        if (actual !== solicitudDevoluciones.current) {
+          return;
+        }
+        // Con la sección ya mostrada, una recarga silenciosa que falla la deja como estaba.
+        if (!hayDevoluciones.current) {
+          setEstadoDevoluciones('error');
+        }
       });
   }, []);
 
@@ -160,9 +251,14 @@ export function useDetallePedidoViewModel(pedidoId: string | undefined): Detalle
             return;
           }
           hayDatos.current = true;
+          estadoVisto.current = respuesta.estado;
           setPedido(respuesta);
           setEstado('listo');
-          consultarPago(respuesta, actual);
+          cargarDevoluciones(respuesta.id);
+          // Con el pago en línea por hacer, una consulta del pago (el registro la comparte si ya va una).
+          if (pidePagoEnLinea(respuesta)) {
+            void verificarPago(respuesta.id, { motivo: 'apertura' });
+          }
         })
         .catch((error: unknown) => {
           if (actual !== solicitud.current) {
@@ -174,12 +270,14 @@ export function useDetallePedidoViewModel(pedidoId: string | undefined): Detalle
             return;
           }
           hayDatos.current = false;
+          estadoVisto.current = '';
           setPedido(null);
           setHojaCancelarVisible(false);
+          setHojaRevocarVisible(false);
           setEstado(noEncontrado ? 'noEncontrado' : 'error');
         });
     },
-    [numero, consultarPago],
+    [numero, cargarDevoluciones],
   );
 
   const recargar = useCallback(() => cargar(false), [cargar]);
@@ -189,8 +287,40 @@ export function useDetallePedidoViewModel(pedidoId: string | undefined): Detalle
     return () => {
       montada.current = false;
       solicitud.current += 1;
+      solicitudDevoluciones.current += 1;
     };
   }, []);
+
+  // La carga más reciente, para el oyente del registro (sin volver a suscribirse).
+  const cargarActual = useRef(cargar);
+  useEffect(() => {
+    cargarActual.current = cargar;
+  });
+
+  // Mientras la pantalla está montada sigue el pago del pedido. Cada cambio real del pago que trae
+  // otro estado del pedido (pagado, cancelado) se muestra de inmediato y el pedido se vuelve a leer
+  // una sola vez (la transición llega una sola vez por cambio).
+  useEffect(() => {
+    if (idNumero === null) {
+      return undefined;
+    }
+    const soltar = mantenerVerificacion(idNumero);
+    const dejarDeEscuchar = suscribirVerificacion(({ pedidoId: id, transicion }) => {
+      if (id !== idNumero || !transicion || !montada.current) {
+        return;
+      }
+      const nuevo = transicion.pedidoEstado;
+      if (nuevo && nuevo !== estadoVisto.current) {
+        estadoVisto.current = nuevo;
+        setPedido((actual) => (actual && actual.id === id ? { ...actual, estado: nuevo } : actual));
+        cargarActual.current(true);
+      }
+    });
+    return () => {
+      dejarDeEscuchar();
+      soltar();
+    };
+  }, [idNumero]);
 
   // La primera vez carga con skeleton; al volver a la pantalla, en silencio.
   useFocusEffect(
@@ -227,15 +357,37 @@ export function useDetallePedidoViewModel(pedidoId: string | undefined): Detalle
     [idPedido, router],
   );
 
-  const completarPago = useCallback(() => abrirConfirmacion('pagar=1&origen=pedido'), [abrirConfirmacion]);
+  const completarPago = useCallback(() => {
+    // Con un pago en proceso nunca se abre otro (evita un cobro doble).
+    if (pagoEnProceso) {
+      return;
+    }
+    abrirConfirmacion('pagar=1&origen=pedido');
+  }, [abrirConfirmacion, pagoEnProceso]);
 
   // Sin pagar=1: la confirmación solo consulta el pago, nunca abre otro (evita un cobro doble).
   const revisarPago = useCallback(() => abrirConfirmacion('origen=pedido'), [abrirConfirmacion]);
 
+  const detalle = pedido
+    ? presentarDetalle({
+        pedido,
+        pagoEnProceso,
+        verificandoPago: conocido?.verificando ?? false,
+        devoluciones,
+        ahora: Date.now(),
+        config: configuracion,
+      })
+    : null;
+  const puedeCancelarAhora = detalle?.puedeCancelar ?? false;
+  const puedeRevocarAhora = detalle?.puedeRevocar ?? false;
+
   const abrirCancelar = useCallback(() => {
+    if (!puedeCancelarAhora) {
+      return;
+    }
     setErrorCancelacion(null);
     setHojaCancelarVisible(true);
-  }, []);
+  }, [puedeCancelarAhora]);
 
   const cerrarCancelar = useCallback(() => {
     if (cancelando) {
@@ -245,27 +397,33 @@ export function useDetallePedidoViewModel(pedidoId: string | undefined): Detalle
     setErrorCancelacion(null);
   }, [cancelando]);
 
-  /** Muestra el pedido ya cancelado, cierra la hoja y deja el aviso. */
-  const mostrarCancelado = useCallback((cancelado: Pedido, nuevoAviso: AvisoPedido) => {
-    // Ninguna recarga anterior pisa el pedido ya cancelado.
-    solicitud.current += 1;
-    hayDatos.current = true;
-    setPedido(cancelado);
-    setEstado('listo');
-    setAviso(nuevoAviso);
-    setHojaCancelarVisible(false);
-  }, []);
+  /** Muestra el pedido como quedó (cancelado o revocado), cierra las hojas y deja el aviso. */
+  const mostrarResultado = useCallback(
+    (nuevo: Pedido, nuevoAviso: AvisoPedido) => {
+      // Ninguna recarga anterior pisa el pedido nuevo.
+      solicitud.current += 1;
+      hayDatos.current = true;
+      estadoVisto.current = nuevo.estado;
+      setPedido(nuevo);
+      setEstado('listo');
+      setAviso(nuevoAviso);
+      setHojaCancelarVisible(false);
+      setHojaRevocarVisible(false);
+      cargarDevoluciones(nuevo.id);
+    },
+    [cargarDevoluciones],
+  );
 
   /**
    * Tras cancelar sin respuesta, lee el pedido; si ya quedó cancelado, se muestra así. Devuelve
    * true si ya no hay nada más que hacer (se mostró cancelado o la pantalla se desmontó).
    */
-  const releerTrasFalloDeRed = useCallback(
+  const releerCancelado = useCallback(
     async (id: number): Promise<boolean> => {
       try {
         const leido = await obtenerPedido(id);
         if (montada.current && leido.estado === 'cancelado') {
-          mostrarCancelado(leido, { tipo: 'exito', texto: MENSAJE_CANCELADO });
+          mostrarResultado(leido, avisoCancelado(null, configuracion));
           return true;
         }
       } catch {
@@ -273,31 +431,42 @@ export function useDetallePedidoViewModel(pedidoId: string | undefined): Detalle
       }
       return !montada.current;
     },
-    [mostrarCancelado],
+    [mostrarResultado, configuracion],
   );
 
   /** Muestra en la hoja o en la pantalla el error de cancelar, según el código del servidor. */
   const atenderErrorCancelacion = useCallback(
-    (status: number | null, mensaje: string) => {
-      if (status === 409 || status === 404) {
+    (error: unknown) => {
+      const mensaje = mensajeCancelarPedido(error, configuracion);
+      const motivo = motivoErrorCancelar(error);
+      if (motivo === 'devolucionEnProceso') {
+        // No cambió nada: se cancela con el salón. La sección de devoluciones muestra la que está en proceso.
+        setHojaCancelarVisible(false);
+        setAviso({ tipo: 'aviso', texto: mensaje, llamarSalon: true });
+        if (pedido) {
+          cargarDevoluciones(pedido.id);
+        }
+        return;
+      }
+      if (motivo === 'cambio' || motivo === 'noEncontrado') {
         // El pedido cambió (o ya no existe): se cierra la hoja y se lee de nuevo.
         setHojaCancelarVisible(false);
-        setAviso(status === 409 ? { tipo: 'info', texto: mensaje } : null);
+        setAviso(motivo === 'cambio' ? { tipo: 'info', texto: mensaje } : null);
         cargar(true);
-      } else {
-        setErrorCancelacion(mensaje);
-        if (status === 403) {
-          // Ya está en preparación: la recarga quita la opción de cancelar de la pantalla.
-          cargar(true);
-        }
+        return;
+      }
+      setErrorCancelacion(mensaje);
+      if (motivo === 'preparando') {
+        // Ya está en preparación: la recarga quita la opción de cancelar de la pantalla.
+        cargar(true);
       }
     },
-    [cargar],
+    [cargar, cargarDevoluciones, configuracion, pedido],
   );
 
   const cancelar = useCallback(() => {
     const actualPedido = pedido;
-    if (!actualPedido) {
+    if (!actualPedido || !puedeCancelarAhora) {
       return;
     }
     candado(async () => {
@@ -305,49 +474,231 @@ export function useDetallePedidoViewModel(pedidoId: string | undefined): Detalle
       setErrorCancelacion(null);
       try {
         const { pedido: nuevo, reembolso } = await cancelarPedido(actualPedido.id);
-        if (!montada.current) {
-          return;
+        if (montada.current) {
+          mostrarResultado(nuevo, avisoCancelado(reembolso, configuracion));
         }
-        mostrarCancelado(nuevo, avisoCancelado(reembolso));
       } catch (error) {
-        if (!montada.current) {
-          return;
-        }
-        const mensaje = mensajeCancelarPedido(error);
-        const status = error instanceof ApiError ? error.status : null;
         // Sin respuesta (el reembolso con Mercado Pago puede tardar): antes de decir que no se pudo,
         // se lee el pedido; si ya quedó cancelado, se muestra así.
-        if (esErrorDeRed(error) || status === 0) {
-          const terminado = await releerTrasFalloDeRed(actualPedido.id);
-          if (terminado) {
-            return;
-          }
+        const terminado = !montada.current || (sinRespuesta(error) && (await releerCancelado(actualPedido.id)));
+        if (!terminado) {
+          atenderErrorCancelacion(error);
         }
-        atenderErrorCancelacion(status, mensaje);
       } finally {
         if (montada.current) {
           setCancelando(false);
         }
       }
     });
-  }, [pedido, candado, mostrarCancelado, releerTrasFalloDeRed, atenderErrorCancelacion]);
+  }, [pedido, puedeCancelarAhora, candado, mostrarResultado, configuracion, releerCancelado, atenderErrorCancelacion]);
+
+  // ── Revocar la compra ──────────────────────────────────────────────────────────────────
+
+  const abrirRevocar = useCallback(() => {
+    if (!puedeRevocarAhora) {
+      return;
+    }
+    setMotivoRevocacion('');
+    setErrorRevocacion(null);
+    setHojaRevocarVisible(true);
+  }, [puedeRevocarAhora]);
+
+  const cerrarRevocar = useCallback(() => {
+    if (revocando) {
+      return;
+    }
+    setHojaRevocarVisible(false);
+    setErrorRevocacion(null);
+  }, [revocando]);
+
+  const cambiarMotivoRevocacion = useCallback(
+    (motivo: string) => {
+      if (!revocando) {
+        setMotivoRevocacion(motivo.slice(0, tiendaCompra.largoMotivoRevocacion));
+      }
+    },
+    [revocando],
+  );
+
+  /**
+   * Tras revocar sin respuesta, lee el pedido y sus devoluciones: si ya hay una revocación, se
+   * muestra que quedó registrada. Devuelve true si ya no hay nada más que hacer.
+   */
+  const releerRevocado = useCallback(
+    async (id: number): Promise<boolean> => {
+      try {
+        const [leido, lista] = await Promise.all([obtenerPedido(id), listarDevolucionesPedido(id)]);
+        if (montada.current && tieneRevocacion(lista)) {
+          mostrarResultado(leido, { tipo: 'exito', texto: obtenerTexto('tienda.revocar.registrada', {}, configuracion) });
+          return true;
+        }
+      } catch {
+        // Tampoco hubo respuesta: queda el mensaje de sin conexión en la hoja.
+      }
+      return !montada.current;
+    },
+    [mostrarResultado, configuracion],
+  );
+
+  const atenderErrorRevocacion = useCallback(
+    (error: unknown) => {
+      const mensaje = mensajeRevocar(error, configuracion);
+      const motivo = motivoErrorRevocar(error);
+      if (motivo === null || !REVOCAR_EN_PANTALLA.includes(motivo)) {
+        // Sin conexión, motivo con caracteres no permitidos o un error del servidor: se queda en la hoja.
+        setErrorRevocacion(mensaje);
+        return;
+      }
+      // El servidor no la permitió (o el pedido cambió): se cierra la hoja, se avisa y se lee de nuevo.
+      setHojaRevocarVisible(false);
+      setAviso({ tipo: 'info', texto: mensaje, llamarSalon: REVOCAR_CON_SALON.includes(motivo) });
+      cargar(true);
+    },
+    [cargar, configuracion],
+  );
+
+  const revocar = useCallback(() => {
+    const actualPedido = pedido;
+    if (!actualPedido || !puedeRevocarAhora) {
+      return;
+    }
+    const motivo = motivoRevocacion;
+    candado(async () => {
+      setRevocando(true);
+      setErrorRevocacion(null);
+      try {
+        const { pedido: nuevo, revocacion } = await revocarCompra(actualPedido.id, motivo);
+        if (montada.current) {
+          setMotivoRevocacion('');
+          // Sin monto válido en la respuesta, el que el detalle ya ofrecía (nunca "$0").
+          const conMonto =
+            revocacion.montoCentavos > 0 ? revocacion : { ...revocacion, montoCentavos: montoRevocable(actualPedido) };
+          mostrarResultado(nuevo, {
+            tipo: revocacion.estado === 'en_revision' ? 'info' : 'exito',
+            texto: textoResultadoRevocacion(conMonto, configuracion),
+          });
+        }
+      } catch (error) {
+        const terminado = !montada.current || (sinRespuesta(error) && (await releerRevocado(actualPedido.id)));
+        if (!terminado) {
+          atenderErrorRevocacion(error);
+        }
+      } finally {
+        if (montada.current) {
+          setRevocando(false);
+        }
+      }
+    });
+  }, [pedido, puedeRevocarAhora, motivoRevocacion, candado, mostrarResultado, configuracion, releerRevocado, atenderErrorRevocacion]);
+
+  // ── Salón y devoluciones ───────────────────────────────────────────────────────────────
+
+  const telefono = configuracion.salon.telefono;
+  const marcable = enlaceTelefono(telefono);
+  const llamarSalon = useCallback(() => abrirEnlace(marcable), [marcable]);
+
+  const reintentarDevoluciones = useCallback(() => {
+    if (!pedido) {
+      return;
+    }
+    hayDevoluciones.current = false;
+    cargarDevoluciones(pedido.id);
+  }, [pedido, cargarDevoluciones]);
+
+  // ── Pedir y retirar una solicitud ──────────────────────────────────────────────────────
+
+  const idCargado = pedido?.id ?? null;
+
+  /** Vuelve a leer la sección en silencio (la que ya se ve se conserva si falla). */
+  const releerDevoluciones = useCallback(() => {
+    if (idCargado !== null) {
+      cargarDevoluciones(idCargado);
+    }
+  }, [idCargado, cargarDevoluciones]);
+
+  const agregarDevolucion = useCallback(
+    (nueva: Devolucion) => {
+      hayDevoluciones.current = true;
+      setDevoluciones((actuales) => [nueva, ...actuales.filter((devolucion) => devolucion.id !== nueva.id)]);
+      setEstadoDevoluciones('listo');
+      releerDevoluciones();
+    },
+    [releerDevoluciones],
+  );
+
+  const marcarRetirada = useCallback(
+    (id: number) => {
+      setDevoluciones((actuales) =>
+        actuales.map((devolucion) => (devolucion.id === id ? { ...devolucion, estado: 'cancelada' } : devolucion)),
+      );
+      releerDevoluciones();
+    },
+    [releerDevoluciones],
+  );
+
+  const solicitudDevolucion = useSolicitudDevolucion({
+    pedido,
+    devoluciones,
+    config: configuracion,
+    avisar: setAviso,
+    agregarDevolucion,
+    marcarRetirada,
+    recargarDevoluciones: releerDevoluciones,
+  });
+
+  const texto = (clave: Parameters<typeof obtenerTexto>[0], contexto = {}) => obtenerTexto(clave, contexto, configuracion);
 
   return {
     estado,
     pedido,
+    detalle,
     numero,
     recargar,
     regresar,
     verMisPedidos,
     completarPago,
-    pagoEnProceso,
     revisarPago,
+    pagoEnProceso,
     hojaCancelarVisible,
     abrirCancelar,
     cerrarCancelar,
     cancelar,
     cancelando,
     errorCancelacion,
+    hojaRevocarVisible,
+    abrirRevocar,
+    cerrarRevocar,
+    motivoRevocacion,
+    cambiarMotivoRevocacion,
+    largoMotivoRevocacion: tiendaCompra.largoMotivoRevocacion,
+    revocar,
+    revocando,
+    errorRevocacion,
+    textosRevocar: {
+      boton: texto('tienda.revocar.boton'),
+      titulo: texto('tienda.revocar.titulo', { pedido: pedido?.id ?? numero }),
+      motivo: texto('tienda.revocar.motivo'),
+      motivoAyuda: texto('tienda.revocar.motivoAyuda'),
+      confirmar: texto('tienda.revocar.confirmar'),
+      revocando: texto('tienda.revocar.revocando'),
+      conservar: texto('tienda.revocar.conservar'),
+    },
     aviso,
+    textoLlamar: marcable ? texto('salon.contacto.telefono', { telefono }) : null,
+    llamarSalon,
+    estadoDevoluciones,
+    devoluciones: presentarDevoluciones(devoluciones, configuracion),
+    pagos: presentarPagos(pagos, configuracion),
+    textosDevoluciones: {
+      titulo: texto('tienda.devoluciones.titulo'),
+      cargando: texto('tienda.devoluciones.cargando'),
+      vacia: texto('pedidos.sinDevoluciones'),
+      error: texto('tienda.devoluciones.error'),
+      reintentar: texto('tienda.devoluciones.reintentar'),
+      pagosTitulo: texto('tienda.devoluciones.pagosTitulo'),
+      notaTitulo: texto('tienda.devoluciones.notaTitulo'),
+    },
+    reintentarDevoluciones,
+    solicitud: solicitudDevolucion,
   };
 }

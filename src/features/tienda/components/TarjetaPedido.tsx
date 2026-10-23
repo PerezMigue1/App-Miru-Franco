@@ -32,6 +32,11 @@ import { BadgePedido } from './BadgePedido';
 
 interface TarjetaPedidoProps {
   pedido: Pedido;
+  /**
+   * El registro de la verificación sabe que el pago en línea está en proceso: la insignia dice "Pago
+   * en proceso" y no "Pendiente de pago" (GP-07.5).
+   */
+  pagoEnProceso?: boolean;
   /** Recibe el id: así la referencia es estable y la tarjeta memoizada no se vuelve a dibujar. */
   onAbrir: (id: number) => void;
 }
@@ -44,7 +49,7 @@ function conMayuscula(texto: string): string {
  * Un pedido de Mis pedidos: número, fecha, piezas, forma de pago, total y estado. Se hunde al
  * tocarla (tarjeta tocable completa: 0.99 en 140 ms; con movimiento reducido solo baja la opacidad).
  */
-export const TarjetaPedido = memo(function TarjetaPedido({ pedido, onAbrir }: TarjetaPedidoProps) {
+export const TarjetaPedido = memo(function TarjetaPedido({ pedido, pagoEnProceso = false, onAbrir }: TarjetaPedidoProps) {
   const { colores } = useTheme();
   const { estilo: estiloPresion, hundir, soltar } = usePresion(escalaPresionadoTarjeta);
 
@@ -52,7 +57,7 @@ export const TarjetaPedido = memo(function TarjetaPedido({ pedido, onAbrir }: Ta
   const piezas = textoPiezas(pedido.piezas);
   const pago = formaPagoCorta(pedido.metodoPago);
   const total = formatoPrecio(pedido.totalCentavos);
-  const estado = etiquetaEstadoPedido(pedido).texto;
+  const estado = etiquetaEstadoPedido(pedido, pagoEnProceso).texto;
 
   const etiqueta = [
     `Pedido número ${pedido.id}`,
@@ -107,7 +112,7 @@ export const TarjetaPedido = memo(function TarjetaPedido({ pedido, onAbrir }: Ta
             </Text>
 
             <View style={styles.insignias}>
-              <BadgePedido pedido={pedido} />
+              <BadgePedido pedido={pedido} pagoEnProceso={pagoEnProceso} />
             </View>
           </View>
 

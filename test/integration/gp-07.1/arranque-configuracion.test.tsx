@@ -20,6 +20,7 @@ import { sinRedEnRuta } from '../../helpers/citasFicticias';
 import {
   ARCHIVO_CONFIGURACION,
   CONFIGURACION_COMPLETA,
+  CONFIGURACION_COMPLETA_EN_ARCHIVO,
   CONFIGURACION_GUARDADA,
   contenidoArchivo,
   respuestaCompleta,
@@ -108,7 +109,8 @@ describe('Carga de la configuración pública al abrir la app (GP-07.1)', () => 
         configuracion: unknown;
       };
       expect(guardado.version).toBe(1);
-      expect(guardado.configuracion).toEqual(CONFIGURACION_COMPLETA);
+      // GP-07.5: el archivo nunca guarda los datos de transferencia.
+      expect(guardado.configuracion).toEqual(CONFIGURACION_COMPLETA_EN_ARCHIVO);
     },
     LIMITE_MS,
   );

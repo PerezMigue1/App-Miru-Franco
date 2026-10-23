@@ -177,6 +177,13 @@ export const duracion = {
   limiteConsultaSinPago: 9000,
   /** Aviso interno en pantalla (GP-07.2): tiempo que se queda a la vista si nadie lo toca. */
   avisoEnPantalla: 5000,
+  /**
+   * Verificación del pago de un pedido (GP-07.5): espera antes de la segunda consulta; cada
+   * reintento espera el doble, hasta verificacionPagoEsperaMaxima.
+   */
+  verificacionPagoEspera: 2000,
+  /** Verificación del pago de un pedido: tope de la espera entre dos consultas. */
+  verificacionPagoEsperaMaxima: 8000,
 } as const;
 
 /** Intervalo de lectura del giroscopio. */
@@ -470,6 +477,8 @@ export const tiendaCompra = {
   radioOpcion: 22,
   /** Diámetro del punto que marca la opción de pago elegida. */
   puntoOpcion: 10,
+  /** Caracteres máximos del motivo opcional al revocar una compra (el tope del backend, GP-07.5). */
+  largoMotivoRevocacion: 500,
 } as const;
 
 /** Controles compartidos: pastillas de filtro, buscadores y contador de cantidad (sin colores). */

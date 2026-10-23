@@ -1,9 +1,10 @@
 /**
- * Funciones, constantes y tipos de presentación de la tienda (precios, piezas, insignias, fechas,
- * forma de pago, qué sigue y datos del salón) para las vistas y los componentes de
- * src/features/tienda. Existe para que ni las vistas ni los componentes importen nada de models/:
- * los toman de la capa viewmodel, que los vuelve a exportar tal cual desde los models. Sin React ni
- * estado.
+ * Funciones, constantes y tipos de presentación de la tienda (precios, piezas, insignias, fechas y
+ * forma de pago) para las vistas y los componentes de src/features/tienda. Existe para que ni las
+ * vistas ni los componentes importen nada de models/: los toman de la capa viewmodel, que los vuelve
+ * a exportar tal cual desde los models. Sin React ni estado. Desde GP-07.5 los textos salen del
+ * catálogo de textos del sitio y los datos del salón, de la configuración pública (ya no hay datos
+ * del salón escritos aquí).
  */
 export { itemConProblema, type ItemCarrito } from '../models/carritoModel';
 export {
@@ -13,11 +14,6 @@ export {
   fechaPedido,
   formaPagoCorta,
   limitePagoPedido,
-  pidePagoEnLinea,
-  puedeCancelar,
-  SALON_RECOGER,
-  textoCancelarPedido,
-  textoQueSigueConPago,
   type ItemPedido,
   type Pedido,
 } from '../models/pedidoModel';

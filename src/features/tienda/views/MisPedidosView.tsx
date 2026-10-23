@@ -1,4 +1,3 @@
-import { useRouter, type Href } from 'expo-router';
 import { useCallback } from 'react';
 import { FlatList, RefreshControl, ScrollView, StyleSheet, Text, View, type ListRenderItem } from 'react-native';
 import Animated from 'react-native-reanimated';
@@ -6,7 +5,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EncabezadoVolver } from '@/features/auth/components/EncabezadoVolver';
 import { InvitacionSesion } from '@/features/auth/components/InvitacionSesion';
-import { useAuth } from '@/features/auth/viewmodels/useAuth';
 import { EmptyState } from '@/shared/ui/EmptyState';
 import { useEntradaContenido } from '@/shared/ui/movimiento';
 import { espacio, fuente, pantalla, tipo } from '@/shared/ui/tokens';
@@ -37,34 +35,18 @@ function Separador() {
 export default function MisPedidosView() {
   const { colores } = useTheme();
   const { bottom } = useSafeAreaInsets();
-  const router = useRouter();
-  const { estado } = useAuth();
+  // Sesión, navegación y textos llegan del viewmodel: la vista solo pinta.
   const vm = useMisPedidosViewModel();
-  const conSesion = estado === 'autenticado';
-
-  const regresar = () => {
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/perfil' as Href);
-    }
-  };
+  const { textos } = vm;
 
   return (
     <View style={[styles.raiz, { backgroundColor: colores.fondo }]}>
-      <EncabezadoVolver
-        titulo="Mis pedidos"
-        subtitulo="Consulta el estado de todos tus pedidos"
-        onVolver={regresar}
-      />
-      {conSesion ? (
+      <EncabezadoVolver titulo={textos.titulo} subtitulo={textos.subtitulo} onVolver={vm.regresar} />
+      {vm.conSesion ? (
         <Contenido vm={vm} />
       ) : (
         <ScrollView contentContainerStyle={{ paddingBottom: bottom + espacio.x3 }}>
-          <InvitacionSesion
-            titulo="Tus pedidos"
-            beneficio="Inicia sesión para ver tus compras y saber cuándo puedes recogerlas."
-          />
+          <InvitacionSesion titulo={textos.sesionTitulo} beneficio={textos.sesionBeneficio} />
         </ScrollView>
       )}
     </View>
@@ -77,11 +59,11 @@ function Contenido({ vm }: { vm: MisPedidosViewModel }) {
   const { bottom } = useSafeAreaInsets();
   // Entrada única de la lista al terminar de cargar: en el contenedor, nunca en cada tarjeta.
   const entrada = useEntradaContenido();
-  const { abrirPedido } = vm;
+  const { abrirPedido, pagosEnProceso, textos } = vm;
 
   const renderItem = useCallback<ListRenderItem<Pedido>>(
-    ({ item }) => <TarjetaPedido pedido={item} onAbrir={abrirPedido} />,
-    [abrirPedido],
+    ({ item }) => <TarjetaPedido pedido={item} pagoEnProceso={pagosEnProceso.has(item.id)} onAbrir={abrirPedido} />,
+    [abrirPedido, pagosEnProceso],
   );
 
   const relleno = { paddingBottom: bottom + espacio.x3 };
@@ -100,7 +82,7 @@ function Contenido({ vm }: { vm: MisPedidosViewModel }) {
       <View
         accessible
         accessibilityRole="progressbar"
-        accessibilityLabel="Cargando tus pedidos"
+        accessibilityLabel={textos.cargando}
         style={[styles.cuerpo, styles.lista]}
       >
         {ESQUELETOS.map((i) => (
@@ -114,9 +96,9 @@ function Contenido({ vm }: { vm: MisPedidosViewModel }) {
     return (
       <ScrollView contentContainerStyle={[styles.cuerpo, relleno]}>
         <EmptyState
-          titulo="No pudimos cargar tus pedidos"
-          mensaje={vm.mensajeError ?? 'Intenta de nuevo en un momento.'}
-          accion={{ titulo: 'Reintentar', onPress: vm.recargar }}
+          titulo={textos.errorTitulo}
+          mensaje={vm.mensajeError ?? ''}
+          accion={{ titulo: textos.reintentar, onPress: vm.recargar }}
         />
       </ScrollView>
     );
@@ -133,9 +115,9 @@ function Contenido({ vm }: { vm: MisPedidosViewModel }) {
       <ScrollView contentContainerStyle={[styles.cuerpo, relleno]} refreshControl={refresco}>
         {aviso}
         <EmptyState
-          titulo="Aún no tienes pedidos"
-          mensaje="Cuando compres en la tienda, tus pedidos aparecerán aquí."
-          accion={{ titulo: 'Ver la tienda', onPress: vm.verTienda }}
+          titulo={textos.vaciaTitulo}
+          mensaje={textos.vaciaTexto}
+          accion={{ titulo: textos.verTienda, onPress: vm.verTienda }}
         />
       </ScrollView>
     );

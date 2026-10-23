@@ -14,6 +14,7 @@ import {
 } from '@/features/tienda/models/pedidoModel';
 import { ApiError } from '@/shared/api/apiClient';
 
+import { marcarCasillasCompra, RUTAS_COMPRA_LEGAL } from '../../helpers/checkoutFicticio';
 import { AHORA, conError, cuerpoError, masMinutos } from '../../helpers/citasFicticias';
 import { abrirSesionSimulada } from '../../helpers/google';
 import { LIMITE_MS } from '../../helpers/pantallas';
@@ -144,8 +145,14 @@ function pedidoCrudo(cambios: Record<string, unknown> = {}) {
 
 /** Rutas del pedido 77 con ese estado del pago en línea (o el manejador indicado). */
 function rutasPedido(pago: EstadoPagoPedido | Manejador, pedidoEstado = 'pendiente_pago'): Record<string, Manejador> {
+  // GP-07.5: con otro estado del pedido, el detalle lo vuelve a leer una vez (registro de la
+  // verificación): desde la segunda lectura el servidor ya lo da con el estado que aplicó.
+  let lecturas = 0;
   return {
-    [RUTA_PEDIDO]: () => respuesta({ success: true, data: pedidoCrudo() }),
+    [RUTA_PEDIDO]: () => {
+      lecturas += 1;
+      return respuesta({ success: true, data: lecturas === 1 ? pedidoCrudo() : pedidoCrudo({ estado: pedidoEstado }) });
+    },
     [RUTA_ESTADO_PAGO]: typeof pago === 'function' ? pago : () => respuesta({ estado: pago, pedidoEstado }),
   };
 }
@@ -278,15 +285,19 @@ describe('Pantallas de la tienda', () => {
       async (_caso, delServidor, enLinea, mensaje, revisar) => {
         const abierta = await abrirReserva('/checkout', {
           rutas: {
+            // GP-07.5: antes del pedido se registran los Términos de venta y la Política de reembolsos.
+            ...RUTAS_COMPRA_LEGAL,
             'GET /api/carrito': () => respuesta({ success: true, count: 1, data: [ITEM_CARRITO] }),
             [RUTA_CREAR_PEDIDO]: conError(cuerpoError(400, delServidor)),
           },
         });
         await tocar('Continuar');
         if (enLinea) {
-          await fireEvent.press(await screen.findByRole('radio', { name: /^Pagar en línea con Mercado Pago/ }));
+          // GP-07.5: el título de la opción sale del catálogo ("Pagar en línea").
+          await fireEvent.press(await screen.findByRole('radio', { name: /^Pagar en línea\./ }));
         }
         await tocar('Continuar');
+        await marcarCasillasCompra();
         await tocar(enLinea ? 'Ir a pagar con Mercado Pago' : 'Apartar mi pedido');
 
         expect(await screen.findByText(mensaje)).toBeOnTheScreen();

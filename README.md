@@ -81,6 +81,53 @@ La app no usa notificaciones push. Los avisos (recordatorios de citas, estado de
 **Forma de pago de citas**
 - `src/features/citas/models/formaPagoModel.ts`: textos y opciones de la forma de pago con las reglas de la configuración o con las guardadas en cada cita.
 
+### Tienda: pagos, pedidos y devoluciones (GP-07.5)
+
+**Checkout**
+- `src/features/tienda/models/compraLegal.ts`, `viewmodels/useCheckoutViewModel.ts`, `viewmodels/checkoutTienda.ts` y `views/CheckoutView.tsx`, con los componentes `DatosRecogerSalon.tsx`, `InformacionCompra.tsx` y `CasillasCompra.tsx`.
+- Solo se ofrecen los métodos activos en `reglas.pagos` de la configuración pública: pagar en línea si `mercadoPagoTienda` está encendido y pagar al recoger si `metodosSalon` trae alguno. Si queda uno solo, ya viene elegido; si no queda ninguno, el checkout explica que llame al salón y no deja continuar.
+- Los datos para recoger (salón, domicilio, horario, mapa y teléfono), los plazos (pago en línea, preparar el apartado, recordatorio, cancelación y resguardo) y los textos salen de la configuración y del catálogo de textos, nunca fijos en el código.
+- El último paso trae la información de la compra: quién vende, precios en pesos con IVA, entrega solo en el salón, cambios y revocación con los días de las reglas, y quejas ante Profeco con su teléfono y su sitio.
+- Dos casillas sin marcar: Términos de venta y Política de reembolsos, cambios y cancelaciones, con enlace al visor `/legal/[slug]` (se apila encima y al volver el checkout sigue igual). Sin las dos no se envía nada.
+- Al confirmar se registra primero `POST /api/consentimientos` (`terminos_venta` con el documento `terminos` y `reembolsos` con `reembolsos`, cada uno con la versión y el hash vigentes) y solo después `POST /api/pedidos?propios=true`. Si el consentimiento falla, el pedido no se crea; con la versión cambiada, las casillas se desmarcan y se traen los documentos nuevos.
+
+**Datos de transferencia**
+- `src/shared/ui/DatosTransferencia.tsx` y `src/shared/ui/portapapeles.ts` (expo-clipboard): banco, titular y CLABE (leída dígito por dígito) con el botón Copiar CLABE; si no se puede copiar, lo avisa y la CLABE queda seleccionable. Se muestran en el checkout, en el detalle de un apartado listo para pagar en el salón y en el detalle de una cita que se paga en el salón.
+- Vienen de `reglas.pagos.transferencia` y solo si la transferencia está activa y completa. Viven solo en memoria y solo desde la red: el archivo de la configuración se guarda sin ellos, y sin red la app no los muestra.
+
+**Verificación del pago en línea**
+- `src/features/tienda/models/verificacionPago.ts` (Singleton y Observer, sin React) y `viewmodels/useVerificacionPago.ts`: un solo registro por pedido con el último estado conocido del pago y si hay una verificación en curso. Lo comparten la confirmación (`usePedidoConfirmadoViewModel.ts`), el detalle y Mis pedidos.
+- Una sola verificación por pedido a la vez; los reintentos tienen tope (`MAXIMO_CONSULTAS_PAGO` y `MAXIMO_CONSULTAS_SIN_PAGO`) y espera creciente. Se detiene en segundo plano y, al volver a primer plano, revisa los pedidos con el pago pendiente. Si cambia la sesión, olvida todo.
+- Al volver de Mercado Pago la confirmación dice "Verificando tu pago" hasta tener respuesta: aprobado, en proceso, en revisión, rechazado o "Todavía no vemos tu pago" con los reintentos agotados (ahí lo primero es Revisar mi pago).
+- Sin cobros dobles: el registro solo consulta el estado (GET), nunca pide una preferencia. Antes de abrir otro pago se consulta el estado y, si está en proceso, en revisión o aprobado, no se abre Mercado Pago.
+
+**Detalle del pedido**
+- `viewmodels/useDetallePedidoViewModel.ts` y `viewmodels/detallePedido.ts`, con `components/HojaRevocarCompra.tsx` y `components/SeccionDevoluciones.tsx`.
+- Revocación de compra (art. 56 de la LFPC) con `models/revocacionModel.ts`: el botón solo se ve si el backend dice `puedeRevocar` y `revocableHasta` no ha pasado. La hoja avisa el derecho con los días guardados en el pedido, cuánto se reintegra (`montoRevocable`), qué pasa con el pedido y hasta cuándo; el motivo es opcional y un candado evita el doble envío. Cada resultado (reembolsado, en revisión o por entregar en el salón) y cada error tiene su texto, sin mostrar el del servidor.
+- Devoluciones y reembolsos con `models/devolucionesModel.ts`: cada devolución con su estado, tipo, monto, motivo sin la etiqueta del backend y la respuesta del salón; de cada pago solo el estado del reembolso, el monto y la fecha. Se ven al abrir el detalle, sin pasar por cancelar; si la consulta falla, el detalle se sigue viendo y la sección deja reintentar.
+- Pedir un cambio o un reembolso con `models/solicitudDevolucionModel.ts`, `viewmodels/useSolicitudDevolucion.ts` y `components/HojaSolicitarDevolucion.tsx`, como la página de devoluciones de la web. Solo se ofrece lo que la política del backend acepta con el estado del pedido: cambio (sellado y sin abrir o defecto de fábrica) y reembolso por defecto o producto distinto en un pedido entregado; reembolso por falta de existencias o por cancelación antes de estar listo (solo pagado en línea) en un pedido cancelado que ya se pagó. Sin artículos libres o con una solicitud activa del pedido completo no se ofrece. La hoja pide el producto cuando la causa lo requiere y confirmar que está sellado; el detalle es opcional (hasta 500 caracteres). Nunca se manda estado ni monto: los calcula el backend. Un candado evita el doble envío y, tras un error de red, se busca la solicitud antes de dejar reintentar. Al terminar aparece pendiente en la sección.
+- Retirar una solicitud pendiente con `components/HojaRetirarDevolucion.tsx`, siempre con confirmación previa. Una revocación no se retira desde la app: es renunciar a un derecho y a un reembolso, y se hace con el salón.
+
+**Mis pedidos y carrito**
+- Mis pedidos toma del registro de verificación los pagos en línea en proceso y los muestra así en lugar de "Pendiente de pago".
+- `carritoModel.ts` (`obtenerCarritoRevisado` y `tomarAvisosCarrito`): compara cada lectura con la anterior de la sesión. Lo que desapareció sin que la clienta lo quitara y cuyo producto ya no está en la tienda, y lo que llega con la presentación no disponible, se quita con `DELETE /api/carrito/:id` antes de pagar y se avisa por su nombre en el carrito (`components/AvisoTienda.tsx`, región en vivo para TalkBack). El checkout hace la misma revisión y, si algo se retiró, regresa al carrito.
+
+**Contratos del backend que usa**
+- `GET /api/configuracion-publica` (`reglas.pagos`, `reglas.tienda`, `reglas.revocacion` y textos).
+- `GET /api/documentos-legales/terminos/vigente` y `GET /api/documentos-legales/reembolsos/vigente`; `POST /api/consentimientos`.
+- `GET /api/carrito`, `PUT /api/carrito/:id`, `DELETE /api/carrito/:id` y `GET /api/productos/:id`.
+- `POST /api/pedidos?propios=true`, `GET /api/pedidos?propios=true&limit=100&sort=creadoEn:desc`, `GET /api/pedidos/:id?propios=true` (con `revocableHasta`, `puedeRevocar` y `montoRevocable`) y `PUT /api/pedidos/:id?propios=true` para cancelar.
+- `POST /api/pedidos/:id/revocar` con `motivo` opcional.
+- `GET /api/devoluciones/pedido/:pedidoId?propios=true` y `GET /api/pagos/pedido/:pedidoId?propios=true`.
+- `POST /api/devoluciones?propios=true` con `pedidoId`, `tipo`, `causa`, `pedidoItemId` opcional, `sellado` (solo con la causa sellado y sin abrir) y `motivo` opcional; `POST /api/devoluciones/:id/cancelar` para retirar una pendiente.
+- `POST /api/pagos-en-linea/mercadopago/preferencia?origen=app` y `GET /api/pagos-en-linea/mercadopago/estado/:pedidoId`.
+
+**Pendientes del backend**
+- Que la lista de pedidos traiga el estado del pago, para no depender del registro de verificación de la app.
+- Que el carrito informe los productos desactivados en lugar de omitirlos (hoy la app los deduce comparando lecturas y consultando el producto).
+- Códigos estables en los 409 de revocar y de cancelar, y en los 400 y 409 de las devoluciones: hoy la app distingue el motivo por el texto del mensaje.
+- Que los pagos y las devoluciones que ve la clienta no expongan `payload`, `referenciaExterna` ni `errorMensaje` (la app los descarta, pero no deberían salir del servidor).
+
 ## Pruebas
 
 ```bash

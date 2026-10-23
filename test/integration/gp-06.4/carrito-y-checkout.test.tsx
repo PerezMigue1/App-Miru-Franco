@@ -6,6 +6,10 @@ import '../../helpers/mocksPantallas';
 import { act, fireEvent, screen, waitFor } from 'expo-router/testing-library';
 import { Linking } from 'react-native';
 
+import { RESPALDO_CONFIGURACION } from '@/shared/api/configuracionPublica';
+import { obtenerTexto } from '@/shared/api/textosSitio';
+
+import { marcarCasillasCompra } from '../../helpers/checkoutFicticio';
 import { AHORA_ISO, conError } from '../../helpers/citasFicticias';
 import { navegadorRegresa } from '../../helpers/google';
 import { LIMITE_MS, ultimoBoton } from '../../helpers/pantallas';
@@ -176,24 +180,20 @@ describe('Carrito y compra con las pantallas reales (GP-06.4)', () => {
             'Esmalte en gel, Uñas Ficticias, 15ml, $1,200 cada uno, 5 piezas, total $6,000, Solo quedan 3 piezas',
           ),
         ).toBeOnTheScreen();
-        conEtiquetas('Shampoo hidratante, Botánica Ficticia, 250ml, $380 cada uno, 1 pieza, total $380, Ya no está disponible');
+        // GP-07.5: la presentación que ya no está disponible se quita sola antes de pagar (DELETE) y se
+        // avisa por su nombre; ya no queda en la lista para quitarla a mano.
+        conTextos(obtenerTexto('tienda.carrito.presentacionRetirada', { producto: 'Shampoo hidratante, 250ml' }));
+        expect(screen.queryByLabelText(/^Shampoo hidratante, /)).not.toBeOnTheScreen();
+        expect(veces(abierta, rutaQuitarDelCarrito(ID_SHAMPOO))).toBe(1);
         conEtiquetas('Aceite de argán, Botánica Ficticia, $540 cada uno, 2 piezas, total $1,080, Solo queda 1 pieza');
         conTextos(AJUSTA);
         expect(screen.getByRole('button', { name: CONTINUAR_COMPRA })).toBeDisabled();
-        expect(screen.getByRole('adjustable', { name: 'Cantidad de Shampoo hidratante' })).toBeDisabled();
-        await moverCantidad('Shampoo hidratante', 'increment');
         expect(veces(abierta, rutaCambiarCantidad(ID_SHAMPOO))).toBe(0);
 
         // "Menos" lleva la cantidad directo a las existencias.
         await moverCantidad('Esmalte en gel', 'decrement');
         expect(await screen.findByLabelText(/^Esmalte en gel, .*, 3 piezas, total \$3,600$/)).toBeOnTheScreen();
         expect(ultimoCuerpo(abierta, rutaCambiarCantidad(idItemCarrito(3051)))).toEqual({ cantidad: 3 });
-        expect(screen.getByRole('button', { name: CONTINUAR_COMPRA })).toBeDisabled();
-
-        // Lo que ya no está solo se puede quitar.
-        await tocar(QUITAR_SHAMPOO);
-        await fireEvent.press(ultimoBoton('Quitar'));
-        await waitFor(() => expect(screen.queryByLabelText(/^Shampoo hidratante, /)).not.toBeOnTheScreen());
         expect(screen.getByRole('button', { name: CONTINUAR_COMPRA })).toBeDisabled();
 
         await tocarBotonCantidad('Aceite de argán', 'menos');
@@ -280,7 +280,10 @@ describe('Carrito y compra con las pantallas reales (GP-06.4)', () => {
         await tocarYEsperar(abierta.app, CONTINUAR_COMPRA, '/checkout');
 
         await esperarPasoCompra(PASO_RECOGER);
-        conTextos('Mirú Franco Beauty Salón', 'Huejutla de Reyes, Hidalgo', 'Lunes a viernes de 9:30 a 19:30 h.');
+        // GP-07.5: nombre, domicilio y horario salen de la configuración pública (aquí, el respaldo).
+        const { salon } = RESPALDO_CONFIGURACION;
+        const domicilio = `${salon.direccion}, ${salon.ciudad}`;
+        conTextos(salon.nombre, domicilio, 'Lunes a viernes de 9:30 a 19:30 h.');
         conTextos('Sábados de 9:30 a 19:00 h.', 'Domingos cerrado.');
         conTextos(
           'Suele estar listo en 24 a 48 horas hábiles. Te avisamos en la app y por correo cuando puedas pasar por él.',
@@ -292,25 +295,28 @@ describe('Carrito y compra con las pantallas reales (GP-06.4)', () => {
         await tocar('Continuar');
         await esperarPasoCompra(PASO_PAGO);
         expect(screen.getByRole('radio', { name: OPCION_EN_SALON })).toBeChecked();
-        conTextos('Tu pedido queda apartado. Pagas $1,142.50 en el mostrador cuando pases por él.');
+        // GP-07.5: los avisos salen del catálogo (checkout.avisoSalon y checkout.avisoLinea) con las reglas.
+        const avisoSalon = obtenerTexto('checkout.avisoSalon', {
+          total: '$1,142.50',
+          metodosSalon: ' (efectivo, tarjeta o transferencia)',
+        });
+        conTextos(avisoSalon);
         // Cambia de idea: en línea y otra vez al recoger.
         await fireEvent.press(screen.getByRole('radio', { name: OPCION_EN_LINEA }));
-        expect(
-          await screen.findByText(
-            'Al confirmar te llevamos a Mercado Pago para pagar $1,142.50. Tu tarjeta la escribes allá: la app no la ve ni la guarda. Tienes 24 horas para completar el pago.',
-          ),
-        ).toBeOnTheScreen();
+        expect(await screen.findByText(obtenerTexto('checkout.avisoLinea', { total: '$1,142.50' }))).toBeOnTheScreen();
         await fireEvent.press(screen.getByRole('radio', { name: OPCION_EN_SALON }));
         expect(screen.getByRole('radio', { name: OPCION_EN_SALON })).toBeChecked();
-        conTextos('Tu pedido queda apartado. Pagas $1,142.50 en el mostrador cuando pases por él.');
+        conTextos(avisoSalon);
 
         await tocar('Continuar');
         await esperarPasoCompra(PASO_CONFIRMAR);
         conEtiquetas('Acondicionador reparación, 300ml, 1 pieza, $382.50', 'Shampoo hidratante, 250ml, 2 piezas, $760');
         conEtiquetas('Total: $1,142.50', 'Forma de pago: Pago al recoger en el salón');
-        conEtiquetas('Recoges en: Mirú Franco Beauty Salón, Huejutla de Reyes, Hidalgo');
-        conTextos('Total estimado: el total final se confirma al crear tu pedido.');
+        // GP-07.5: el salón sale de la configuración y bajo el total va la leyenda de precios con IVA.
+        conEtiquetas(`Recoges en: ${salon.nombre}, ${domicilio}`);
+        conTextos('Precios en pesos mexicanos con IVA incluido.');
 
+        await marcarCasillasCompra();
         await tocar(APARTAR);
         await esperarRuta(abierta.app, '/pedido-confirmado/701');
         expect(await screen.findByRole('header', { name: '¡Gracias por tu compra!' })).toBeOnTheScreen();
@@ -416,7 +422,9 @@ describe('Carrito y compra con las pantallas reales (GP-06.4)', () => {
         'pendiente',
         () => {
           expect(screen.getByRole('header', { name: 'Tu pago se está procesando' })).toBeOnTheScreen();
-          conTextos('Mercado Pago aún no lo confirma. Esta pantalla se actualiza sola.');
+          // GP-07.5: el texto sale del catálogo (tienda.pagoEnProcesoTexto); que se actualiza sola lo
+          // dice el indicador "Verificando tu pago" mientras el registro vuelve a consultar.
+          conTextos('Mercado Pago aún no lo confirma. Te avisamos en la app y por correo en cuanto se acredite.');
           conEtiquetas('Estado: Pago en proceso');
           sinPedirPagoOtraVez();
           expect(screen.queryByLabelText(/Paga antes del/)).not.toBeOnTheScreen();
@@ -498,7 +506,9 @@ describe('Carrito y compra con las pantallas reales (GP-06.4)', () => {
     );
 
     it.each<[string, Manejador, RegExp, boolean]>([
-      ['el pago todavía no aparece', conEstadoPago('sin_pago'), /^Todavía no recibimos tu pago\. Tu pedido sigue apartado hasta el /, true],
+      // GP-07.5: con los reintentos agotados la pantalla dice "Todavía no vemos tu pago" y pide no
+      // pagar de nuevo (tienda.pago.porConfirmarTexto del catálogo).
+      ['el pago todavía no aparece', conEstadoPago('sin_pago'), /^Si ya pagaste, no pagues de nuevo: puede tardar unos minutos en verse\. Toca Revisar mi pago\. Tu pedido sigue apartado hasta el /, true],
       ['la consulta del pago falla', errorDelServidor, /^No pudimos revisar tu pago\. Si ya pagaste, no pagues de nuevo/, false],
     ])(
       'si al regresar de Mercado Pago %s, primero ofrece "Revisar mi pago" y así encuentra el pago aprobado',

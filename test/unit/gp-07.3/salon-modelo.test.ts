@@ -98,14 +98,17 @@ describe('domicilio y enlaceMapa', () => {
 describe('respaldo del salón sin red', () => {
   const salon = RESPALDO_CONFIGURACION.salon;
 
-  it('trae los datos públicos de contacto que publica el salón, sin enlace de mapa propio', () => {
+  // GP-07.5: el respaldo ya trae el mapa con las coordenadas del salón (antes venía vacío).
+  const MAPA_SALON = 'https://www.google.com/maps/search/?api=1&query=21.144534,-98.4205943';
+
+  it('trae los datos públicos de contacto que publica el salón y el mapa con sus coordenadas', () => {
     expect(salon).toEqual({
       nombre: 'Mirú Franco Salón Beauty',
       direccion: 'Segunda Cerrada de Allende No. 15, Col. Juárez',
       ciudad: 'Huejutla de Reyes, Hidalgo',
       telefono: '+52 771 268 1432',
       whatsapp: '+52 771 186 7645',
-      mapaUrl: '',
+      mapaUrl: MAPA_SALON,
       correoContacto: 'contacto@mirufranco.com',
     });
   });
@@ -115,7 +118,7 @@ describe('respaldo del salón sin red', () => {
     expect(enlaceWhatsApp(salon.whatsapp)).toBe('https://wa.me/527711867645');
     expect(enlaceCorreo(salon.correoContacto)).toBe('mailto:contacto@mirufranco.com');
     expect(domicilio(salon)).toBe('Segunda Cerrada de Allende No. 15, Col. Juárez, Huejutla de Reyes, Hidalgo');
-    expect(enlaceMapa(salon)).toBe(`${BUSQUEDA_MAPA}${encodeURIComponent(domicilio(salon))}`);
+    expect(enlaceMapa(salon)).toBe(MAPA_SALON);
   });
 });
 

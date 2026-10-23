@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { OpcionPago } from '@/features/tienda/components/OpcionPago';
+import { DatosTransferencia } from '@/shared/ui/DatosTransferencia';
 import { espacio, fuente, icono, radio, sombra, tipo } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
@@ -26,8 +27,9 @@ const ICONO_OPCION: Record<OpcionAnticipo, LucideIcon> = {
 /**
  * "Forma de pago" del paso Confirmar (FormaPagoCita de la web), siempre visible. Con anticipo: el
  * monto y el saldo, la pregunta con las opciones activas como radios (cada una con su plazo), qué
- * pasa si no llega, el aviso para reagendar, los métodos del salón y la casilla de la política. Sin
- * anticipo: cuánto se paga en el salón y con qué métodos. Solo pinta lo que arma el viewmodel.
+ * pasa si no llega, el aviso para reagendar, los métodos del salón (con los datos de transferencia si
+ * se paga en el salón) y la casilla de la política. Sin anticipo: cuánto se paga en el salón, con qué
+ * métodos y los datos de transferencia. Solo pinta lo que arma el viewmodel.
  */
 export function SeccionFormaPago({ formaPago, opcion, onElegir, casilla, deshabilitada }: SeccionFormaPagoProps) {
   const { colores } = useTheme();
@@ -76,6 +78,7 @@ export function SeccionFormaPago({ formaPago, opcion, onElegir, casilla, deshabi
               </Text>
             ))}
             {formaPago.metodos ? <Metodos texto={formaPago.metodos} /> : null}
+            <DatosTransferencia datos={formaPago.transferencia} />
           </View>
           {casilla}
         </>
@@ -83,6 +86,7 @@ export function SeccionFormaPago({ formaPago, opcion, onElegir, casilla, deshabi
         <View style={tarjeta}>
           <Text style={[styles.sinAnticipo, { color: colores.texto }]}>{formaPago.sinAnticipo}</Text>
           {formaPago.metodos ? <Metodos texto={formaPago.metodos} /> : null}
+          <DatosTransferencia datos={formaPago.transferencia} />
         </View>
       )}
     </View>

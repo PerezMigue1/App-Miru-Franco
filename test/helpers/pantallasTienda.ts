@@ -4,6 +4,7 @@ import * as SecureStore from 'expo-secure-store';
 import { fireEvent, screen, waitFor } from 'expo-router/testing-library';
 import type { TestInstance } from 'test-renderer';
 
+import { marcarCasillasCompra, RUTAS_COMPRA_LEGAL } from './checkoutFicticio';
 import { AHORA, CLIENTA_CITAS, llamadasDeRuta, respuestaError } from './citasFicticias';
 import { abrirSesionSimulada } from './google';
 import { abrirApp, cerrarIntroSiAparece, ultimoBoton, type App } from './pantallas';
@@ -109,6 +110,8 @@ export async function abrirTienda(ruta: string, opciones: OpcionesTienda = {}): 
   const pedidos = opciones.pedidos ?? MIS_PEDIDOS_CRUDOS;
   const carrito = carritoSimulado({ catalogo: opciones.catalogo, items: opciones.items });
   const llamadas = simularServidorTienda({
+    // GP-07.5: confirmar registra antes los Términos de venta y la Política de reembolsos.
+    ...RUTAS_COMPRA_LEGAL,
     ...(opciones.catalogo ? rutasCatalogoTienda(opciones.catalogo) : {}),
     ...rutasPedidos(pedidos),
     ...rutasCompra(pedidos, opciones.crear),
@@ -273,7 +276,8 @@ export function fechaEnTarjeta(iso: string): string {
 export const PASO_RECOGER = 'Recoges tu pedido en el salón';
 export const PASO_PAGO = '¿Cómo quieres pagar?';
 export const PASO_CONFIRMAR = 'Revisa y confirma';
-export const OPCION_EN_LINEA = /^Pagar en línea con Mercado Pago/;
+// GP-07.5: el título sale del catálogo (checkout.opcionLineaTitulo, "Pagar en línea").
+export const OPCION_EN_LINEA = /^Pagar en línea\./;
 export const OPCION_EN_SALON = /^Pagar al recoger en el salón/;
 export const APARTAR = 'Apartar mi pedido';
 export const IR_A_PAGAR = 'Ir a pagar con Mercado Pago';
@@ -283,7 +287,10 @@ export async function esperarPasoCompra(titulo: string): Promise<void> {
   expect(await screen.findByRole('header', { name: titulo })).toBeOnTheScreen();
 }
 
-/** En el checkout, de "Recoger en el salón" a "Revisa y confirma" eligiendo (o no) pagar en línea. */
+/**
+ * En el checkout, de "Recoger en el salón" a "Revisa y confirma" eligiendo (o no) pagar en línea.
+ * GP-07.5: al llegar marca las dos casillas obligatorias (Términos de venta y Política de reembolsos).
+ */
 export async function llegarAConfirmar(enLinea: boolean): Promise<void> {
   await esperarPasoCompra(PASO_RECOGER);
   await tocar('Continuar');
@@ -293,6 +300,7 @@ export async function llegarAConfirmar(enLinea: boolean): Promise<void> {
   }
   await tocar('Continuar');
   await esperarPasoCompra(PASO_CONFIRMAR);
+  await marcarCasillasCompra();
 }
 
 /**
