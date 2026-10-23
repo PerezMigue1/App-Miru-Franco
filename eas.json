@@ -1,4 +1,8 @@
 {
+  "cli": {
+    "appVersionSource": "remote",
+    "version": ">= 25.3.0"
+  },
   "build": {
     "development": {
       "developmentClient": true,
@@ -14,7 +18,19 @@
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://api.mirufranco.com",
-        "EXPO_PUBLIC_WEB_URL": "https://www.mirufranco.com"
+        "EXPO_PUBLIC_WEB_URL": "https://www.mirufranco.com",
+        "OFUSCAR_JS": "1"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.mirufranco.com",
+        "EXPO_PUBLIC_WEB_URL": "https://www.mirufranco.com",
+        "OFUSCAR_JS": "1"
       }
     }
   }
