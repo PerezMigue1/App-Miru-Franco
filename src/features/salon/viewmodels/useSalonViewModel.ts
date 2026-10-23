@@ -1,11 +1,12 @@
 import { useRouter, type Href } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Linking } from 'react-native';
 
 import { fechaLegible } from '@/features/citas/viewmodels/presentacionCita';
-import type { ValorSalon } from '@/shared/api/configuracionPublica';
+import { errorUltimoRefresco, suscribirErrorRefresco, type ValorSalon } from '@/shared/api/configuracionPublica';
+import { tipoDeError, type TipoError } from '@/shared/api/mensajesError';
 import { useConfiguracionPublica } from '@/shared/api/useConfiguracionPublica';
-import { useTextos } from '@/shared/api/useTextos';
+import { useTextos, type FuncionTexto } from '@/shared/api/useTextos';
 
 import {
   diasInhabilesProximos,
@@ -47,7 +48,10 @@ export interface DiaInhabilSalon {
 
 export interface SalonViewModel {
   titulo: string;
-  /** Aviso sin conexión cuando la configuración no salió de la red; null con datos frescos. */
+  /**
+   * Aviso cuando la configuración no salió de la red (sin conexión, o no se pudo actualizar si el
+   * servidor respondió con error); null con datos frescos.
+   */
   avisoSinRed: string | null;
   sobreNosotros: {
     titulo: string;
@@ -73,6 +77,15 @@ export interface SalonViewModel {
   volver: () => void;
 }
 
+/**
+ * Aviso de que se muestran los datos guardados: "sin conexión" solo si la última lectura falló por
+ * falta de red; si respondió con error (un 5xx) o aún no hubo lectura, que no se pudieron actualizar.
+ */
+function avisoDatosGuardados(texto: FuncionTexto, falla: TipoError | null): string {
+  return falla === 'sinConexion' ? texto('salon.sinRed') : texto('salon.sinActualizar');
+}
+
+
 /** Primera letra en mayúscula: "lunes 30 de noviembre" a "Lunes 30 de noviembre". */
 const conMayuscula = (texto: string): string => texto.charAt(0).toUpperCase() + texto.slice(1);
 
@@ -86,6 +99,11 @@ export function useSalonViewModel(): SalonViewModel {
   const { configuracion, origen, refrescar: refrescarConfiguracion } = useConfiguracionPublica();
   const texto = useTextos();
   const [refrescando, setRefrescando] = useState(false);
+  // Una falla que conserva la memoria no cambia la configuración: el error de la última lectura se
+  // observa aparte (cualquier refresco: deslizar, volver a primer plano o la pantalla de carga) para
+  // que el aviso cambie en cuanto se sabe, sin esperar a que la pantalla se repinte por otra causa.
+  const errorRefresco = useSyncExternalStore(suscribirErrorRefresco, errorUltimoRefresco, errorUltimoRefresco);
+  const falla: TipoError | null = errorRefresco ? tipoDeError(errorRefresco) : null;
   const montada = useRef(true);
   useEffect(() => {
     montada.current = true;
@@ -141,7 +159,7 @@ export function useSalonViewModel(): SalonViewModel {
 
   return {
     titulo: texto('salon.titulo'),
-    avisoSinRed: origen === 'red' ? null : texto('salon.sinRed'),
+    avisoSinRed: origen === 'red' ? null : avisoDatosGuardados(texto, falla),
     sobreNosotros: {
       titulo: contenido.sobreNosotros.titulo,
       parrafos: contenido.sobreNosotros.parrafos,

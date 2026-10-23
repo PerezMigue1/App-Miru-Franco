@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useAuth } from '@/features/auth/viewmodels/useAuth';
 import { ApiError } from '@/shared/api/apiClient';
+import { mensajeParaClienta } from '@/shared/api/mensajesError';
 import { obtenerTexto } from '@/shared/api/textosSitio';
 
 import {
@@ -26,6 +27,8 @@ export type { ItemCarrito } from '../models/carritoModel';
 export type EstadoCarrito = 'cargando' | 'listo' | 'error';
 
 export interface CarritoViewModel {
+  /** Con estado 'error': por qué no se cargó el carrito (sin red, servidor...); null si no hay error. */
+  mensajeError: string | null;
   /** La clienta tiene sesión (sin ella se muestra la invitación). */
   conSesion: boolean;
   /** La sesión todavía se está leyendo. */
@@ -99,6 +102,7 @@ export function useCarritoViewModel(): CarritoViewModel {
   const cuenta = conSesion ? (usuario?.id ?? null) : null;
 
   const [estado, setEstado] = useState<EstadoCarrito>('cargando');
+  const [errorCarga, setErrorCarga] = useState<unknown>(null);
   const [items, setItems] = useState<ItemCarrito[]>([]);
   const [ocupados, setOcupados] = useState<ReadonlySet<number>>(() => new Set());
   const [errores, setErrores] = useState<Readonly<Record<number, string>>>({});
@@ -183,12 +187,13 @@ export function useCarritoViewModel(): CarritoViewModel {
         // El número de la pestaña Carrito toma lo que ya se leyó, sin otra lectura.
         publicarPiezasCarrito(piezasCarrito(lista));
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (actual !== solicitud.current) {
           return;
         }
         // Con una lista ya mostrada, un reenfoque fallido no la borra.
         if (!yaCargo.current) {
+          setErrorCarga(error);
           setEstado('error');
         }
       });
@@ -310,6 +315,7 @@ export function useCarritoViewModel(): CarritoViewModel {
   }, [router, items.length, hayProblemas]);
 
   return {
+    mensajeError: estado === 'error' ? mensajeParaClienta(errorCarga) : null,
     conSesion,
     sesionCargando: estadoSesion === 'cargando',
     estado,

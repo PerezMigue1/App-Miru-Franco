@@ -10,6 +10,7 @@ import {
   renovarSesion,
   renovarSesionSiVigente,
 } from '@/shared/api/apiClient';
+import { avisarCierreSesion } from '@/shared/api/eventosSesion';
 import {
   aMarcaDeTiempo,
   borrarSesion,
@@ -43,6 +44,7 @@ import {
   leerRetornoGoogle,
   urlInicioGoogle,
 } from '../models/googleAuth';
+import { olvidarPerfilReciente } from '../models/perfilCompartido';
 
 export type EstadoSesion = 'cargando' | 'autenticado' | 'anonimo';
 
@@ -197,10 +199,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // apiClient avisa aquí cuando la sesión expira (401 sin renovación posible): además de quedar
-  // sin sesión, se marca para avisarle a la clienta.
+  // sin sesión, se marca para avisarle a la clienta y se borra lo que quedó en memoria de ella.
   useEffect(
     () =>
       alExpirarSesion(() => {
+        avisarCierreSesion('vencida');
         quedarAnonimo();
         setSesionVencida(true);
       }),
@@ -222,12 +225,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const cerrado = await cerrarSesionDeGeneracion(generacion);
       if (cerrado) {
         avisarCierre(cerrado);
+        avisarCierreSesion('salida');
         if (activo) {
           quedarAnonimo();
         }
       }
     };
     const restaurar = async () => {
+      // Un perfil reciente de antes no se reparte a la cabecera: el /me de abajo trae el de ahora.
+      olvidarPerfilReciente();
       let guardada: SesionGuardada | null = null;
       try {
         guardada = await leerSesion();
@@ -256,6 +262,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // Si la renovación hubiera cerrado la sesión, la generación ya habría cambiado: aquí no
           // pudo borrarla (o ya no había). Se intenta de nuevo y se queda sin sesión con su aviso.
           await borrarSesion().catch(() => undefined);
+          avisarCierreSesion('vencida');
           if (activo) {
             quedarAnonimo();
             setSesionVencida(true);
@@ -420,6 +427,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return false;
     }
     avisarCierre(sesion);
+    // Lo que quedó en memoria de la clienta (por ejemplo, el pago de un pedido) se borra ya.
+    avisarCierreSesion('salida');
     quedarAnonimo();
     return true;
   }, [quedarAnonimo]);
@@ -432,6 +441,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const correo = usuario?.email ?? '';
     // Si el borrado local fallara, el token guardado ya no sirve: al reabrir, /me lo rechaza.
     await borrarConReintento();
+    avisarCierreSesion('cambioContrasena');
     setSesionVencida(false);
     setAvisoAcceso({ correo });
     quedarAnonimo();

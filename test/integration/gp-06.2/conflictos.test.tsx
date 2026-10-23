@@ -62,6 +62,7 @@ import { enSecuencia, errorDelServidor } from '../../helpers/pantallasServicios'
 import { ESPECIALISTA_UNO } from '../../helpers/serviciosFicticios';
 import { respuesta, type Manejador } from '../../helpers/servidorSimulado';
 import { sesionGuardada } from '../../helpers/sesionGuardada';
+import { TEXTO_SERVIDOR, TEXTO_SIN_CONEXION } from '../../helpers/textosError';
 
 jest.mock('expo-web-browser', () => require('../../helpers/google').navegadorSimulado());
 
@@ -74,7 +75,7 @@ jest.mock('expo-web-browser', () => require('../../helpers/google').navegadorSim
 
 const OCUPADO = 'Ese horario se acaba de ocupar. Elige otro.';
 const ERROR_RESERVA = 'No pudimos reservar tu cita. Intenta de nuevo.';
-const SIN_CONEXION = 'Sin conexión. Revisa tu internet e intenta de nuevo';
+const SIN_CONEXION = TEXTO_SIN_CONEXION;
 const SESION_TERMINADA = 'Tu sesión terminó. Inicia sesión de nuevo.';
 
 /** Disponibilidad del corte (servicio 1) con la primera especialista ese día. */
@@ -268,7 +269,7 @@ describe('Errores y conflictos al reservar con las pantallas reales (GP-06.2)', 
       '/anticipo/501',
       enSecuencia(errorDelServidor, () => respuesta(cuerpoCita(CITA_CON_ANTICIPO))),
       'No pudimos cargar tu cita',
-      'Revisa tu conexión e intenta de nuevo.',
+      TEXTO_SERVIDOR,
       'Reintentar',
       async () => {
         expect(await screen.findByLabelText('Anticipo a pagar: $360')).toBeOnTheScreen();
@@ -279,7 +280,7 @@ describe('Errores y conflictos al reservar con las pantallas reales (GP-06.2)', 
       '/cita-confirmada/501',
       enSecuencia(errorDelServidor, () => respuesta(cuerpoCita(CITA_CON_ANTICIPO))),
       'No pudimos cargar tu cita',
-      'Tu reserva no se pierde. Revisa tu conexión e intenta de nuevo.',
+      `Tu reserva no se pierde. ${TEXTO_SERVIDOR}`,
       'Reintentar',
       async () => {
         expect(await screen.findByRole('header', { name: 'Tu cita está reservada' })).toBeOnTheScreen();

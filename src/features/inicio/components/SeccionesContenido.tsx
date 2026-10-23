@@ -95,7 +95,7 @@ function SeccionLista<T>({ seccion, error, etiquetaCargando, children }: Seccion
       {seccion.estado === 'error' ? (
         <EmptyState
           titulo={error.titulo}
-          mensaje={error.texto}
+          mensaje={seccion.mensajeError ?? error.texto}
           accion={{ titulo: 'Reintentar', onPress: seccion.reintentar }}
         />
       ) : (

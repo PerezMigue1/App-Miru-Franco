@@ -5,20 +5,17 @@ import {
   esObjeto,
   idDe,
   listaDe,
-  obtenerProductos,
   primeraImagen,
   texto,
   urlHttps,
   type Crudo,
 } from '@/features/inicio/models/inicioService';
 
-import { respuesta } from '../../helpers/servidorSimulado';
-import { imagenServicio, simularServidorServicios } from '../../helpers/serviciosFicticios';
+import { imagenServicio } from '../../helpers/serviciosFicticios';
 
 /**
  * GP-06.1: lectores compartidos con los que el modelo de servicios normaliza las respuestas
- * (src/features/inicio/models/inicioService.ts) y precioParaMostrar de FluidoModel. Cada lector con valores válidos, vacíos y de tipo equivocado. El precio de los
- * productos (precioDe) solo se alcanza por obtenerProductos, con fetch simulado.
+ * (src/features/inicio/models/inicioService.ts) y precioParaMostrar de FluidoModel. Cada lector con valores válidos, vacíos y de tipo equivocado.
  */
 
 const A = imagenServicio('a');
@@ -156,31 +153,5 @@ describe('precioParaMostrar', () => {
     ['Infinity', null],
   ])('precioParaMostrar(%p) da %p', (valor, esperado) => {
     expect(precioParaMostrar(valor)).toBe(esperado);
-  });
-});
-
-describe('obtenerProductos: precio de las presentaciones (precioDe)', () => {
-  it.each<[string, Record<string, unknown>, string]>([
-    ['el menor de las presentaciones', { precio: '999', presentaciones: [{ precio: '$1,200' }, { precio: '380.50' }] }, '380.5'],
-    ['salta presentaciones sin precio válido', { presentaciones: [{ precio: '0' }, { precio: 'x' }, null, { precio: 250 }] }, '250'],
-    ['el precio propio si ninguna presentación sirve', { precio: ' 450 ', presentaciones: [{ precio: '' }, 'x'] }, '450'],
-    ['el precio propio si presentaciones no es arreglo', { precio: '450', presentaciones: { precio: '10' } }, '450'],
-    ['vacío sin precio ni presentaciones', {}, ''],
-  ])('usa %s', async (_caso, campos, esperado) => {
-    simularServidorServicios({
-      'GET /api/productos': () => respuesta({ productos: [{ id: 'producto-1', ...campos }] }),
-    });
-    const [producto] = await obtenerProductos();
-    expect(producto.precio).toBe(esperado);
-  });
-
-  it('normaliza id, nombre, categoría e imagen de cada producto', async () => {
-    simularServidorServicios({
-      'GET /api/productos': () =>
-        respuesta([{ _id: 'producto-2', nombre: ' Shampoo ficticio ', categoria: 5, imagen: HTTP, imagenes: [A] }]),
-    });
-    await expect(obtenerProductos()).resolves.toEqual([
-      { id: 'producto-2', nombre: 'Shampoo ficticio', precio: '', categoria: '5', imagen: A },
-    ]);
   });
 });

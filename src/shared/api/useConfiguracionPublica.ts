@@ -5,7 +5,9 @@ import {
   cacheVencida,
   cargarConLimite,
   estadoConfiguracion,
+  obtenerConfiguracion,
   refrescar,
+  RESPALDO_CONFIGURACION,
   suscribir,
   TIEMPO_MAXIMO_CARGA_MS,
   type ConfiguracionPublica,
@@ -67,4 +69,13 @@ export function useCargaConfiguracion(ms: number = TIEMPO_MAXIMO_CARGA_MS): bool
   }, [ms]);
 
   return lista;
+}
+
+/**
+ * Nombre del salón de la configuración pública (o el del respaldo, "Mirú Franco Salón Beauty"), para
+ * lo que anuncia TalkBack en el logotipo y en el panel de marca. Se vuelve a pintar si cambia.
+ */
+export function useNombreSalon(): string {
+  const configuracion = useSyncExternalStore(suscribir, obtenerConfiguracion, obtenerConfiguracion);
+  return configuracion.salon.nombre.trim() || RESPALDO_CONFIGURACION.salon.nombre;
 }

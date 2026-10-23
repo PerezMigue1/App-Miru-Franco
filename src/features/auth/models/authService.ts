@@ -3,6 +3,8 @@ import * as Device from 'expo-device';
 import { accesoPorVencer, apiGet, apiPatch, apiPost, renovarSinGuardar } from '@/shared/api/apiClient';
 import { subirMultipart } from '@/shared/api/subirMultipart';
 
+import { invalidarPerfil, leerPerfil } from './perfilCompartido';
+
 import type {
   DatosRegistro,
   PreguntaSeguridad,
@@ -77,9 +79,12 @@ export async function cerrarSesionServidor(sesion: SesionARevocar): Promise<void
   await apiPost<RespuestaSimple>('/api/auth/logout', { logoutAll: false, refreshToken }, { token });
 }
 
-/** GET /api/auth/me. */
+/**
+ * GET /api/auth/me con el que useAuth valida la sesión: compartido con las demás lecturas del perfil
+ * y ofrecido, una vez, a la foto de la cabecera (perfilCompartido).
+ */
 export function obtenerPerfil(): Promise<RespuestaPerfil> {
-  return apiGet<RespuestaPerfil>('/api/auth/me');
+  return leerPerfil({ guardar: true }) as Promise<RespuestaPerfil>;
 }
 
 /** GET /api/auth/me con un token recién emitido: se envía tal cual y su 401 no renueva ni cierra la sesión. */
@@ -87,14 +92,20 @@ export function obtenerPerfilConToken(token: string): Promise<RespuestaPerfil> {
   return apiGet<RespuestaPerfil>('/api/auth/me', { token });
 }
 
-/** GET /api/auth/me con el perfil completo (datos capilares y foto), sin normalizar. */
-export function obtenerPerfilCompleto(): Promise<unknown> {
-  return apiGet<unknown>('/api/auth/me');
+/**
+ * GET /api/auth/me con el perfil completo (datos capilares y foto), sin normalizar. Comparte la
+ * petición en vuelo; con `reciente` acepta, una vez, la última respuesta de esta sesión.
+ */
+export function obtenerPerfilCompleto(opciones: { reciente?: boolean } = {}): Promise<unknown> {
+  return leerPerfil({ reciente: opciones.reciente });
 }
 
-/** PATCH /api/auth/me: solo los campos que cambiaron. */
+/** PATCH /api/auth/me: solo los campos que cambiaron. Al guardar, el perfil en memoria se olvida. */
 export function actualizarPerfil(cambios: CambiosPerfil | { foto: string | null }): Promise<unknown> {
-  return apiPatch<unknown>('/api/auth/me', cambios);
+  return apiPatch<unknown>('/api/auth/me', cambios).then((respuesta) => {
+    invalidarPerfil();
+    return respuesta;
+  });
 }
 
 /** POST /api/auth/me/foto/firma (máximo 10 por minuto): firma de una hora para subir la foto. */

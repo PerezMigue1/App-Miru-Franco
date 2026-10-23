@@ -75,7 +75,7 @@ export default function EditarPerfilView() {
         <View style={styles.cuerpo}>
           <EmptyState
             titulo="No pudimos cargar tu perfil"
-            mensaje="Revisa tu conexión a internet e inténtalo de nuevo."
+            mensaje={vm.mensajeError ?? ''}
             accion={{ titulo: 'Reintentar', onPress: vm.reintentar }}
           />
         </View>

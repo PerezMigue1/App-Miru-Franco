@@ -15,6 +15,7 @@ import {
 } from '../../helpers/pantallas';
 import { leerSecureStore } from '../../helpers/secureStore';
 import { llamadasA, respuesta, servidorConRutas, type Manejador } from '../../helpers/servidorSimulado';
+import { TEXTO_DEMASIADAS_SOLICITUDES } from '../../helpers/textosError';
 
 const CODIGO = '123456';
 
@@ -213,7 +214,7 @@ describe('Activar la cuenta y recuperar la contraseña (GP-05)', () => {
 
       // Con el límite del servidor (429) se pide esperar, sin el texto técnico.
       await fireEvent.press(screen.getByRole('button', { name: 'Enviar enlace' }));
-      expect(await screen.findByText('Demasiados intentos, espera un minuto')).toBeOnTheScreen();
+      expect(await screen.findByText(TEXTO_DEMASIADAS_SOLICITUDES)).toBeOnTheScreen();
       expect(screen.queryByText(MENSAJE_NEUTRO)).not.toBeOnTheScreen();
       expect(
         screen.queryByText('ThrottlerException: Too Many Requests'),

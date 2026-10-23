@@ -20,6 +20,7 @@ export function cuentaSinActivar(): Response {
     {
       statusCode: 403,
       message: 'Tu cuenta no está activada. Revisa tu correo para activar tu cuenta.',
+      code: 'CUENTA_NO_ACTIVADA',
     },
     403,
   );

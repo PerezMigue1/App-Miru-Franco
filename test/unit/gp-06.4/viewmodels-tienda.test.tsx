@@ -3,8 +3,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 import { AppState, type AppStateStatus } from 'react-native';
 
-import { MENSAJE_SIN_CONEXION } from '@/features/auth/models/AuthModel';
-import { MENSAJE_SESION_TERMINADA } from '@/features/tienda/models/carritoModel';
+import { MENSAJE_SESION_TERMINADA, MENSAJE_SIN_CONEXION } from '@/shared/api/mensajesError';
 import { REDIRECCION_PEDIDO, type MetodoPago } from '@/features/tienda/models/pedidoModel';
 import {
   MAXIMO_CONSULTAS_PAGO,

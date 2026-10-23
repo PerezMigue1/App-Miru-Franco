@@ -166,15 +166,6 @@ export const duracion = {
   cuentaRegresiva: 1000,
   /** Sesión móvil: el acceso se renueva antes de salir si le falta menos que esto para vencer. */
   margenRenovacion: 60000,
-  /** Confirmación del pedido: cada cuánto se consulta el estado del pago mientras está pendiente. */
-  consultaPago: 3000,
-  /** Confirmación del pedido: tiempo máximo de consultas seguidas del estado del pago. */
-  limiteConsultaPago: 45000,
-  /**
-   * Tras volver de Mercado Pago, cuánto se sigue consultando un pago que todavía no aparece
-   * (sin_pago): tres consultas. Un pago aprobado aparece casi siempre en la primera.
-   */
-  limiteConsultaSinPago: 9000,
   /** Aviso interno en pantalla (GP-07.2): tiempo que se queda a la vista si nadie lo toca. */
   avisoEnPantalla: 5000,
   /**

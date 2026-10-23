@@ -8,7 +8,7 @@ import { act, fireEvent, screen, waitFor } from 'expo-router/testing-library';
 import { MAXIMO_CONSULTAS_SIN_PAGO, reiniciarVerificacion, verificarPago } from '@/features/tienda/models/verificacionPago';
 import { RESPALDO_TEXTOS, type ClaveTexto } from '@/shared/api/textosSitio';
 
-import { MENSAJE_SIN_CONEXION } from '@/features/auth/models/AuthModel';
+import { MENSAJE_SIN_CONEXION } from '@/shared/api/mensajesError';
 
 import { abrirSesionSimulada } from '../../helpers/google';
 import { LIMITE_MS } from '../../helpers/pantallas';

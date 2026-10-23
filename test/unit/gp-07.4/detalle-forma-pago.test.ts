@@ -221,9 +221,9 @@ describe('textoAnticipoPendiente y contactoSalon', () => {
     expect(textoAnticipoPendiente(pendiente, AHORA, soloSalon)).toContain('Págalo en el salón.');
     const ninguna = configVigente({ mercadoPagoAnticipos: false, citas: { permitirAnticipoEnSalon: false } });
     expect(textoAnticipoPendiente(pendiente, AHORA, ninguna)).toContain('Págalo en línea.');
-    // Solo el salón y ya sin margen: el texto sin formas de pago.
+    // Solo el salón y ya sin margen: la frase sin formas de pago (GP-07.6: ya no "Págalo." suelto).
     const cercana = cita(conReglas(citaConAnticipo({ fechaHoraInicio: masMinutos(AHORA, 30).toISOString() })));
-    expect(textoAnticipoPendiente(cercana, AHORA, soloSalon)).toMatch(/^Págalo\. Si no se paga en /);
+    expect(textoAnticipoPendiente(cercana, AHORA, soloSalon)).toMatch(/^Paga tu anticipo\. Si no se paga en /);
   });
 
   it('sin ahora ni configuración usan el reloj del teléfono y la configuración en memoria (el respaldo)', () => {

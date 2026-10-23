@@ -9,6 +9,7 @@ import { ErrorInicioGoogle } from '@/features/auth/models/googleAuth';
 import { AuthProvider, useAuth } from '@/features/auth/viewmodels/useAuth';
 import { useGoogleViewModel } from '@/features/auth/viewmodels/useGoogleViewModel';
 import { ApiError, ErrorDeRed } from '@/shared/api/apiClient';
+import { MENSAJE_SIN_CONEXION } from '@/shared/api/mensajesError';
 
 import { espiarConsola } from '../../helpers/consola';
 import { CLAVE, CORREO, USUARIO } from '../../helpers/datosClienta';
@@ -282,9 +283,9 @@ function enNavegador(preparar: () => void, lanza: ClaseError = ErrorInicioGoogle
 }
 
 /** Falla en el canje: no hay sesión emitida que revocar. */
-function enCanje(salida: ManejadorVm, lanza: ClaseError): Fallo {
+function enCanje(salida: ManejadorVm, lanza: ClaseError, mensaje = MENSAJE_GOOGLE): Fallo {
   const rutas = { [`POST ${RUTA_CANJE}`]: salida };
-  return { preparar: conCodigo, rutas, mensaje: MENSAJE_GOOGLE, lanza, canjes: 1, revoca: false };
+  return { preparar: conCodigo, rutas, mensaje, lanza, canjes: 1, revoca: false };
 }
 
 /** Falla después del canje (/me, rol o SecureStore): la sesión emitida se revoca. */
@@ -305,11 +306,12 @@ const FALLOS: [string, Fallo][] = [
   ['openAuthSessionAsync lanza', enNavegador(() => abrirSesionSimulada().mockRejectedValueOnce(new Error(MENSAJE_TECNICO)))],
   ['el canje responde 400', enCanje(() => errorServidor(400, MENSAJE_TECNICO, 'CODIGO_INVALIDO'), ApiError)],
   ['el canje responde 401', enCanje(() => errorServidor(401, MENSAJE_TECNICO), ApiError)],
-  ['el canje se queda sin red', enCanje(sinRed, ErrorDeRed)],
+  // GP-07.6: sin red se dice sin conexión (mensajeParaClienta), no el mensaje general de Google.
+  ['el canje se queda sin red', enCanje(sinRed, ErrorDeRed, MENSAJE_SIN_CONEXION)],
   ['el canje no trae token', enCanje(() => canjeExitoso({ token: '', refreshToken: SESION_GOOGLE.refreshToken }), ApiError)],
   ['/me responde 401', trasCanje(() => errorServidor(401, MENSAJE_TECNICO), ApiError)],
   ['/me responde 500', trasCanje(() => errorServidor(500, MENSAJE_TECNICO), ApiError)],
-  ['/me se queda sin red', trasCanje(sinRed, ErrorDeRed)],
+  ['/me se queda sin red', trasCanje(sinRed, ErrorDeRed, MENSAJE_SIN_CONEXION)],
   ['/me no trae usuario', trasCanje(() => respuesta({ success: true }), ErrorInicioGoogle)],
   ['/me trae un usuario sin id', trasCanje(() => respuesta({ data: { ...USUARIO, id: '' } }), ErrorInicioGoogle)],
   [

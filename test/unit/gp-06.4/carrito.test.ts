@@ -3,14 +3,13 @@
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 import { AppState, type AppStateStatus } from 'react-native';
 
-import { MENSAJE_SIN_CONEXION } from '@/features/auth/models/AuthModel';
+import { MENSAJE_SESION_TERMINADA, MENSAJE_SIN_CONEXION } from '@/shared/api/mensajesError';
 import * as carritoModel from '@/features/tienda/models/carritoModel';
 import {
   actualizarCantidad,
   agregarAlCarrito,
   esSinExistencias,
   itemConProblema,
-  MENSAJE_SESION_TERMINADA,
   mensajeComunTienda,
   mensajeErrorCarrito,
   obtenerCarrito,

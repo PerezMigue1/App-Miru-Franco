@@ -4,20 +4,22 @@ import { openBrowserAsync } from 'expo-web-browser';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking } from 'react-native';
 
+import { mensajeParaClienta } from '@/shared/api/mensajesError';
+import { obtenerTexto, type ClaveTextoSitio } from '@/shared/api/textosSitio';
 import { generacionActual } from '@/shared/api/tokenStorage';
 import { useTextos } from '@/shared/api/useTextos';
 import { useApariencia } from '@/shared/ui/apariencia';
 import type { PreferenciaApariencia } from '@/shared/ui/preferencias';
 import { useCandado } from '@/shared/ui/useCandado';
 
-import { MENSAJE_SIN_CONEXION, esErrorDeRed, estadoHttp, urlAvisoPrivacidad } from '../models/AuthModel';
+import { estadoHttp, urlAvisoPrivacidad } from '../models/AuthModel';
 import { actualizarPerfil, obtenerPerfilCompleto, pedirFirmaFoto, subirFoto } from '../models/authService';
 import { borrarFotoTemporal, prepararFoto } from '../models/fotoPerfil';
 import {
   MENSAJE_ESPERA_UN_MOMENTO,
   MENSAJE_FOTO_FALLIDA,
   MENSAJE_FOTO_NO_GUARDADA,
-  MENSAJE_FOTO_PESADA,
+  mensajeFotoPesada,
   MENSAJE_QUITAR_FALLIDO,
   MENSAJE_SUBIDA_NO_DISPONIBLE,
   PESO_MAXIMO_FOTO,
@@ -29,9 +31,9 @@ import {
 import { useAuth } from './useAuth';
 import { fijarFotoClienta } from './useFotoClienta';
 
-const CIERRE_FALLIDO = 'No se pudo cerrar la sesión. Intenta de nuevo';
-const AVISOS_GUARDADO: Record<string, string> = {
-  perfil: 'Tus cambios se guardaron.',
+/** Aviso al volver de cada pantalla que guarda (?guardado=...), por su clave del catálogo. */
+const AVISOS_GUARDADO: Record<string, ClaveTextoSitio> = {
+  perfil: 'perfil.guardado',
 };
 
 export type EstadoPerfil = 'sinSesion' | 'cargando' | 'listo' | 'error';
@@ -47,6 +49,8 @@ export interface PerfilVisible {
 
 export interface PerfilViewModel {
   estado: EstadoPerfil;
+  /** Con estado 'error': por qué no se cargó el perfil (sin red, servidor...); null si no hay error. */
+  mensajeError: string | null;
   perfil: PerfilVisible | null;
   reintentar: () => void;
   /** Aviso de éxito al volver de Editar perfil. */
@@ -91,9 +95,6 @@ type EtapaFoto = 'preparar' | 'firma' | 'subida' | 'guardado';
 
 /** Mensaje en español según en qué paso falló la foto. */
 function mensajeDeFoto(error: unknown, etapa: EtapaFoto): string {
-  if (esErrorDeRed(error)) {
-    return MENSAJE_SIN_CONEXION;
-  }
   const estado = estadoHttp(error);
   if (estado === 503) {
     return MENSAJE_SUBIDA_NO_DISPONIBLE;
@@ -104,7 +105,7 @@ function mensajeDeFoto(error: unknown, etapa: EtapaFoto): string {
   if (etapa === 'guardado' && estado === 400) {
     return MENSAJE_FOTO_NO_GUARDADA;
   }
-  return MENSAJE_FOTO_FALLIDA;
+  return mensajeParaClienta(error, { respaldo: MENSAJE_FOTO_FALLIDA });
 }
 
 /**
@@ -123,6 +124,7 @@ export function usePerfilViewModel(): PerfilViewModel {
 
   const [estado, setEstado] = useState<EstadoPerfil>(conSesion ? 'cargando' : 'sinSesion');
   const [perfil, setPerfil] = useState<PerfilVisible | null>(null);
+  const [errorCarga, setErrorCarga] = useState<unknown>(null);
   const [errorCierre, setErrorCierre] = useState<string | null>(null);
   const [opcionesFoto, setOpcionesFoto] = useState(false);
   const [fotoOcupada, setFotoOcupada] = useState(false);
@@ -147,6 +149,7 @@ export function usePerfilViewModel(): PerfilViewModel {
           return;
         }
         const completo = normalizarPerfil(respuesta);
+        setErrorCarga(null);
         if (!completo) {
           setEstado('error');
           return;
@@ -157,8 +160,9 @@ export function usePerfilViewModel(): PerfilViewModel {
         setPerfil({ nombre: completo.nombre, email: completo.email, foto, tienePassword: completo.tienePassword });
         setEstado('listo');
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (id === solicitud.current) {
+          setErrorCarga(error);
           setEstado((actual) => (actual === 'listo' ? actual : 'error'));
         }
       });
@@ -198,7 +202,8 @@ export function usePerfilViewModel(): PerfilViewModel {
     if (!guardado) {
       return;
     }
-    setAvisoGuardado(AVISOS_GUARDADO[guardado] ?? null);
+    const aviso = Object.prototype.hasOwnProperty.call(AVISOS_GUARDADO, guardado) ? AVISOS_GUARDADO[guardado] : null;
+    setAvisoGuardado(aviso ? obtenerTexto(aviso) : null);
     navegacion.setParams({ guardado: undefined });
   }, [guardado, navegacion]);
 
@@ -239,7 +244,7 @@ export function usePerfilViewModel(): PerfilViewModel {
       const foto = await prepararFoto(elegida.uri, elegida.width, elegida.height);
       temporales.push(foto.uri);
       if (foto.tamano > PESO_MAXIMO_FOTO) {
-        setErrorFoto(MENSAJE_FOTO_PESADA);
+        setErrorFoto(mensajeFotoPesada());
         return;
       }
       // La firma vale una hora: se pide justo antes de subir.
@@ -299,7 +304,7 @@ export function usePerfilViewModel(): PerfilViewModel {
       setPerfil((actual) => (actual ? { ...actual, foto: null } : actual));
     } catch (error) {
       if (generacion === generacionActual()) {
-        setErrorFoto(esErrorDeRed(error) ? MENSAJE_SIN_CONEXION : MENSAJE_QUITAR_FALLIDO);
+        setErrorFoto(mensajeParaClienta(error, { respaldo: MENSAJE_QUITAR_FALLIDO }));
       }
     } finally {
       setFotoOcupada(false);
@@ -311,7 +316,7 @@ export function usePerfilViewModel(): PerfilViewModel {
     // Si no se pudo borrar la sesión, sigue abierta y se avisa.
     const cerrada = await salir();
     if (!cerrada) {
-      setErrorCierre(CIERRE_FALLIDO);
+      setErrorCierre(obtenerTexto('perfil.cierreFallido'));
       return;
     }
     navigate('/inicio');
@@ -328,6 +333,7 @@ export function usePerfilViewModel(): PerfilViewModel {
 
   return {
     estado,
+    mensajeError: estado === 'error' ? mensajeParaClienta(errorCarga) : null,
     perfil,
     reintentar: cargar,
     avisoGuardado,

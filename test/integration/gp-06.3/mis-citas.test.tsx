@@ -62,6 +62,7 @@ import {
 import { enSecuencia, errorDelServidor } from '../../helpers/pantallasServicios';
 import { ESPECIALISTA_UNO } from '../../helpers/serviciosFicticios';
 import { respuesta, type Manejador } from '../../helpers/servidorSimulado';
+import { TEXTO_SIN_CONEXION } from '../../helpers/textosError';
 
 jest.mock('expo-web-browser', () => require('../../helpers/google').navegadorSimulado());
 
@@ -175,7 +176,7 @@ describe('Mis citas con las pantallas reales (GP-06.3)', () => {
 
   it.each<[string, Manejador, string, string]>([
     ['un 500', errorDelServidor, 'Algo salió mal al traer tus citas. Intenta de nuevo en un momento.', 'Error interno ficticio'],
-    ['la red caída', sinRedEnRuta, 'Sin conexión. Revisa tu internet e intenta de nuevo', 'Network request failed'],
+    ['la red caída', sinRedEnRuta, TEXTO_SIN_CONEXION, 'Network request failed'],
   ])(
     'con %s dice que no pudo cargar y Reintentar trae la lista',
     async (_caso, falla, mensaje, tecnico) => {

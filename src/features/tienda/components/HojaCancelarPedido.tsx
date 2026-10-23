@@ -6,6 +6,8 @@ import { Hoja } from '@/shared/ui/Hoja';
 import { espacio, fuente, icono, tipo } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
+import { useTextosTienda } from '../viewmodels/textosTienda';
+
 interface HojaCancelarPedidoProps {
   visible: boolean;
   onCerrar: () => void;
@@ -33,13 +35,9 @@ export function HojaCancelarPedido({
   onCancelar,
 }: HojaCancelarPedidoProps) {
   const { colores } = useTheme();
+  const { cancelarPedido: textos } = useTextosTienda();
   return (
-    <Hoja
-      visible={visible}
-      onCerrar={onCerrar}
-      titulo={`¿Cancelar el pedido #${numero}?`}
-      texto={texto}
-    >
+    <Hoja visible={visible} onCerrar={onCerrar} titulo={textos.titulo(numero)} texto={texto}>
       {/* Región en vivo siempre montada: TalkBack anuncia el error cuando aparece. */}
       <View collapsable={false} accessibilityLiveRegion="polite">
         {error ? (
@@ -54,14 +52,14 @@ export function HojaCancelarPedido({
 
       <View style={styles.acciones}>
         <Button
-          titulo={cancelando ? 'Cancelando tu pedido' : 'Sí, cancelar pedido'}
+          titulo={cancelando ? textos.cancelando : textos.confirmar}
           variante="peligro"
           onPress={onCancelar}
           cargando={cancelando}
           deshabilitado={!puedeConfirmar}
         />
         <Button
-          titulo="No, conservarlo"
+          titulo={textos.conservar}
           variante="secundario"
           onPress={onCerrar}
           deshabilitado={cancelando}

@@ -132,7 +132,7 @@ export default function ReservarCitaView() {
         <ScrollView contentContainerStyle={[styles.estado, relleno]}>
           <EmptyState
             titulo="No pudimos preparar tu reserva"
-            mensaje="Revisa tu conexión e intenta de nuevo."
+            mensaje={vm.mensajeError ?? ''}
             accion={{ titulo: 'Reintentar', onPress: vm.recargar }}
           />
         </ScrollView>
@@ -225,13 +225,13 @@ function PasoDiaHora({ vm }: { vm: ReservarCitaViewModel }) {
 
       {/* Región en vivo siempre montada: el aviso se anuncia una vez al aparecer. */}
       <View collapsable={false} accessibilityLiveRegion="polite">
-        {vm.horarioOcupado ? (
+        {vm.horarioOcupado || vm.avisoRegresoOcupado ? (
           <View accessible style={styles.aviso}>
             <View importantForAccessibility="no-hide-descendants">
               <Info color={colores.aviso} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
             </View>
             <Text style={[styles.textoAviso, { color: colores.aviso }]}>
-              Ese horario se acaba de ocupar. Elige otro.
+              {vm.avisoRegresoOcupado ?? 'Ese horario se acaba de ocupar. Elige otro.'}
             </Text>
           </View>
         ) : null}
@@ -373,19 +373,24 @@ function PasoConfirmar({ vm }: { vm: ReservarCitaViewModel }) {
         ) : null}
       </View>
 
+      {/* Sin saber si la cita quedó registrada no se confirma otra vez: primero se revisa Mis citas. */}
+      {vm.revisarMisCitas ? <Button titulo={vm.textoVerMisCitas} onPress={vm.verMisCitas} /> : null}
+
       {/* Un solo botón principal: su texto dice cómo se paga (en línea, en el salón o sin anticipo). */}
-      <Button
-        titulo={vm.textoBoton}
-        onPress={vm.confirmar}
-        cargando={vm.enviando}
-        accessibilityHint={
-          vm.anticipo && vm.opcionPago === 'linea' ? 'Reserva tu cita y abre Mercado Pago en el navegador' : undefined
-        }
-        icono={
-          <CalendarCheck color={colores.textoSobreAccion} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
-        }
-        posicionIcono="inicio"
-      />
+      {vm.revisarMisCitas ? null : (
+        <Button
+          titulo={vm.textoBoton}
+          onPress={vm.confirmar}
+          cargando={vm.enviando}
+          accessibilityHint={
+            vm.anticipo && vm.opcionPago === 'linea' ? 'Reserva tu cita y abre Mercado Pago en el navegador' : undefined
+          }
+          icono={
+            <CalendarCheck color={colores.textoSobreAccion} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
+          }
+          posicionIcono="inicio"
+        />
+      )}
     </>
   );
 }

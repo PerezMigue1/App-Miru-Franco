@@ -776,6 +776,18 @@ export function rutaCita(id: string | number = ID_CITA): string {
   return `GET /api/citas/${encodeURIComponent(String(id))}?propios=true`;
 }
 
+/**
+ * "GET /api/citas?propios=true..." acotado a una especialista y un inicio exacto: la consulta con que
+ * crearCitaVerificada busca la cita cuya respuesta se perdió.
+ */
+export function rutaBuscarCita(especialistaId: string | number, inicio: string): string {
+  const valor = encodeURIComponent;
+  return (
+    `GET /api/citas?propios=true&orden=fechaHoraInicio&limit=100&especialistaId=${valor(String(especialistaId))}` +
+    `&desde=${valor(inicio)}&hasta=${valor(inicio)}`
+  );
+}
+
 /** "POST /api/pagos-en-linea/citas/:id/preferencia?origen=app". */
 export function rutaPreferencia(id: string | number = ID_CITA): string {
   return `POST /api/pagos-en-linea/citas/${encodeURIComponent(String(id))}/preferencia?origen=app`;
@@ -829,7 +841,7 @@ export function rutasReserva(
     const ruta = rutaDisponibilidad(disponibilidad.especialistaId, disponibilidad.fecha, disponibilidad.servicioId);
     rutas[ruta] = () => respuesta(disponibilidad);
   }
-  return rutas;
+  return { ...rutasSinCitaCreada(disponibilidades), ...rutas };
 }
 
 /**
@@ -855,11 +867,26 @@ export function conPromesa(salida: () => Promise<Response>): Manejador {
 /** Manejador sin red: fetch rechaza solo en esa ruta. */
 export const sinRedEnRuta: Manejador = conPromesa(() => Promise.reject(new TypeError('Network request failed')));
 
-/** Cada disponibilidad en su ruta de GET /api/citas/disponibilidad. */
-export function rutasDisponibilidad(lista: DisponibilidadCruda[]): Record<string, Manejador> {
+/**
+ * GP-07.6: por cada horario de las disponibilidades, la búsqueda de crearCitaVerificada sin
+ * resultados. Así, si la respuesta de crear la cita se pierde (sin red o un 5xx), la cita no se creó
+ * con certeza y se puede reintentar; una prueba que quiera otra respuesta pone su ruta encima.
+ */
+export function rutasSinCitaCreada(lista: DisponibilidadCruda[]): Record<string, Manejador> {
+  const ninguna: Manejador = () => respuesta(cuerpoMisCitas([]));
   return Object.fromEntries(
-    lista.map((d) => [rutaDisponibilidad(d.especialistaId, d.fecha, d.servicioId), () => respuesta(d)]),
+    lista.flatMap((d) => d.slots.map((slot) => [rutaBuscarCita(d.especialistaId, slot.inicio), ninguna])),
   );
+}
+
+/** Cada disponibilidad en su ruta de GET /api/citas/disponibilidad, con rutasSinCitaCreada. */
+export function rutasDisponibilidad(lista: DisponibilidadCruda[]): Record<string, Manejador> {
+  return {
+    ...rutasSinCitaCreada(lista),
+    ...Object.fromEntries(
+      lista.map((d) => [rutaDisponibilidad(d.especialistaId, d.fecha, d.servicioId), () => respuesta(d)]),
+    ),
+  };
 }
 
 /**

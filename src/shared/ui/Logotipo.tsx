@@ -1,6 +1,8 @@
 import { Image } from 'expo-image';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { useNombreSalon } from '@/shared/api/useConfiguracionPublica';
+
 import { cabeceraCompacta, cabeceraFoto, fuente, tipo } from './tokens';
 import { useTheme } from './useTheme';
 
@@ -8,16 +10,18 @@ import { useTheme } from './useTheme';
  * Logotipo de la cabecera: la imagen real del logotipo de la web (public/logo-miru.jpg, copiada a
  * assets/) y, a su lado, "Mirú" en Playfair 700 con "Franco" en Great Vibes y "BEAUTY SALÓN" debajo,
  * en oro sobre carbón: en la imagen pequeña las letras no se leen. Solo va sobre el cromo carbón.
- * TalkBack lo lee como un solo elemento: "Mirú Franco Beauty Salón".
+ * TalkBack lo lee como un solo elemento con el nombre del salón de la configuración ("Mirú Franco
+ * Salón Beauty" en el respaldo). El dibujo dice "Beauty Salón" en mayúsculas, como la web.
  */
 export function Logotipo() {
   const { colores } = useTheme();
+  const nombre = useNombreSalon();
   const oro = { color: colores.oroTextoPequeno };
   return (
     <View
       accessible
       accessibilityRole="text"
-      accessibilityLabel="Mirú Franco Beauty Salón"
+      accessibilityLabel={nombre}
       style={styles.logotipo}
     >
       <Image source={LOGO} contentFit="contain" accessible={false} style={styles.imagen} />

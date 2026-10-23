@@ -1,6 +1,6 @@
 import { ApiError, apiDelete, apiGet, apiPatch, apiPut } from '@/shared/api/apiClient';
 import { esObjeto, listaDe, texto } from '@/features/inicio/models/inicioService';
-import { mensajeComunTienda } from '@/features/tienda/models/carritoModel';
+import { mensajeSinContexto } from '@/shared/api/mensajesError';
 
 /**
  * Aviso interno de la clienta ya normalizado. El backend lo llama Notificacion: GET
@@ -191,7 +191,7 @@ export function esAvisoInexistente(error: unknown): boolean {
  * existe; lo demás, el mensaje de la acción.
  */
 export function mensajeErrorAvisos(error: unknown, accion: AccionAvisos): string {
-  const comun = mensajeComunTienda(error);
+  const comun = mensajeSinContexto(error);
   if (comun) {
     return comun;
   }

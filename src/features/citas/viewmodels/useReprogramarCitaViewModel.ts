@@ -2,10 +2,10 @@ import { useRouter, type Href } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Linking } from 'react-native';
 
-import { esErrorDeRed, MENSAJE_SIN_CONEXION } from '@/features/auth/models/AuthModel';
 import { ApiError } from '@/shared/api/apiClient';
 import { obtenerConfiguracion, suscribir } from '@/shared/api/configuracionPublica';
 import { rutaVisorDocumento } from '@/shared/api/documentosLegales';
+import { mensajeParaClienta } from '@/shared/api/mensajesError';
 import { obtenerTexto } from '@/shared/api/textosSitio';
 import { useCandado } from '@/shared/ui/useCandado';
 
@@ -33,9 +33,9 @@ import {
 import {
   avisoAnticipoAlReprogramar,
   avisoFueraDePlazo,
+  avisoSinAgenda,
   contactoSalon,
   dentroDelAviso,
-  esEspecialistaInactiva,
   type ContactoSalon,
 } from '../models/gestionCitaModel';
 import { useCalendarioCitas, type BloqueosCalendario } from './useCalendarioCitas';
@@ -48,7 +48,10 @@ export type { ContactoSalon } from '../models/gestionCitaModel';
  * 'fueraDeAviso': faltan menos horas que las de aviso de la regla de la cita; se reagenda con el salón.
  */
 export type EstadoReprogramar = 'cargando' | 'listo' | 'error' | 'noEncontrado' | 'sinCambios' | 'fueraDeAviso';
-/** 'sinAgenda': la especialista ya no atiende (404 de la disponibilidad); se reagenda con el salón. */
+/**
+ * 'sinAgenda': la especialista ya no atiende o el servicio ya no se ofrece (404 de la disponibilidad);
+ * se reagenda con el salón.
+ */
 export type EstadoHorariosReprogramar = 'inactivo' | 'cargando' | 'listo' | 'error' | 'sinAgenda';
 
 /** "De" y "A" del cambio, con el mismo formato y la misma zona horaria. */
@@ -57,9 +60,10 @@ export interface ResumenCambio {
   a: string;
 }
 
-const ERROR_HORARIOS = 'No pudimos cargar los horarios de este día.';
 
 export interface ReprogramarCitaViewModel {
+  /** Con estado 'error': por qué no se cargó la cita (sin red, servidor...); null si no hay error. */
+  mensajeError: string | null;
   estado: EstadoReprogramar;
   cita: Cita | null;
   /** Vuelve a cargar la cita con skeleton (botón Reintentar). */
@@ -144,6 +148,7 @@ export function useReprogramarCitaViewModel(citaId: string | undefined): Reprogr
   const configuracion = useSyncExternalStore(suscribir, obtenerConfiguracion, obtenerConfiguracion);
 
   const [estado, setEstado] = useState<EstadoReprogramar>('cargando');
+  const [errorCarga, setErrorCarga] = useState<unknown>(null);
   const [cita, setCita] = useState<Cita | null>(null);
 
   const [mesVisible, setMesVisible] = useState<MesCalendario>(() => mesDe());
@@ -206,13 +211,15 @@ export function useReprogramarCitaViewModel(citaId: string | undefined): Reprogr
           if (actual !== solicitudHorarios.current) {
             return;
           }
-          // La especialista ya no atiende: no sirve reintentar, se reagenda con el salón.
-          if (esEspecialistaInactiva(error)) {
-            setErrorHorarios(obtenerTexto('citas.reprogramar.especialistaInactiva'));
+          // La especialista ya no atiende o el servicio ya no se ofrece: no sirve reintentar, se
+          // cancela o se habla con el salón.
+          const sinAgenda = avisoSinAgenda(error);
+          if (sinAgenda) {
+            setErrorHorarios(sinAgenda);
             setEstadoHorarios('sinAgenda');
             return;
           }
-          setErrorHorarios(esErrorDeRed(error) ? MENSAJE_SIN_CONEXION : ERROR_HORARIOS);
+          setErrorHorarios(mensajeParaClienta(error, { respaldo: obtenerTexto('citas.errores.horarios') }));
           setEstadoHorarios('error');
         });
     },
@@ -268,6 +275,7 @@ export function useReprogramarCitaViewModel(citaId: string | undefined): Reprogr
           return;
         }
         setCita(null);
+        setErrorCarga(error);
         setEstado(error instanceof ApiError && error.status === 404 ? 'noEncontrado' : 'error');
       });
   }, [idLimpio, cargarHorarios, primerDiaLibre, sinDia]);
@@ -394,6 +402,7 @@ export function useReprogramarCitaViewModel(citaId: string | undefined): Reprogr
   }, []);
 
   return {
+    mensajeError: estado === 'error' ? mensajeParaClienta(errorCarga) : null,
     estado,
     cita,
     recargar,

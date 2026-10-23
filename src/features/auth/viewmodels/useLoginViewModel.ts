@@ -1,16 +1,15 @@
 import { usePathname, useRouter } from 'expo-router';
 import { useState } from 'react';
 
+import { mensajeParaClienta } from '@/shared/api/mensajesError';
+import { obtenerTexto } from '@/shared/api/textosSitio';
 import { useCandado } from '@/shared/ui/useCandado';
 
 import {
   ErrorRolNoPermitido,
-  MENSAJE_DEMASIADOS_INTENTOS,
-  MENSAJE_SIN_CONEXION,
+  MENSAJE_ROL_NO_PERMITIDO,
   esCuentaSinActivar,
-  esErrorDeRed,
   estadoHttp,
-  mensajeDelServidor,
   normalizarCorreo,
   problemaDeCorreo,
 } from '../models/AuthModel';
@@ -41,23 +40,16 @@ const SIN_ERRORES: ErroresLogin = { correo: null, clave: null };
 
 function mensajeDeLogin(error: unknown): string {
   if (error instanceof ErrorRolNoPermitido) {
-    return error.message;
-  }
-  if (esErrorDeRed(error)) {
-    return MENSAJE_SIN_CONEXION;
+    return MENSAJE_ROL_NO_PERMITIDO;
   }
   const estado = estadoHttp(error);
   if (estado === 401) {
-    return 'Correo o contraseña incorrectos';
+    return obtenerTexto('auth.login.credenciales');
   }
-  if (estado === 403) {
-    // Bloqueo temporal tras intentos fallidos: el mensaje del servidor trae el detalle.
-    return mensajeDelServidor(error, 'Tu cuenta está bloqueada temporalmente.');
-  }
-  if (estado === 429) {
-    return MENSAJE_DEMASIADOS_INTENTOS;
-  }
-  return 'No pudimos iniciar sesión. Intenta de nuevo.';
+  // 403 sin code del login: bloqueo temporal tras intentos fallidos (el backend no manda los minutos aparte).
+  return mensajeParaClienta(error, {
+    respaldo: obtenerTexto(estado === 403 ? 'auth.login.bloqueo' : 'auth.login.noSePudo'),
+  });
 }
 
 /**

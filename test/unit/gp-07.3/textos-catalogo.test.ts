@@ -67,6 +67,11 @@ const VARIABLES_CONTEXTO = [
   // GP-07.5: {plazoPago}, {diasRevocacion}, {monto} y {pedido} de pedidos.* del catálogo del backend
   // (VARIABLES_CONTEXTO), y {producto} de los avisos propios del carrito (tienda.carrito.*).
   'plazoPago', 'diasRevocacion', 'monto', 'pedido', 'producto',
+  // GP-07.6: {referencia} de errores.referencia (la referencia de un 5xx del backend).
+  'referencia',
+  // GP-07.6 Tarea 5: cifras de constantes de la app ({digitos}, {minutos}, {segundos}, {megas}) y
+  // datos de pantalla ({numero}, {paso}, {piezas}, {formaPago}) de los textos que salieron del código.
+  'digitos', 'minutos', 'segundos', 'megas', 'numero', 'paso', 'piezas', 'formaPago',
 ];
 
 describe('RESPALDO_TEXTOS', () => {

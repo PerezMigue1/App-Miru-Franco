@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { mensajeParaClienta } from '@/shared/api/mensajesError';
+
 import { obtenerServicios, type Servicio } from '../models/servicioModel';
 
 export type EstadoCatalogo = 'cargando' | 'listo' | 'error';
 
 export interface CatalogoServiciosViewModel {
+  /** Con estado 'error': por qué no se cargaron los servicios (sin red, servidor...); null si no hay error. */
+  mensajeError: string | null;
   estado: EstadoCatalogo;
   recargar: () => void;
   busqueda: string;
@@ -141,6 +145,7 @@ function normalizar(texto: string): string {
  */
 export function useCatalogoServiciosViewModel(): CatalogoServiciosViewModel {
   const [estado, setEstado] = useState<EstadoCatalogo>('cargando');
+  const [errorCarga, setErrorCarga] = useState<unknown>(null);
   const [servicios, setServicios] = useState<Servicio[]>([]);
   const [busqueda, setBusqueda] = useState('');
   const [categoria, setCategoria] = useState<string | null>(null);
@@ -162,8 +167,9 @@ export function useCatalogoServiciosViewModel(): CatalogoServiciosViewModel {
         setServicios(lista.filter((s) => s.activo !== false));
         setEstado('listo');
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (id === solicitud.current) {
+          setErrorCarga(error);
           setEstado('error');
         }
       });
@@ -227,6 +233,7 @@ export function useCatalogoServiciosViewModel(): CatalogoServiciosViewModel {
   }, []);
 
   return {
+    mensajeError: estado === 'error' ? mensajeParaClienta(errorCarga) : null,
     estado,
     recargar,
     busqueda,

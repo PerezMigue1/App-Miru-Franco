@@ -59,7 +59,17 @@ import { usePantallaInicio } from '../viewmodels/usePantallaInicio';
 export default function InicioView() {
   const vm = usePantallaInicio();
   const { catalogos, contenido } = vm;
-  const { estado, fluidos, estadoProductos, productosDestacados, serviciosDestacados, recargar } = catalogos;
+  const {
+    estado,
+    mensajeError,
+    fluidos,
+    estadoProductos,
+    mensajeErrorProductos,
+    recargarProductos,
+    productosDestacados,
+    serviciosDestacados,
+    recargar,
+  } = catalogos;
   const { colores } = useTheme();
   const { top } = useSafeAreaInsets();
   const reducido = useMovimientoReducido();
@@ -151,6 +161,17 @@ export default function InicioView() {
           onAbrir={abrirProducto}
           onVerTodos={verTienda}
         />
+        {/* Falló solo el catálogo: su propio error con Reintentar, que pide solo los productos. Si
+            también fallaron los servicios basta el error general (su Reintentar pide los dos). */}
+        {estadoProductos === 'error' && estado !== 'error' ? (
+          <View style={styles.errorCatalogos}>
+            <EmptyState
+              titulo={vm.titulosError.productos}
+              mensaje={mensajeErrorProductos ?? ''}
+              accion={{ titulo: 'Reintentar', onPress: recargarProductos }}
+            />
+          </View>
+        ) : null}
         <CarruselServicios
           cargando={estado === 'cargando'}
           descripcion={contenido.serviciosDescripcion}
@@ -162,8 +183,8 @@ export default function InicioView() {
         {estado === 'error' ? (
           <View style={styles.errorCatalogos}>
             <EmptyState
-              titulo="No pudimos cargar el inicio"
-              mensaje="Revisa tu conexión a internet e inténtalo de nuevo."
+              titulo={vm.titulosError.servicios}
+              mensaje={mensajeError ?? ''}
               accion={{ titulo: 'Reintentar', onPress: recargar }}
             />
           </View>
@@ -286,7 +307,7 @@ function ContenidoGaleria({
     return (
       <EmptyState
         titulo={error.titulo}
-        mensaje={error.texto}
+        mensaje={galeria.mensajeError ?? error.texto}
         accion={{ titulo: 'Reintentar', onPress: galeria.reintentar }}
       />
     );

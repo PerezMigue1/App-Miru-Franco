@@ -1,3 +1,4 @@
+import { alCerrarSesion } from '@/shared/api/eventosSesion';
 import { generacionActual } from '@/shared/api/tokenStorage';
 import { duracion } from '@/shared/ui/tokens';
 
@@ -18,7 +19,7 @@ import { obtenerEstadoPagoPedido, type EstadoPagoPedido, type ResultadoEstadoPag
  *   backend aplica el pago aprobado si el webhook no llegó.
  * - Nunca rechaza: los errores quedan en el resultado.
  * - Si cambia la sesión (generacionActual de tokenStorage), lo guardado se borra y las respuestas
- *   en camino se descartan.
+ *   en camino se descartan. Al cerrar sesión (alCerrarSesion de shared) se borra en ese momento.
  */
 
 /** Por qué se verifica. Decide si hay reintentos y si un pago que aún no aparece se vuelve a consultar. */
@@ -513,6 +514,12 @@ export function limpiarVerificacion(): void {
   }
   soltarVigilancia();
 }
+
+// Todo cierre de sesión (salir, sesión vencida o cambio de contraseña) borra en ese momento lo que se
+// sabía del pago: era de la clienta que salió y no espera a que alguien vuelva a consultarlo.
+alCerrarSesion(() => {
+  limpiarVerificacion();
+});
 
 /** Conecta (o quita, con null) la vigilancia del primer plano. La usa el viewmodel con AppState. */
 export function configurarVigilancia(fabrica: FabricaVigilancia | null): void {

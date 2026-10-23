@@ -12,9 +12,6 @@ import {
   esErrorDeRed,
   estadoHttp,
   esTelefonoValido,
-  MENSAJE_ERROR_SERVIDOR,
-  MENSAJE_SIN_CONEXION,
-  mensajeDelServidor,
   normalizarCorreo,
   normalizarTelefono,
   problemaDeAlergias,
@@ -112,15 +109,14 @@ describe('correo', () => {
 });
 
 describe('teléfono', () => {
-  it('normaliza dejando solo dígitos, hasta 10', () => {
+  it('normaliza dejando solo dígitos, sin recortar (GP-07.6: recortar daba otro número)', () => {
     expect(normalizarTelefono('(771) 123-4567')).toBe('7711234567');
-    expect(normalizarTelefono('77112345678999')).toBe('7711234567');
+    expect(normalizarTelefono('77112345678999')).toBe('77112345678999');
     expect(normalizarTelefono('')).toBe('');
   });
 
-  it('con +52 no quita la lada: corta los primeros 10 dígitos', () => {
-    // La lada se quita en otro lado (telefonoSinLada); aquí solo se toman los primeros 10 dígitos.
-    expect(normalizarTelefono('+52 771 123 4567')).toBe('5277112345');
+  it('con +52 quita la lada de México (GP-07.6)', () => {
+    expect(normalizarTelefono('+52 771 123 4567')).toBe('7711234567');
   });
 
   it.each(['7711234567', '771 123 4567', '771-123-4567'])('acepta %p', (telefono) => {
@@ -234,9 +230,9 @@ describe('problemaDeClave: reglas básicas en orden', () => {
     expect(problemaDeClave(clave)).toBe(mensaje);
   });
 
-  it('las letras con acento cuentan como mayúscula y minúscula', () => {
+  it('las letras con acento no cuentan como mayúscula ni minúscula (como /[A-Z]/ del backend, GP-07.6)', () => {
     expect(problemaDeClave('ÉSTA#CLAVE9')).toBe('Debe incluir al menos una letra minúscula');
-    expect(problemaDeClave('Ésta#clave9')).toBeNull();
+    expect(problemaDeClave('Ésta#clave9')).toBe('Debe incluir al menos una letra mayúscula');
   });
 
   it('solo números o solo letras se reportan antes por la regla de mayúscula o de número', () => {
@@ -312,11 +308,9 @@ describe('problemaDeClave: datos personales', () => {
 describe('problemaDeClave: patrones', () => {
   it.each([
     ['patrón de teclado', 'Qwerty#Clv9', 'La contraseña no puede seguir patrones simples de teclado'],
-    ['patrón de teclado numérico', 'Clv#654321x', 'La contraseña no puede seguir patrones simples de teclado'],
     ['letras consecutivas', 'Abc#Clave9z', 'La contraseña no puede contener letras consecutivas'],
     ['letras consecutivas con mayúsculas mezcladas', 'Clave#XyZ9', 'La contraseña no puede contener letras consecutivas'],
     ['números consecutivos que suben', 'Clave#123x', 'La contraseña no puede contener números consecutivos'],
-    ['números consecutivos que bajan', 'Clave#321x', 'La contraseña no puede contener números consecutivos'],
     ['carácter repetido 3 veces', 'Claaave#9x', 'La contraseña no puede tener el mismo carácter repetido 3 o más veces'],
     ['dígito repetido 3 veces', 'Clave#999x', 'La contraseña no puede tener el mismo carácter repetido 3 o más veces'],
   ])('rechaza %s', (_caso, clave, mensaje) => {
@@ -378,50 +372,19 @@ describe('conversión de errores', () => {
     expect(estadoHttp(undefined)).toBeNull();
   });
 
-  it.each([
-    'Tu cuenta no está activada',
-    'TU CUENTA NO ESTÁ ACTIVADA',
-    'Debes activar tu cuenta con el código del correo',
-  ])('esCuentaSinActivar: 403 con %p', (mensaje) => {
-    expect(esCuentaSinActivar(new ApiError(403, mensaje))).toBe(true);
+  it('esCuentaSinActivar: 403 con el code CUENTA_NO_ACTIVADA, con cualquier texto (GP-07.6)', () => {
+    expect(esCuentaSinActivar(new ApiError(403, 'Tu cuenta no está activada', 'CUENTA_NO_ACTIVADA'))).toBe(true);
+    expect(esCuentaSinActivar(new ApiError(403, 'Otro texto', 'CUENTA_NO_ACTIVADA'))).toBe(true);
   });
 
-  it('esCuentaSinActivar: otro status, otro mensaje u otro error no cuentan', () => {
-    expect(esCuentaSinActivar(new ApiError(401, 'Tu cuenta no está activada'))).toBe(false);
+  it('esCuentaSinActivar: otro status, otro code, sin code u otro error no cuentan', () => {
+    expect(esCuentaSinActivar(new ApiError(401, 'Tu cuenta no está activada', 'CUENTA_NO_ACTIVADA'))).toBe(false);
+    // Solo el texto ya no decide (GP-07.6): el backend siempre manda el code.
+    expect(esCuentaSinActivar(new ApiError(403, 'Tu cuenta no está activada'))).toBe(false);
     expect(esCuentaSinActivar(new ApiError(403, 'Acceso denegado'))).toBe(false);
     expect(esCuentaSinActivar(new Error('Tu cuenta no está activada'))).toBe(false);
     expect(esCuentaSinActivar(new ErrorDeRed())).toBe(false);
     expect(esCuentaSinActivar(null)).toBe(false);
-  });
-
-  it('mensajeDelServidor usa el mensaje de un 4xx', () => {
-    expect(mensajeDelServidor(new ApiError(409, 'El correo ya está registrado'), 'Genérico')).toBe(
-      'El correo ya está registrado',
-    );
-    expect(mensajeDelServidor(new ApiError(429, 'Demasiadas solicitudes'), 'Genérico')).toBe(
-      'Demasiadas solicitudes',
-    );
-  });
-
-  it('mensajeDelServidor usa el genérico si el 4xx no trae mensaje', () => {
-    expect(mensajeDelServidor(new ApiError(400, ''), 'Genérico')).toBe('Genérico');
-  });
-
-  it('mensajeDelServidor nunca muestra el texto de un 5xx', () => {
-    const interno = 'PrismaClientKnownRequestError en usuarios.service.ts:42';
-    expect(mensajeDelServidor(new ApiError(500, interno), 'Genérico')).toBe(MENSAJE_ERROR_SERVIDOR);
-    expect(mensajeDelServidor(new ApiError(503, interno), 'Genérico')).toBe(MENSAJE_ERROR_SERVIDOR);
-  });
-
-  it('mensajeDelServidor usa el genérico con errores que no son ApiError', () => {
-    expect(mensajeDelServidor(new ErrorDeRed(), 'Genérico')).toBe('Genérico');
-    expect(mensajeDelServidor(new Error('detalle técnico'), 'Genérico')).toBe('Genérico');
-    expect(mensajeDelServidor(undefined, 'Genérico')).toBe('Genérico');
-  });
-
-  it('los mensajes fijos son para la clienta, sin detalles técnicos', () => {
-    expect(MENSAJE_SIN_CONEXION).toBe('Sin conexión. Revisa tu internet e intenta de nuevo');
-    expect(MENSAJE_ERROR_SERVIDOR).toBe('Ocurrió un problema en el servidor. Intenta de nuevo.');
   });
 });
 

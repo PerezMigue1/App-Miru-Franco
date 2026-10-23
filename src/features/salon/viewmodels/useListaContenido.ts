@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { mensajeParaClienta, tipoDeError, type TipoError } from '@/shared/api/mensajesError';
+
 import {
   obtenerEquipo,
   obtenerGaleria,
@@ -16,6 +18,9 @@ export type EstadoLista = 'cargando' | 'listo' | 'vacio' | 'error';
 export interface ListaContenido<T> {
   estado: EstadoLista;
   datos: T[];
+  /** Con estado 'error': qué clase de error fue y su texto para la clienta; null si no hay error. */
+  tipoError: TipoError | null;
+  mensajeError: string | null;
   /** Vuelve a pedir la lista mostrando 'cargando' (botón Reintentar). */
   reintentar: () => void;
   /**
@@ -33,6 +38,7 @@ export interface ListaContenido<T> {
 export function useListaContenido<T>(cargar: () => Promise<T[]>): ListaContenido<T> {
   const [estado, setEstado] = useState<EstadoLista>('cargando');
   const [datos, setDatos] = useState<T[]>([]);
+  const [error, setError] = useState<unknown>(null);
   // Solo la última solicitud escribe el estado (reintentos rápidos o pantalla desmontada).
   const solicitud = useRef(0);
   const hayDatos = useRef(false);
@@ -53,11 +59,12 @@ export function useListaContenido<T>(cargar: () => Promise<T[]>): ListaContenido
           setDatos(lista);
           setEstado(lista.length > 0 ? 'listo' : 'vacio');
         },
-        () => {
+        (causa: unknown) => {
           // Si una recarga falla con datos en pantalla, se quedan; sin datos, se muestra el error.
           if (id === solicitud.current && (mostrarCarga || !hayDatos.current)) {
             hayDatos.current = false;
             setDatos([]);
+            setError(causa);
             setEstado('error');
           }
         },
@@ -79,7 +86,15 @@ export function useListaContenido<T>(cargar: () => Promise<T[]>): ListaContenido
     };
   }, [pedir]);
 
-  return { estado, datos, reintentar, recargar };
+  const conError = estado === 'error';
+  return {
+    estado,
+    datos,
+    tipoError: conError ? tipoDeError(error) : null,
+    mensajeError: conError ? mensajeParaClienta(error) : null,
+    reintentar,
+    recargar,
+  };
 }
 
 export interface ContenidoSalon {

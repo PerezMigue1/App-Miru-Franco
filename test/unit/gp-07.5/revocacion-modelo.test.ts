@@ -1,6 +1,6 @@
 /// <reference types="jest" />
 
-import { MENSAJE_SIN_CONEXION } from '@/features/auth/models/AuthModel';
+import { MENSAJE_SIN_CONEXION } from '@/shared/api/mensajesError';
 import { fechaYHora, type Pedido } from '@/features/tienda/models/pedidoModel';
 import {
   mensajeRevocar,

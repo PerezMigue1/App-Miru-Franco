@@ -6,6 +6,7 @@ import { useAuth } from '@/features/auth/viewmodels/useAuth';
 import { mensajeErrorAvisos, type Aviso } from '../models/avisoModel';
 
 import { borrar, cargarAvisos, leerEstadoAvisos, marcarLeido, marcarTodos, useAvisos } from './avisosEstado';
+import { avisosApagados } from './preferenciaAvisosEstado';
 
 // La vista y los componentes no importan de models/: reciben el tipo y la hora relativa de aquí.
 export type { Aviso } from '../models/avisoModel';
@@ -87,9 +88,10 @@ export function useNotificaciones(): NotificacionesViewModel {
         setErrorAccion(null);
         return;
       }
-      // Ya cargada (o cargando) no se vuelve a pedir: la conexión en vivo la mantiene al día.
+      // Ya cargada (o cargando) no se vuelve a pedir: la conexión en vivo la mantiene al día. Con
+      // "Avisos en la app" apagado no hay conexión: se pide cada vez que se abre.
       const actual = leerEstadoAvisos().estado;
-      if (actual === 'inicial' || actual === 'error') {
+      if (actual === 'inicial' || actual === 'error' || avisosApagados()) {
         void cargarAvisos();
       }
     }, [conSesion]),

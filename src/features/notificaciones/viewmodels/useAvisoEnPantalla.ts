@@ -6,6 +6,7 @@ import { duracion } from '@/shared/ui/tokens';
 import type { Aviso } from '../models/avisoModel';
 
 import { alLlegarAviso, marcarLeido } from './avisosEstado';
+import { avisosApagados, useAvisosApagados } from './preferenciaAvisosEstado';
 
 // El componente no importa de models/: recibe el tipo de aquí.
 export type { Aviso } from '../models/avisoModel';
@@ -54,9 +55,17 @@ export function useAvisoEnPantalla(): AvisoEnPantallaViewModel {
     }
   }, [enBandeja, quitar]);
 
+  // Con "Avisos en la app" apagado en Perfil no se muestra ninguno (y el que estaba se quita).
+  const apagados = useAvisosApagados();
+  useEffect(() => {
+    if (apagados) {
+      quitar();
+    }
+  }, [apagados, quitar]);
+
   useEffect(() => {
     const quitarOyente = alLlegarAviso((nuevo) => {
-      if (enBandejaActual.current) {
+      if (enBandejaActual.current || avisosApagados()) {
         return;
       }
       detenerTemporizador();

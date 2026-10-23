@@ -1,5 +1,5 @@
 import { ApiError, ErrorDeRed, esUrlPermitida } from '@/shared/api/apiClient';
-import { soloDigitos } from '@/shared/ui/digitos';
+import { soloDigitos, telefonoSinLada } from '@/shared/ui/digitos';
 
 /** Tipos y reglas del dominio de autenticación (contratos del backend NestJS ya desplegado). */
 
@@ -97,19 +97,18 @@ export interface RespuestaSimple {
   message?: string;
 }
 
+/** Texto para la clienta cuando la cuenta no es de clienta (lo muestran login y Google). */
+export const MENSAJE_ROL_NO_PERMITIDO = 'Esta app es para clientas. Usa el sitio web';
+
 /** El inicio de sesión fue correcto, pero la cuenta no es de clienta. */
 export class ErrorRolNoPermitido extends Error {
   constructor() {
-    super('Esta app es para clientas. Usa el sitio web');
+    super(MENSAJE_ROL_NO_PERMITIDO);
     this.name = 'ErrorRolNoPermitido';
   }
 }
 
-// ── Mensajes de error ──────────────────────────────────────────────────────────────────────
-
-export const MENSAJE_SIN_CONEXION = 'Sin conexión. Revisa tu internet e intenta de nuevo';
-export const MENSAJE_DEMASIADOS_INTENTOS = 'Demasiados intentos, espera un minuto';
-export const MENSAJE_ERROR_SERVIDOR = 'Ocurrió un problema en el servidor. Intenta de nuevo.';
+// ── Clasificación de errores (los textos para la clienta salen de shared/api/mensajesError) ──
 
 export function esErrorDeRed(error: unknown): boolean {
   return error instanceof ErrorDeRed;
@@ -119,27 +118,24 @@ export function estadoHttp(error: unknown): number | null {
   return error instanceof ApiError ? error.status : null;
 }
 
-/** 403 del login cuando la cuenta todavía no se activa con el código del correo. */
+/** Code estable del 403 del login con una cuenta sin activar (usuarios.service.ts del backend). */
+export const CODIGO_CUENTA_NO_ACTIVADA = 'CUENTA_NO_ACTIVADA';
+
+/**
+ * 403 del login cuando la cuenta todavía no se activa con el código del correo: se reconoce solo por
+ * su code (el texto del servidor puede cambiar y nunca decide nada). Otro 403 (cuenta bloqueada,
+ * sin permiso) no abre la activación.
+ */
 export function esCuentaSinActivar(error: unknown): boolean {
-  if (!(error instanceof ApiError) || error.status !== 403) {
-    return false;
-  }
-  const mensaje = error.message.toLowerCase();
-  return mensaje.includes('no está activada') || mensaje.includes('activar tu cuenta');
+  return error instanceof ApiError && error.status === 403 && error.code === CODIGO_CUENTA_NO_ACTIVADA;
 }
 
 /**
- * Mensaje del servidor si lo hay; si no, el genérico indicado. Con un error 5xx nunca se muestra
- * el texto del servidor (podría traer detalles internos).
+ * 400 del reenvío del código porque la cuenta ya se activó ("Este correo electrónico ya está
+ * activado.", sin code): se reconoce por el texto, que nunca se muestra.
  */
-export function mensajeDelServidor(error: unknown, generico: string): string {
-  if (!(error instanceof ApiError)) {
-    return generico;
-  }
-  if (error.status >= 500) {
-    return MENSAJE_ERROR_SERVIDOR;
-  }
-  return error.message || generico;
+export function esCuentaYaActivada(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 400 && error.message.toLowerCase().includes('ya está activad');
 }
 
 // ── Validaciones (sin expresiones regulares) ───────────────────────────────────────────────
@@ -152,15 +148,23 @@ const LARGO_MINIMO_TEXTO = 2;
 const LARGO_MINIMO_DATO = 3;
 const EDAD_MINIMA = 18;
 const ESPECIALES = '!@#$%^&*()_+-=[]{};\':"\\|,.<>/?';
-const PATRONES_TECLADO = ['qwerty', 'asdfgh', 'zxcvbn', '123456', '654321'];
+/** KEYBOARD_SEQUENCES de password.validator.ts del backend: se rechaza la contraseña que contenga una. */
+const PATRONES_TECLADO = [
+  'qwerty', 'qwertyuiop', 'asdfgh', 'asdfghjkl', 'zxcvbn', 'zxcvbnm',
+  '123456', '12345678', '123456789', '1234567890',
+  'abcdef', 'abcdefgh', 'qwertyui', 'asdfghjk',
+];
+/**
+ * COMMON_PASSWORDS de password.validator.ts del backend. Como allá, basta con que la contraseña
+ * contenga una, sin importar mayúsculas ("Hello#29x" también se rechaza).
+ */
 const CLAVES_COMUNES = [
-  'password', 'password123', '12345678', '123456789', '1234567890',
-  'qwerty', 'qwerty123', 'abc123', 'monkey', '1234567',
-  'letmein', 'trustno1', 'dragon', 'baseball', 'iloveyou',
-  'master', 'sunshine', 'ashley', 'bailey', 'passw0rd',
-  'shadow', '123123', '654321', 'superman', 'qazwsx',
-  'michael', 'football', 'welcome', 'jesus', 'ninja',
-  'mustang', 'password1', '123qwe', 'admin', 'root',
+  'password', 'password123', 'password1', '12345678', '123456789', '1234567890',
+  'qwerty', 'qwerty123', 'abc123', 'admin', 'admin123', 'letmein', 'welcome',
+  'monkey', 'dragon', 'master', 'sunshine', 'princess', 'football', 'baseball',
+  'iloveyou', 'trustno1', 'superman', 'batman', 'jesus', 'michael', 'jordan',
+  'shadow', 'mustang', 'harley', 'freedom', 'whatever', 'hello', 'charlie',
+  'aa123456', 'donald', 'welcome123', 'monkey123',
 ];
 const FRAGMENTOS_PELIGROSOS = [
   '<script', '</script>', '<iframe', '<img', 'onerror', 'onload', 'onclick', 'onmouseover',
@@ -171,17 +175,18 @@ function esDigito(c: string): boolean {
   return c >= '0' && c <= '9';
 }
 
+// Como el backend (/[A-Z]/ y /[a-z]/), solo cuentan las letras sin acento: "É" o "ñ" no cumplen
+// la regla de mayúscula o minúscula.
 function esMayuscula(c: string): boolean {
-  return c !== c.toLowerCase() && c === c.toUpperCase();
+  return c >= 'A' && c <= 'Z';
 }
 
 function esMinuscula(c: string): boolean {
-  return c !== c.toUpperCase() && c === c.toLowerCase();
+  return c >= 'a' && c <= 'z';
 }
 
 function esLetraAscii(c: string): boolean {
-  const minuscula = c.toLowerCase();
-  return minuscula >= 'a' && minuscula <= 'z';
+  return esMayuscula(c) || esMinuscula(c);
 }
 
 /** Un solo @, texto a ambos lados, sin espacios y un punto con texto a ambos lados en el dominio. */
@@ -218,9 +223,13 @@ export function tieneFragmentosPeligrosos(texto: string): boolean {
   return FRAGMENTOS_PELIGROSOS.some((fragmento) => minusculas.includes(fragmento));
 }
 
-/** Teléfono de México (web: 10 dígitos, el primero distinto de 0, sin +52). */
+/**
+ * Teléfono de México como lo exige el backend (/^\d{10}$/): solo dígitos y sin la lada 52 o 521
+ * (telefonoSinLada). No recorta: "+52 771 268 1432" queda "7712681432" y no "5277126814"; si sobran
+ * o faltan dígitos, esTelefonoValido lo marca y nunca se manda un número equivocado.
+ */
 export function normalizarTelefono(telefono: string): string {
-  return soloDigitos(telefono).slice(0, LARGO_TELEFONO);
+  return telefonoSinLada(telefono);
 }
 
 export function esTelefonoValido(telefono: string): boolean {
@@ -252,10 +261,10 @@ function tieneConsecutivos(texto: string): { letras: boolean; numeros: boolean; 
     if (esLetraAscii(a) && esLetraAscii(b) && esLetraAscii(c) && cb === ca + 1 && cc === cb + 1) {
       letras = true;
     }
+    // Como el backend (012, 123... 789 y 890): solo los que suben; los que bajan (321) sí se permiten.
     if (esDigito(a) && esDigito(b) && esDigito(c)) {
       const sube = cb === ca + 1 && cc === cb + 1;
-      const baja = cb === ca - 1 && cc === cb - 1;
-      if (sube || baja) {
+      if (sube || a + b + c === '890') {
         numeros = true;
       }
     }
@@ -324,7 +333,10 @@ export function problemaDeClave(clave: string, datos: DatosPersonales = {}): str
     [consecutivos.repetidos, 'La contraseña no puede tener el mismo carácter repetido 3 o más veces'],
     [clave.length > 0 && caracteres.every(esDigito), 'La contraseña no puede contener solo números'],
     [clave.length > 0 && caracteres.every(esLetraAscii), 'La contraseña no puede contener solo letras'],
-    [CLAVES_COMUNES.includes(minusculas), 'Esta contraseña es muy común, elige otra más segura'],
+    [
+      CLAVES_COMUNES.some((comun) => minusculas.includes(comun)),
+      'Esta contraseña es muy común, elige otra más segura',
+    ],
   ];
   const fallida = reglas.find(([falla]) => falla);
   return fallida ? fallida[1] : null;

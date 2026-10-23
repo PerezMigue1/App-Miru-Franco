@@ -133,7 +133,8 @@ describe('mensajeErrorAvisos', () => {
 
   it.each(ACCIONES)('%s: sin red → mensaje de sin conexión', (accion) => {
     expect(mensajeErrorAvisos(crearErrorApi({ tipo: 'red' }), accion)).toBe(
-      'Sin conexión. Revisa tu internet e intenta de nuevo',
+      // GP-07.6: el único texto de sin conexión es el de shared/api/mensajesError (con punto final).
+      'Sin conexión. Revisa tu internet e intenta de nuevo.',
     );
   });
 

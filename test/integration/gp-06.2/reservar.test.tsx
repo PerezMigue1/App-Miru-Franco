@@ -54,6 +54,7 @@ import {
 import { enSecuencia } from '../../helpers/pantallasServicios';
 import { ESPECIALISTA_DOS, ESPECIALISTA_UNO } from '../../helpers/serviciosFicticios';
 import { respuesta } from '../../helpers/servidorSimulado';
+import { TEXTO_SIN_CONEXION } from '../../helpers/textosError';
 
 jest.mock('expo-web-browser', () => require('../../helpers/google').navegadorSimulado());
 
@@ -308,7 +309,7 @@ describe('Reservar una cita con las pantallas reales (GP-06.2)', () => {
       });
 
       expect(await screen.findByRole('header', { name: 'No pudimos preparar tu reserva' })).toBeOnTheScreen();
-      expect(screen.getByText('Revisa tu conexión e intenta de nuevo.')).toBeOnTheScreen();
+      expect(screen.getByText(TEXTO_SIN_CONEXION)).toBeOnTheScreen();
       await tocar('Reintentar');
 
       expect(await screen.findByRole('header', { name: 'Sin especialistas disponibles' })).toBeOnTheScreen();

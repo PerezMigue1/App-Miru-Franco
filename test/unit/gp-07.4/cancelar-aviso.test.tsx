@@ -195,8 +195,10 @@ describe('cancelar desde el detalle (viewmodel)', () => {
     expect(result.current.puedeConfirmarCancelacion).toBe(true);
   });
 
-  it('sin anticipo pagado no consulta la política', async () => {
-    const { result, llamadas } = await abrir(conReglas(citaConAnticipo()));
+  // GP-07.6: con el anticipo sin pagar la hoja sí consulta si hay un pago en línea en proceso
+  // (test/unit/gp-07.6/cancelar-pago-en-proceso.test.tsx); sin anticipo no consulta nada.
+  it('sin anticipo no consulta la política ni el pago', async () => {
+    const { result, llamadas } = await abrir(conReglas(citaCruda()));
     await hacer(() => result.current.abrirCancelar());
     expect(result.current).toMatchObject({ avisoConPolitica: false, puedeConfirmarCancelacion: true });
     expect(llamadas.filter((l) => l.ruta.includes('/estado'))).toEqual([]);

@@ -7,6 +7,7 @@ import {
   obtenerCatalogo,
   type ProductoCatalogo,
 } from '@/features/tienda/models/productoModel';
+import { mensajeParaClienta } from '@/shared/api/mensajesError';
 
 import { seleccionarFluidos, type FluidoHero } from '../models/FluidoModel';
 
@@ -17,12 +18,18 @@ const DESTACADOS = 6;
 
 export interface InicioViewModel {
   estado: EstadoInicio;
+  /** Con estado 'error': por qué no se cargaron los servicios (sin red, servidor...); null si no hay error. */
+  mensajeError: string | null;
   fluidos: FluidoHero[];
   /**
    * Estado del catálogo (hero y carrusel de productos): va aparte para que un fallo del catálogo no
    * tumbe los servicios; sin catálogo, el hero queda sin nombre ni precio.
    */
   estadoProductos: EstadoInicio;
+  /** Con estadoProductos 'error': por qué no se cargó el catálogo (por tipo de error); si no, null. */
+  mensajeErrorProductos: string | null;
+  /** Vuelve a pedir solo el catálogo de productos pasando por 'cargando' (Reintentar del carrusel). */
+  recargarProductos: () => void;
   /** Hasta 6 productos con existencias, al azar en cada carga. */
   productosDestacados: ProductoCatalogo[];
   /** Hasta 6 servicios activos, al azar en cada carga (siguen al `estado` general). */
@@ -52,6 +59,9 @@ function elegirAlAzar<T>(lista: T[], cantidad: number): T[] {
   return copia.slice(0, cantidad);
 }
 
+/** Un fallo deja 'error' salvo que ya hubiera datos en pantalla. */
+const conservarOError = (actual: EstadoInicio): EstadoInicio => (actual === 'listo' ? actual : 'error');
+
 /**
  * Lecturas públicas de los catálogos de Inicio: el catálogo de productos (una sola vez: de ahí salen
  * el nombre y el precio de los fluidos del hero y el carrusel de productos) y los servicios
@@ -59,12 +69,48 @@ function elegirAlAzar<T>(lista: T[], cantidad: number): T[] {
  */
 export function useInicioViewModel(): InicioViewModel {
   const [estado, setEstado] = useState<EstadoInicio>('cargando');
+  const [errorCarga, setErrorCarga] = useState<unknown>(null);
   const [fluidos, setFluidos] = useState<FluidoHero[]>(() => seleccionarFluidos([]));
   const [estadoProductos, setEstadoProductos] = useState<EstadoInicio>('cargando');
+  const [errorProductos, setErrorProductos] = useState<unknown>(null);
   const [productosDestacados, setProductosDestacados] = useState<ProductoCatalogo[]>([]);
   const [serviciosDestacados, setServiciosDestacados] = useState<Servicio[]>([]);
-  // Solo la última solicitud escribe el estado (reintentos rápidos o pantalla desmontada).
+  // Solo la última solicitud escribe el estado (reintentos rápidos o pantalla desmontada). El
+  // catálogo lleva su propio contador: su Reintentar no cuenta como una carga de los servicios.
   const solicitud = useRef(0);
+  const solicitudProductos = useRef(0);
+
+  // Una sola lectura de /api/productos: el catálogo trae lo que piden el hero (nombre y precio de
+  // los fluidos) y la tarjeta de producto (presentaciones, existencias y marca).
+  const pedirCatalogo = useCallback((mostrarCarga: boolean): Promise<void> => {
+    solicitudProductos.current += 1;
+    const id = solicitudProductos.current;
+    const vigente = () => id === solicitudProductos.current;
+    if (mostrarCarga) {
+      setEstadoProductos('cargando');
+    }
+    return obtenerCatalogo().then(
+      (productos) => {
+        if (!vigente()) {
+          return;
+        }
+        setFluidos(seleccionarFluidos(productos));
+        setProductosDestacados(
+          elegirAlAzar(
+            productos.filter((producto) => !estaAgotado(producto)),
+            DESTACADOS,
+          ),
+        );
+        setEstadoProductos('listo');
+      },
+      (error: unknown) => {
+        if (vigente()) {
+          setErrorProductos(error);
+          setEstadoProductos(conservarOError);
+        }
+      },
+    );
+  }, []);
 
   // El sorteo ocurre aquí, una vez por carga (al montar, en cada Reintentar y al deslizar para
   // actualizar), nunca al pintar. Un fallo deja 'error' salvo que ya hubiera datos en pantalla.
@@ -72,10 +118,8 @@ export function useInicioViewModel(): InicioViewModel {
     solicitud.current += 1;
     const id = solicitud.current;
     const vigente = () => id === solicitud.current;
-    const conservarOError = (actual: EstadoInicio): EstadoInicio => (actual === 'listo' ? actual : 'error');
     if (mostrarCarga) {
       setEstado('cargando');
-      setEstadoProductos('cargando');
     }
     const servicios = obtenerServicios().then(
       (lista) => {
@@ -90,53 +134,39 @@ export function useInicioViewModel(): InicioViewModel {
         );
         setEstado('listo');
       },
-      () => {
+      (error: unknown) => {
         if (vigente()) {
+          setErrorCarga(error);
           setEstado(conservarOError);
         }
       },
     );
-    // Una sola lectura de /api/productos: el catálogo trae lo que piden el hero (nombre y precio de
-    // los fluidos) y la tarjeta de producto (presentaciones, existencias y marca).
-    const catalogo = obtenerCatalogo().then(
-      (productos) => {
-        if (!vigente()) {
-          return;
-        }
-        setFluidos(seleccionarFluidos(productos));
-        setProductosDestacados(
-          elegirAlAzar(
-            productos.filter((producto) => !estaAgotado(producto)),
-            DESTACADOS,
-          ),
-        );
-        setEstadoProductos('listo');
-      },
-      () => {
-        if (vigente()) {
-          setEstadoProductos(conservarOError);
-        }
-      },
-    );
-    return Promise.all([servicios, catalogo]).then(() => undefined);
-  }, []);
+    return Promise.all([servicios, pedirCatalogo(mostrarCarga)]).then(() => undefined);
+  }, [pedirCatalogo]);
 
   const recargar = useCallback(() => {
     void pedir(true);
   }, [pedir]);
+  const recargarProductos = useCallback(() => {
+    void pedirCatalogo(true);
+  }, [pedirCatalogo]);
   const refrescar = useCallback(() => pedir(false), [pedir]);
 
   useEffect(() => {
     recargar();
     return () => {
       solicitud.current += 1;
+      solicitudProductos.current += 1;
     };
   }, [recargar]);
 
   return {
+    mensajeError: estado === 'error' ? mensajeParaClienta(errorCarga) : null,
     estado,
     fluidos,
     estadoProductos,
+    mensajeErrorProductos: estadoProductos === 'error' ? mensajeParaClienta(errorProductos) : null,
+    recargarProductos,
     productosDestacados,
     serviciosDestacados,
     recargar,

@@ -2,7 +2,7 @@
 
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 
-import { MENSAJE_SIN_CONEXION } from '@/features/auth/models/AuthModel';
+import { MENSAJE_SIN_CONEXION } from '@/shared/api/mensajesError';
 import type { Slot } from '@/features/citas/models/citaModel';
 import { useDetalleCitaViewModel, type DetalleCitaViewModel } from '@/features/citas/viewmodels/useDetalleCitaViewModel';
 import { useMisCitasViewModel, type Cita, type MisCitasViewModel } from '@/features/citas/viewmodels/useMisCitasViewModel';
@@ -555,10 +555,11 @@ describe('useDetalleCitaViewModel: aviso de cancelación', () => {
       AVISO_PAGADO,
     ],
     ['sin pago: recomienda reprogramar', CITA_CON_ANTICIPO, RECOMENDACION],
+    // GP-07.6: con el anticipo retenido nunca dice que cancelar no tiene costo, sino que no se devuelve.
     [
-      'anticipo retenido: no dice que se pagó',
+      'anticipo retenido: dice que quedó retenido y no se devuelve',
       citaAnticipoPagado({ pagos: [pagoCrudo({ estado: 'aprobado', pagadoEn: PAGADO_EN_ISO, retenidoEn: RETENIDO_EN_ISO })] }),
-      RECOMENDACION,
+      obtenerTexto('citas.cancelar.anticipoRetenido', { anticipo: '$360' }),
     ],
     [
       'anticipo reembolsado: no dice que se pagó',

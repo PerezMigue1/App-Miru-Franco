@@ -13,14 +13,12 @@ import {
   esObjeto,
   idDe,
   listaDe,
-  obtenerProductos,
   primeraImagen,
   texto,
   urlHttps,
   type Producto,
 } from '@/features/inicio/models/inicioService';
 import { useInicioViewModel } from '@/features/inicio/viewmodels/useInicioViewModel';
-import { ApiError, ErrorDeRed } from '@/shared/api/apiClient';
 import { colorFluido } from '@/shared/ui/tokens';
 
 /**
@@ -262,86 +260,6 @@ describe('inicioService: utilidades de normalización', () => {
     expect(primeraImagen([{ secure_url: 'https://img.test/obj.jpg' }])).toBe('https://img.test/obj.jpg');
     expect(primeraImagen('', [], null)).toBeUndefined();
     expect(primeraImagen()).toBeUndefined();
-  });
-});
-
-// ── inicioService: obtenerProductos ────────────────────────────────────────────────────────
-
-describe('inicioService: obtenerProductos (GET /api/productos)', () => {
-  it('pide el catálogo público a la API de prueba, sin token, y normaliza cada producto', async () => {
-    const simulado = servidor({
-      [URL_PRODUCTOS]: {
-        cuerpo: {
-          success: true,
-          count: 2,
-          data: [
-            {
-              _id: 'p-1',
-              nombre: '  Shampoo  ',
-              categoria: ' Cuidado ',
-              precio: '999',
-              // Manda la menor presentación con precio positivo, sin $ ni comas.
-              presentaciones: [{ precio: '$1,200' }, { precio: '380' }, { precio: '0' }, 'basura'],
-              imagenes: ['http://img.test/no.jpg', 'https://img.test/si.jpg'],
-            },
-            // Sin presentaciones con precio: se usa el precio del producto.
-            { id: 2, nombre: 'Mascarilla', precio: 450, presentaciones: [{ precio: '' }], imagen: 'https://img.test/m.jpg' },
-            'no es objeto',
-          ],
-        },
-      },
-    });
-
-    const productos = await obtenerProductos();
-
-    expect(productos).toEqual([
-      { id: 'p-1', nombre: 'Shampoo', precio: '380', categoria: 'Cuidado', imagen: 'https://img.test/si.jpg' },
-      { id: 2, nombre: 'Mascarilla', precio: '450', categoria: '', imagen: 'https://img.test/m.jpg' },
-    ]);
-    expect(urlsDe(simulado)).toEqual([URL_PRODUCTOS]);
-    const [, init] = llamadas(simulado)[0];
-    expect(init.method).toBe('GET');
-    expect((init.headers as Record<string, string>).Authorization).toBeUndefined();
-  });
-
-  it('acepta el catálogo como arreglo directo o bajo productos', async () => {
-    servidor({ [URL_PRODUCTOS]: { cuerpo: [{ id: 1, nombre: 'Uno', precio: '10' }] } });
-    await expect(obtenerProductos()).resolves.toEqual([
-      { id: 1, nombre: 'Uno', precio: '10', categoria: '', imagen: undefined },
-    ]);
-
-    servidor({ [URL_PRODUCTOS]: { cuerpo: { productos: [{ id: 2, nombre: 'Dos', precio: '20' }] } } });
-    await expect(obtenerProductos()).resolves.toEqual([
-      { id: 2, nombre: 'Dos', precio: '20', categoria: '', imagen: undefined },
-    ]);
-  });
-
-  it('una respuesta sin lista da un catálogo vacío', async () => {
-    servidor({ [URL_PRODUCTOS]: { cuerpo: { success: true, count: 0, data: [] } } });
-    await expect(obtenerProductos()).resolves.toEqual([]);
-
-    servidor({ [URL_PRODUCTOS]: { cuerpo: { success: true } } });
-    await expect(obtenerProductos()).resolves.toEqual([]);
-  });
-
-  it('un error del servidor llega como ApiError con su status y su code', async () => {
-    servidor({
-      [URL_PRODUCTOS]: { cuerpo: { message: 'Fallo interno', code: 'ERROR_INTERNO' }, status: 500 },
-    });
-
-    const error = await obtenerProductos().catch((e: unknown) => e);
-
-    expect(error).toBeInstanceOf(ApiError);
-    expect(error).toMatchObject({ status: 500, code: 'ERROR_INTERNO', message: 'Fallo interno' });
-  });
-
-  it('sin red llega como ErrorDeRed', async () => {
-    servidor({ [URL_PRODUCTOS]: { sinRed: true } });
-
-    const error = await obtenerProductos().catch((e: unknown) => e);
-
-    expect(error).toBeInstanceOf(ErrorDeRed);
-    expect(error).not.toBeInstanceOf(ApiError);
   });
 });
 

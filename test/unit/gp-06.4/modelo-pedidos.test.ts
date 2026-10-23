@@ -1,8 +1,7 @@
 /// <reference types="jest" />
 
-import { MENSAJE_SIN_CONEXION } from '@/features/auth/models/AuthModel';
+import { MENSAJE_SESION_TERMINADA, MENSAJE_SIN_CONEXION } from '@/shared/api/mensajesError';
 import { fechaLegible, horaLegible, type EtiquetaEstado } from '@/features/citas/models/citaModel';
-import { MENSAJE_SESION_TERMINADA } from '@/features/tienda/models/carritoModel';
 import {
   buscarPedidoRecienCreado,
   cancelarPedido,

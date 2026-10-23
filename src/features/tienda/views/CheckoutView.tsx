@@ -32,6 +32,7 @@ import { InformacionCompra } from '../components/InformacionCompra';
 import { OpcionPago } from '../components/OpcionPago';
 import { DatoCompra, ResumenCompra } from '../components/ResumenCompra';
 import { etiquetaMetodoPago } from '../viewmodels/presentacionTienda';
+import { useTextosTienda } from '../viewmodels/textosTienda';
 import {
   PASOS_CHECKOUT,
   useCheckoutViewModel,
@@ -41,6 +42,7 @@ import {
 /** Finalizar compra en tres pasos: recoger en el salón, forma de pago y revisar y confirmar. */
 export default function CheckoutView() {
   const { colores } = useTheme();
+  const textos = useTextosTienda();
   const { bottom } = useSafeAreaInsets();
   const vm = useCheckoutViewModel();
   const reducido = useMovimientoReducido();
@@ -64,17 +66,13 @@ export default function CheckoutView() {
 
   return (
     <View style={[styles.raiz, { backgroundColor: colores.fondo }]}>
-      <EncabezadoVolver
-        titulo="Finalizar compra"
-        subtitulo="Sigue los pasos para completar tu compra"
-        onVolver={vm.atras}
-      />
+      <EncabezadoVolver titulo={textos.checkout.titulo} subtitulo={textos.checkout.subtitulo} onVolver={vm.atras} />
 
       {vm.estado === 'cargando' ? (
         <View
           accessible
           accessibilityRole="progressbar"
-          accessibilityLabel="Cargando tu compra"
+          accessibilityLabel={textos.checkout.cargando}
           style={styles.contenido}
         >
           <Skeleton estilo={styles.indicadorEsqueleto} />
@@ -87,8 +85,8 @@ export default function CheckoutView() {
       {vm.estado === 'error' ? (
         <ScrollView contentContainerStyle={[styles.estado, { paddingBottom: bottom + espacio.x3 }]}>
           <EmptyState
-            titulo="No pudimos cargar tu carrito"
-            mensaje="Revisa tu conexión e intenta de nuevo."
+            titulo={textos.carrito.errorTitulo}
+            mensaje={vm.mensajeError ?? ''}
             accion={{ titulo: 'Reintentar', onPress: vm.recargar }}
           />
         </ScrollView>
@@ -143,6 +141,7 @@ function ContenidoListo({
 /** Pie fijo: error de envío, casillas por marcar, revisar carrito y el botón para avanzar o confirmar. */
 function PieCheckout({ vm, bottom }: { vm: CheckoutViewModel; bottom: number }) {
   const { colores } = useTheme();
+  const textos = useTextosTienda();
   const enLinea = vm.metodo === 'mercado_pago';
   const mensaje = vm.paso === 3 ? (vm.errorEnvio ?? vm.avisoCasillas) : null;
 
@@ -158,7 +157,7 @@ function PieCheckout({ vm, bottom }: { vm: CheckoutViewModel; bottom: number }) 
         {mensaje ? <Text style={[styles.error, { color: colores.peligro }]}>{mensaje}</Text> : null}
       </View>
       {vm.paso === 3 && vm.revisarCarrito ? (
-        <Button titulo="Revisar mi carrito" variante="secundario" onPress={vm.irAlCarrito} />
+        <Button titulo={textos.checkout.revisarCarrito} variante="secundario" onPress={vm.irAlCarrito} />
       ) : null}
       {/* No se sabe si el pedido se creó: en lugar de confirmar otra vez, revisar Mis pedidos. */}
       {vm.paso === 3 && vm.revisarMisPedidos ? (
@@ -166,15 +165,11 @@ function PieCheckout({ vm, bottom }: { vm: CheckoutViewModel; bottom: number }) 
       ) : null}
       {vm.paso === 3 && !vm.revisarMisPedidos ? (
         <Button
-          titulo={vm.botonFinal || 'Confirmar pedido'}
+          titulo={vm.botonFinal || textos.checkout.confirmarPedido}
           onPress={vm.confirmar}
           cargando={vm.enviando}
           deshabilitado={vm.metodo === null}
-          accessibilityHint={
-            enLinea
-              ? 'Guarda tu aceptación, crea tu pedido y abre Mercado Pago en el navegador'
-              : 'Guarda tu aceptación y crea tu pedido'
-          }
+          accessibilityHint={enLinea ? textos.checkout.ayudaLinea : textos.checkout.ayudaSalon}
         />
       ) : null}
       {vm.paso === 3 ? null : (
@@ -213,18 +208,19 @@ function PasoRecoger({ vm }: { vm: CheckoutViewModel }) {
 
 /** Paso 2: solo las formas de pago activas para la tienda; sin ninguna, que llame al salón. */
 function PasoFormaPago({ vm }: { vm: CheckoutViewModel }) {
+  const textos = useTextosTienda();
   if (vm.sinMetodos) {
     return (
       <EmptyState
         titulo={vm.sinMetodos.titulo}
         mensaje={vm.sinMetodos.texto}
-        accion={{ titulo: 'Llamar al salón', onPress: vm.llamarSalon }}
+        accion={{ titulo: textos.checkout.llamarSalon, onPress: vm.llamarSalon }}
       />
     );
   }
   return (
     <>
-      <Subtitulo titulo="¿Cómo quieres pagar?" texto={vm.notaOpciones} />
+      <Subtitulo titulo={textos.checkout.comoPagar} texto={vm.notaOpciones} />
       <View accessibilityRole="radiogroup" style={styles.opciones}>
         {vm.opciones.map((opcion) => (
           <OpcionPago
@@ -287,12 +283,10 @@ function Plazos({ vm }: { vm: CheckoutViewModel }) {
 /** Paso 3: artículos y total con IVA, forma de pago, plazos, información de la compra y casillas. */
 function PasoConfirmar({ vm }: { vm: CheckoutViewModel }) {
   const { colores } = useTheme();
+  const textos = useTextosTienda();
   return (
     <>
-      <Subtitulo
-        titulo="Revisa y confirma"
-        texto="Revisa tus productos antes de crear tu pedido."
-      />
+      <Subtitulo titulo={textos.checkout.revisaTitulo} texto={textos.checkout.revisaTexto} />
       <ResumenCompra
         lineas={vm.items.map((item) => ({
           clave: item.id,
@@ -305,8 +299,8 @@ function PasoConfirmar({ vm }: { vm: CheckoutViewModel }) {
       >
         <Text style={[styles.nota, { color: colores.textoSuave }]}>{vm.textos.leyendaPrecios}</Text>
         <View style={[styles.datos, { borderTopColor: colores.hairline }]}>
-          {vm.metodo ? <DatoCompra etiqueta="Forma de pago" valor={etiquetaMetodoPago(vm.metodo)} /> : null}
-          <DatoCompra etiqueta="Recoges en" valor={vm.recogesEn} />
+          {vm.metodo ? <DatoCompra etiqueta={textos.checkout.formaPago} valor={etiquetaMetodoPago(vm.metodo)} /> : null}
+          <DatoCompra etiqueta={textos.checkout.recogesEn} valor={vm.recogesEn} />
         </View>
       </ResumenCompra>
       <Plazos vm={vm} />

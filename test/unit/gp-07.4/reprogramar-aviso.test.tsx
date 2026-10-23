@@ -128,9 +128,10 @@ describe('especialista que ya no atiende', () => {
     expect(result.current.errorHorarios).toBe(RESPALDO_TEXTOS['citas.reprogramar.especialistaInactiva']);
   });
 
-  it('otro 404 (servicio inactivo) sigue con el error de horarios', async () => {
+  // GP-07.6: el servicio inactivo ya tiene su propio aviso (test/unit/gp-07.6); otro 404 sigue con el error.
+  it('otro 404 (ni especialista ni servicio) sigue con el error de horarios', async () => {
     const { result } = await abrir(conReglas(citaConAnticipo()), {
-      [DISPONIBILIDAD]: turnos(errorCon(404, 'Servicio no encontrado o inactivo')),
+      [DISPONIBILIDAD]: turnos(errorCon(404, 'Cita no encontrada')),
     });
     await waitFor(() => expect(result.current.estadoHorarios).toBe('error'));
     expect(esEspecialistaInactiva(new ApiError(404, 'Especialista no encontrado o inactivo'))).toBe(true);

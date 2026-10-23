@@ -78,7 +78,12 @@ export default function ClienteLayout() {
         ),
       }}
     >
-      <Tabs.Screen name="inicio" options={{ title: 'Inicio', tabBarIcon: iconoInicio }} />
+      {/* Cada pestaña lleva su etiqueta para TalkBack, igual en las cinco (el rol 'tab' y el estado
+          seleccionado los pone la barra y BotonPestana los conserva). */}
+      <Tabs.Screen
+        name="inicio"
+        options={{ title: 'Inicio', tabBarIcon: iconoInicio, tabBarAccessibilityLabel: 'Inicio' }}
+      />
       {/* La ruta sigue siendo `citas`; la pestaña se llama Servicios, como la sección de la web. */}
       <Tabs.Screen
         name="citas"
@@ -106,7 +111,10 @@ export default function ClienteLayout() {
         name="tienda"
         options={{ title: 'Productos', tabBarIcon: iconoTienda, tabBarAccessibilityLabel: 'Productos' }}
       />
-      <Tabs.Screen name="perfil" options={{ title: 'Perfil', tabBarIcon: iconoPerfil }} />
+      <Tabs.Screen
+        name="perfil"
+        options={{ title: 'Perfil', tabBarIcon: iconoPerfil, tabBarAccessibilityLabel: 'Perfil' }}
+      />
     </Tabs>
   );
 }

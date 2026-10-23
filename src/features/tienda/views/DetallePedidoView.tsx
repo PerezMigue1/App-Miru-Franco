@@ -10,6 +10,7 @@ import { BadgeEstado } from '@/features/citas/components/BadgeEstado';
 import { Button } from '@/shared/ui/Button';
 import { DatosTransferencia } from '@/shared/ui/DatosTransferencia';
 import { EmptyState } from '@/shared/ui/EmptyState';
+import { estilosDetalle } from '@/shared/ui/estilosDetalle';
 import { useEntradaContenido } from '@/shared/ui/movimiento';
 import { Skeleton } from '@/shared/ui/Skeleton';
 import {
@@ -20,11 +21,9 @@ import {
   icono,
   pantalla,
   radio,
-  sombra,
   tienda,
   tipo,
   toqueMinimo,
-  tracking,
 } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
@@ -37,6 +36,7 @@ import { HojaRevocarCompra } from '../components/HojaRevocarCompra';
 import { HojaSolicitarDevolucion } from '../components/HojaSolicitarDevolucion';
 import { SeccionDevoluciones } from '../components/SeccionDevoluciones';
 import { formatoPrecio, textoPiezas } from '../viewmodels/presentacionTienda';
+import { useTextosTienda } from '../viewmodels/textosTienda';
 import {
   useDetallePedidoViewModel,
   type DetallePedidoViewModel,
@@ -53,9 +53,10 @@ export default function DetallePedidoView() {
   const { bottom } = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const vm = useDetallePedidoViewModel(id);
+  const { pedido: textos } = useTextosTienda();
 
   const numero = vm.pedido ? String(vm.pedido.id) : vm.numero;
-  const titulo = numero ? `Pedido #${numero}` : 'Tu pedido';
+  const titulo = textos.titulo(numero);
 
   return (
     <View style={[styles.raiz, { backgroundColor: colores.fondo }]}>
@@ -72,8 +73,8 @@ export default function DetallePedidoView() {
       {vm.estado === 'error' ? (
         <ScrollView contentContainerStyle={[styles.estado, { paddingBottom: bottom + espacio.x3 }]}>
           <EmptyState
-            titulo="No pudimos cargar tu pedido"
-            mensaje="Revisa tu conexión o intenta de nuevo en un momento."
+            titulo={textos.errorTitulo}
+            mensaje={vm.mensajeError ?? ''}
             accion={{ titulo: 'Reintentar', onPress: vm.recargar }}
           />
         </ScrollView>
@@ -82,9 +83,9 @@ export default function DetallePedidoView() {
       {vm.estado === 'noEncontrado' ? (
         <ScrollView contentContainerStyle={[styles.estado, { paddingBottom: bottom + espacio.x3 }]}>
           <EmptyState
-            titulo="No encontramos este pedido"
-            mensaje="Puede que ya no esté disponible. Revisa tus pedidos para ver su estado."
-            accion={{ titulo: 'Ver mis pedidos', onPress: vm.verMisPedidos }}
+            titulo={textos.noEncontradoTitulo}
+            mensaje={textos.noEncontradoTexto}
+            accion={{ titulo: textos.verMisPedidos, onPress: vm.verMisPedidos }}
           />
         </ScrollView>
       ) : null}
@@ -129,6 +130,8 @@ function Contenido({
   vm: DetallePedidoViewModel;
 }) {
   const { colores } = useTheme();
+  const tienda = useTextosTienda();
+  const textos = tienda.pedido;
   // Aparece una vez al terminar de cargar; las recargas al enfocar no la repiten.
   const entrada = useEntradaContenido();
 
@@ -149,12 +152,12 @@ function Contenido({
           <BadgeEstado texto={detalle.etiqueta.texto} tono={detalle.etiqueta.tono} />
         </View>
         {detalle.fecha ? (
-          <View style={styles.filaIcono} accessible accessibilityLabel={`Pedido hecho el ${detalle.fecha}`}>
+          <View style={styles.filaIcono} accessible accessibilityLabel={textos.hechoElEtiqueta(detalle.fecha)}>
             <View style={styles.iconoLinea}>
               <CalendarDays color={colores.textoSuave} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
             </View>
             {/* Fecha en el secundario: 8.9:1 sobre lino (6:1 sobre carbón en oscuro). */}
-            <Text style={[styles.cuerpo, { color: colores.textoSuave }]}>Hecho el {detalle.fecha}</Text>
+            <Text style={[styles.cuerpo, { color: colores.textoSuave }]}>{textos.hechoEl(detalle.fecha)}</Text>
           </View>
         ) : null}
       </View>
@@ -162,7 +165,7 @@ function Contenido({
       {detalle.queSigue ? (
         <Tarjeta>
           <Text accessibilityRole="header" style={[styles.tituloTarjeta, { color: colores.texto }]}>
-            Qué sigue
+            {textos.queSigue}
           </Text>
           <Text style={[styles.parrafo, { color: colores.texto }]}>{detalle.queSigue}</Text>
           {detalle.plazo ? (
@@ -174,8 +177,8 @@ function Contenido({
             </View>
           ) : null}
           {/* Con el pago en proceso solo se revisa: nunca se ofrece pagar otra vez. */}
-          {detalle.accionPago === 'revisar' ? <Button titulo="Revisar mi pago" onPress={vm.revisarPago} /> : null}
-          {detalle.accionPago === 'completar' ? <Button titulo="Completar el pago" onPress={vm.completarPago} /> : null}
+          {detalle.accionPago === 'revisar' ? <Button titulo={textos.revisarMiPago} onPress={vm.revisarPago} /> : null}
+          {detalle.accionPago === 'completar' ? <Button titulo={textos.completarPago} onPress={vm.completarPago} /> : null}
           {/* Apartado listo para pagar en el salón: la cuenta para transferir (si está activa). */}
           <DatosTransferencia datos={detalle.transferencia} />
         </Tarjeta>
@@ -183,7 +186,7 @@ function Contenido({
 
       <Tarjeta>
         <Text accessibilityRole="header" style={[styles.tituloTarjeta, { color: colores.texto }]}>
-          Artículos
+          {textos.articulos}
         </Text>
         {/* Un pedido trae pocos artículos y va dentro de este ScrollView: map en lugar de FlatList. */}
         <View style={styles.articulos}>
@@ -198,16 +201,16 @@ function Contenido({
         <View
           style={styles.monto}
           accessible
-          accessibilityLabel={`Total: ${total}, ${textoPiezas(pedido.piezas)}`}
+          accessibilityLabel={tienda.totalPiezasEtiqueta(total, textoPiezas(pedido.piezas))}
         >
           <View>
-            <Text style={[styles.etiquetaMonto, { color: colores.texto }]}>Total</Text>
+            <Text style={[styles.etiquetaMonto, { color: colores.texto }]}>{tienda.total}</Text>
             <Text style={[styles.detalle, { color: colores.textoSuave }]}>{textoPiezas(pedido.piezas)}</Text>
           </View>
           <Text style={[styles.cifra, { color: colores.texto }]}>{total}</Text>
         </View>
-        <View style={styles.pago} accessible accessibilityLabel={`Forma de pago: ${detalle.formaPago}`}>
-          <Text style={[styles.etiquetaMonto, { color: colores.texto }]}>Forma de pago</Text>
+        <View style={styles.pago} accessible accessibilityLabel={textos.formaPagoEtiqueta(detalle.formaPago)}>
+          <Text style={[styles.etiquetaMonto, { color: colores.texto }]}>{textos.formaPago}</Text>
           <Text style={[styles.cuerpo, { color: colores.texto }]}>{detalle.formaPago}</Text>
         </View>
       </Tarjeta>
@@ -215,7 +218,7 @@ function Contenido({
       {detalle.recoger ? (
         <Tarjeta>
           <Text accessibilityRole="header" style={[styles.tituloTarjeta, { color: colores.texto }]}>
-            Recoger en el salón
+            {textos.recoger}
           </Text>
           <DatosRecogerSalon />
         </Tarjeta>
@@ -245,7 +248,7 @@ function Contenido({
             <Text style={[styles.nota, { color: colores.texto }]}>{detalle.cancelarORevocar}</Text>
           ) : null}
           {detalle.puedeCancelar ? (
-            <Button titulo="Cancelar pedido" variante="peligro" onPress={vm.abrirCancelar} />
+            <Button titulo={textos.cancelar} variante="peligro" onPress={vm.abrirCancelar} />
           ) : null}
           {detalle.puedeRevocar ? (
             <Button titulo={vm.textosRevocar.boton} variante="peligro" onPress={vm.abrirRevocar} />
@@ -267,8 +270,9 @@ function Tarjeta({ children }: { children: ReactNode }) {
 
 /** Skeleton con la forma del detalle: insignia, fecha, qué sigue y artículos. */
 function Esqueleto() {
+  const { pedido: textos } = useTextosTienda();
   return (
-    <View accessible accessibilityRole="progressbar" accessibilityLabel="Cargando tu pedido" style={styles.contenido}>
+    <View accessible accessibilityRole="progressbar" accessibilityLabel={textos.cargando} style={styles.contenido}>
       <Skeleton estilo={styles.badgeEsqueleto} />
       <Skeleton estilo={styles.lineaMedia} />
       <View style={styles.bloqueEsqueleto}>
@@ -311,34 +315,15 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: espacio.s,
   },
-  tarjeta: {
-    padding: espacio.xl,
-    gap: espacio.m,
-    borderRadius: radio.tarjeta,
-    shadowOpacity: sombra.tarjeta.opacidad,
-    shadowRadius: sombra.tarjeta.radio,
-    shadowOffset: { width: 0, height: sombra.tarjeta.desplazamientoY },
-    elevation: sombra.tarjeta.elevacion,
-  },
-  tituloTarjeta: {
-    fontFamily: fuente.titulo,
-    fontSize: tipo.subtitulo.tamano,
-    lineHeight: tipo.subtitulo.linea,
-    letterSpacing: tracking.subtitulo,
-  },
+  tarjeta: estilosDetalle.tarjeta,
+  tituloTarjeta: estilosDetalle.tituloTarjeta,
   articulos: {
     gap: espacio.m,
   },
   linea: {
     height: borde.hairline,
   },
-  monto: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    columnGap: espacio.m,
-  },
+  monto: estilosDetalle.monto,
   pago: {
     gap: espacio.xxs,
   },
@@ -353,28 +338,10 @@ const styles = StyleSheet.create({
     lineHeight: tipo.pequeno.linea,
     fontVariant: ['tabular-nums'],
   },
-  cifra: {
-    fontFamily: fuente.textoFuerte,
-    fontSize: tipo.subtitulo.tamano,
-    lineHeight: tipo.subtitulo.linea,
-    fontVariant: ['tabular-nums'],
-  },
-  filaIcono: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: espacio.m,
-  },
-  iconoLinea: {
-    // Centra el ícono con la primera línea del texto.
-    paddingTop: (tipo.cuerpo.linea - icono.tamanoPequeno) / 2,
-  },
-  textoFuerte: {
-    flex: 1,
-    fontFamily: fuente.textoMedio,
-    fontSize: tipo.cuerpo.tamano,
-    lineHeight: tipo.cuerpo.linea,
-    fontVariant: ['tabular-nums'],
-  },
+  cifra: estilosDetalle.cifra,
+  filaIcono: estilosDetalle.filaIcono,
+  iconoLinea: estilosDetalle.iconoLinea,
+  textoFuerte: estilosDetalle.textoFuerte,
   cuerpo: {
     flexShrink: 1,
     fontFamily: fuente.texto,

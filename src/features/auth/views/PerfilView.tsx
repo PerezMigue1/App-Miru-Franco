@@ -13,6 +13,7 @@ import {
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
+import { FilaAvisosEnApp } from '@/features/notificaciones/components/FilaAvisosEnApp';
 import { Button } from '@/shared/ui/Button';
 import { EmptyState } from '@/shared/ui/EmptyState';
 import { Hoja } from '@/shared/ui/Hoja';
@@ -72,6 +73,8 @@ export default function PerfilView() {
           descripcion="Claro, oscuro o igual que tu teléfono."
           onPress={perfil.abrirApariencia}
         />
+        {/* Avisos internos en vivo (GP-07.6): la preferencia es de cada clienta, solo con sesión. */}
+        {perfil.estado === 'sinSesion' ? null : <FilaAvisosEnApp />}
         <FilaTarjeta
           icono={ShieldCheck}
           titulo="Aviso de privacidad"
@@ -143,7 +146,7 @@ function ContenidoConSesion({ perfil }: { perfil: PerfilViewModel }) {
       <View style={styles.margen}>
         <EmptyState
           titulo="No pudimos cargar tu perfil"
-          mensaje="Revisa tu conexión a internet e inténtalo de nuevo."
+          mensaje={perfil.mensajeError ?? ''}
           accion={{ titulo: 'Reintentar', onPress: perfil.reintentar }}
         />
       </View>

@@ -362,8 +362,9 @@ describe('mensajeConsentimientoCompra', () => {
     ],
     ['otro error (500)', new ErrorConsentimientoCompra('registro', new ApiError(500, 'Error interno ficticio')), `${NO_GUARDO} Intenta de nuevo en un momento.`],
     [
-      'sin versión vigente',
-      new ErrorConsentimientoCompra('version'),
+      // GP-07.6: "Revisa tu conexión" solo si la versión no se pudo confirmar por falta de red.
+      'sin versión vigente y sin red',
+      new ErrorConsentimientoCompra('version', new ErrorDeRed()),
       'No pudimos confirmar la versión vigente de los Términos de venta y la Política de reembolsos, así que tu pedido no se creó. Revisa tu conexión a internet e intenta de nuevo.',
     ],
   ])('%s', (_caso, error, mensaje) => {

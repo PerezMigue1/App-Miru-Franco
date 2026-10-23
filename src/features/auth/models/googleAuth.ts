@@ -103,41 +103,30 @@ function esCodigoValido(code: string): boolean {
 }
 
 /**
- * Lee el deep link de regreso. La query se parte a mano por '?', '&' y '=' (el `URL` de React
- * Native no es fiable con esquemas propios ni con `searchParams`). Cualquier cosa que no sea un
- * único `code` de 64 hexadecimales, sin `error`, se trata como error.
+ * Lee el deep link de regreso. El backend lo arma siempre como REDIRECCION_GOOGLE seguido de
+ * `?code=<64 hexadecimales>` (o `?error=...`), así que se exige exactamente esa forma: la ruta
+ * seguida de '?', un único parámetro `code` y nada más. Un fragmento (aunque sea un '#' vacío),
+ * `error`, otro parámetro o un '&' de más es error. La query se parte a mano (el `URL` de React
+ * Native no es fiable con esquemas propios ni con `searchParams`).
  */
 export function leerRetornoGoogle(url: string): RetornoGoogle {
   const fallo: RetornoGoogle = { tipo: 'error' };
-  if (!url.startsWith(REDIRECCION_GOOGLE)) {
+  const prefijo = `${REDIRECCION_GOOGLE}?code=`;
+  if (!url.startsWith(prefijo) || url.includes('#')) {
     return fallo;
   }
-  // Sin fragmento; tras la ruta solo puede venir la query.
-  const sinFragmento = url.split('#')[0];
-  const resto = sinFragmento.slice(REDIRECCION_GOOGLE.length);
-  if (!resto.startsWith('?')) {
+  const valorCrudo = url.slice(prefijo.length);
+  // Otro parámetro (incluido un error o un segundo code) viene tras un '&'.
+  if (valorCrudo.includes('&')) {
     return fallo;
   }
-  let code: string | undefined;
-  for (const par of resto.slice(1).split('&')) {
-    const separador = par.indexOf('=');
-    const clave = separador === -1 ? par : par.slice(0, separador);
-    const valorCrudo = separador === -1 ? '' : par.slice(separador + 1);
-    if (clave === 'error') {
-      return fallo;
-    }
-    if (clave === 'code') {
-      if (code !== undefined) {
-        return fallo;
-      }
-      try {
-        code = decodeURIComponent(valorCrudo);
-      } catch {
-        return fallo;
-      }
-    }
+  let code: string;
+  try {
+    code = decodeURIComponent(valorCrudo);
+  } catch {
+    return fallo;
   }
-  return code !== undefined && esCodigoValido(code) ? { tipo: 'codigo', code } : fallo;
+  return esCodigoValido(code) ? { tipo: 'codigo', code } : fallo;
 }
 
 /** Respuesta de POST /api/auth/exchange-code; se valida en quien la usa (no trae usuario). */

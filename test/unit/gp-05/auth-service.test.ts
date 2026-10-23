@@ -1,7 +1,8 @@
 /// <reference types="jest" />
 
 import type { DatosRegistro } from '@/features/auth/models/AuthModel';
-import { esCuentaSinActivar, mensajeDelServidor } from '@/features/auth/models/AuthModel';
+import { esCuentaSinActivar } from '@/features/auth/models/AuthModel';
+import { mensajeParaClienta } from '@/shared/api/mensajesError';
 import {
   cerrarSesionServidor,
   iniciarSesion,
@@ -244,7 +245,7 @@ describe('iniciarSesion', () => {
   });
 
   it('403 de cuenta sin activar se reconoce con esCuentaSinActivar', async () => {
-    responderJson({ message: 'Tu cuenta no está activada. Revisa tu correo.' }, 403);
+    responderJson({ message: 'Tu cuenta no está activada. Revisa tu correo.', code: 'CUENTA_NO_ACTIVADA' }, 403);
     const error = await capturarError(iniciarSesion(CORREO, CLAVE));
     expect(esCuentaSinActivar(error)).toBe(true);
   });
@@ -259,7 +260,8 @@ describe('iniciarSesion', () => {
   it('500: el mensaje técnico nunca llega a la clienta', async () => {
     responderJson({ message: 'PrismaClientInitializationError' }, 500);
     const error = await capturarError(iniciarSesion(CORREO, CLAVE));
-    expect(mensajeDelServidor(error, 'Genérico')).toBe('Ocurrió un problema en el servidor. Intenta de nuevo.');
+    // GP-07.6: el texto para la clienta sale de mensajeParaClienta (el respaldo de la pantalla).
+    expect(mensajeParaClienta(error, { respaldo: 'Genérico' })).toBe('Genérico');
   });
 
   it('sin red: ErrorDeRed', async () => {
@@ -546,12 +548,12 @@ describe('registrarUsuario', () => {
     expect(error.message).toBe('telefono must be 10 digits, password too weak');
   });
 
-  it('409: correo ya registrado, con su mensaje', async () => {
+  it('409: correo ya registrado, con su code; el texto del servidor no llega a la clienta', async () => {
     responderJson({ message: 'El correo ya está registrado', code: 'CORREO_REGISTRADO' }, 409);
     const error = (await capturarError(registrarUsuario(DATOS_REGISTRO))) as ApiError;
     expect(error.status).toBe(409);
     expect(error.code).toBe('CORREO_REGISTRADO');
-    expect(mensajeDelServidor(error, 'Genérico')).toBe('El correo ya está registrado');
+    expect(mensajeParaClienta(error, { respaldo: 'Genérico' })).toBe('Genérico');
   });
 
   it('429: ApiError', async () => {

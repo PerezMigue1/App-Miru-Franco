@@ -25,6 +25,7 @@ import {
   imagenServicio,
 } from '../../helpers/serviciosFicticios';
 import { llamadasA, respuesta } from '../../helpers/servidorSimulado';
+import { TEXTO_SERVIDOR } from '../../helpers/textosError';
 
 /**
  * GP-06.1: detalle de un servicio (/servicio/:id) con las pantallas reales y solo el servidor
@@ -225,7 +226,7 @@ describe('Detalle de un servicio con las pantallas reales (GP-06.1)', () => {
       expect(
         await screen.findByRole('header', { name: 'No pudimos cargar este servicio' }),
       ).toBeOnTheScreen();
-      expect(screen.getByText('Revisa tu conexión e intenta de nuevo.')).toBeOnTheScreen();
+      expect(screen.getByText(TEXTO_SERVIDOR)).toBeOnTheScreen();
       expect(screen.queryByText('Error interno ficticio')).not.toBeOnTheScreen();
 
       await fireEvent.press(screen.getByRole('button', { name: 'Reintentar' }));

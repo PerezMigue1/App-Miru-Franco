@@ -571,6 +571,25 @@ const ESTADO_INICIAL: EstadoConfiguracion = Object.freeze({
 let estado: EstadoConfiguracion = ESTADO_INICIAL;
 const oyentes = new Set<() => void>();
 let enVuelo: Promise<ResultadoRefresco> | null = null;
+/**
+ * Por qué falló la última lectura de red (null si salió bien o si todavía no hubo ninguna). Va aparte
+ * del estado: una falla que conserva la memoria no avisa a los suscriptores de la configuración, sino
+ * a los de suscribirErrorRefresco.
+ */
+let ultimoError: ApiError | ErrorDeRed | null = null;
+const oyentesError = new Set<() => void>();
+
+/** Fija el resultado de la última lectura de red y avisa a quien lo observa. */
+function fijarUltimoError(error: ApiError | ErrorDeRed | null): void {
+  ultimoError = error;
+  for (const oyente of [...oyentesError]) {
+    try {
+      oyente();
+    } catch {
+      // Un oyente que falla no impide avisar a los demás.
+    }
+  }
+}
 
 function fijar(nuevo: EstadoConfiguracion): void {
   estado = Object.freeze(nuevo);
@@ -611,6 +630,25 @@ export function cacheVencida(ahora: number = Date.now()): boolean {
   return estado.origen !== 'red' || estado.leidoEn === null || ahora - estado.leidoEn >= VIGENCIA_CONFIGURACION_MS;
 }
 
+/**
+ * El error de la última lectura de red, o null si salió bien o todavía no hubo ninguna. Sirve para
+ * decir "sin conexión" solo cuando de verdad no hubo red. Nunca se muestra a la clienta.
+ */
+export function errorUltimoRefresco(): ApiError | ErrorDeRed | null {
+  return ultimoError;
+}
+
+/**
+ * Registra un oyente que se llama al terminar cada lectura de red, salga bien o mal (para
+ * useSyncExternalStore con errorUltimoRefresco). Devuelve cómo quitarlo.
+ */
+export function suscribirErrorRefresco(oyente: () => void): () => void {
+  oyentesError.add(oyente);
+  return () => {
+    oyentesError.delete(oyente);
+  };
+}
+
 /** Registra un oyente que se llama cada vez que llega una versión nueva. Devuelve cómo quitarlo. */
 export function suscribir(oyente: () => void): () => void {
   oyentes.add(oyente);
@@ -628,11 +666,13 @@ async function ejecutarRefresco(): Promise<ResultadoRefresco> {
     }
     const nuevo: EstadoConfiguracion = { configuracion: normalizarConfiguracion(cuerpo), origen: 'red', leidoEn: Date.now() };
     escribirArchivo(nuevo);
+    fijarUltimoError(null);
     fijar(nuevo);
     return { configuracion: nuevo.configuracion, origen: 'red' };
   } catch (causa) {
     // Solo llegan ApiError o ErrorDeRed; otro error (por ejemplo, sin URL de la API) cuenta como sin red.
     const error = causa instanceof ApiError || causa instanceof ErrorDeRed ? causa : crearErrorApi({ tipo: 'red' });
+    fijarUltimoError(error);
     await subirArchivoSiNoHayNada();
     return { configuracion: estado.configuracion, origen: estado.origen, error };
   }
@@ -682,4 +722,6 @@ export function reiniciarConfiguracionPublica(): void {
   estado = ESTADO_INICIAL;
   oyentes.clear();
   enVuelo = null;
+  ultimoError = null;
+  oyentesError.clear();
 }
