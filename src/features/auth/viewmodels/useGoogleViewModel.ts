@@ -1,11 +1,24 @@
 import { useState } from 'react';
 
+import { esSinRespuesta, mensajeParaClienta } from '@/shared/api/mensajesError';
+import { obtenerTexto } from '@/shared/api/textosSitio';
 import { useCandado } from '@/shared/ui/useCandado';
 
-import { ErrorRolNoPermitido } from '../models/AuthModel';
+import { ErrorRolNoPermitido, MENSAJE_ROL_NO_PERMITIDO, estadoHttp } from '../models/AuthModel';
 import { useAuth } from './useAuth';
 
-const MENSAJE_ERROR_GOOGLE = 'No pudimos iniciar sesión con Google. Inténtalo de nuevo.';
+/**
+ * Una cuenta que no es de clienta lleva el mismo mensaje que el login con correo. Sin respuesta del
+ * servidor (sin red o tiempo agotado) o con el límite de solicitudes, el texto de mensajeParaClienta;
+ * cualquier otro fallo (del navegador, del canje o de /me, con o sin code), el mensaje de Google: el
+ * code de un canje (por ejemplo CODIGO_INVALIDO) habla del código de Google, no de uno del correo.
+ */
+function mensajeDeGoogle(error: unknown): string {
+  if (error instanceof ErrorRolNoPermitido) {
+    return MENSAJE_ROL_NO_PERMITIDO;
+  }
+  return esSinRespuesta(error) || estadoHttp(error) === 429 ? mensajeParaClienta(error) : obtenerTexto('auth.google.error');
+}
 
 export interface GoogleViewModel {
   /** El navegador de Google está abierto o la sesión se está creando. */
@@ -32,8 +45,7 @@ export function useGoogleViewModel(): GoogleViewModel {
     try {
       await ingresarConGoogle();
     } catch (e) {
-      // Una cuenta que no es de clienta lleva el mismo mensaje que el login con correo.
-      setError(e instanceof ErrorRolNoPermitido ? e.message : MENSAJE_ERROR_GOOGLE);
+      setError(mensajeDeGoogle(e));
     } finally {
       setAbriendo(false);
     }

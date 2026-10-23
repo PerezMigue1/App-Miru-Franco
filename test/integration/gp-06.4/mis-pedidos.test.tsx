@@ -53,6 +53,7 @@ import {
   rutaPedido,
   type PedidoCrudo,
 } from '../../helpers/tiendaFicticia';
+import { TEXTO_SERVIDOR, TEXTO_SIN_CONEXION } from '../../helpers/textosError';
 
 jest.mock('expo-web-browser', () => require('../../helpers/google').navegadorSimulado());
 
@@ -136,7 +137,7 @@ describe('Mis pedidos con las pantallas reales (GP-06.4)', () => {
 
     it.each<[string, Manejador, string]>([
       ['el servidor falla', errorDelServidor, 'Algo salió mal al traer tus pedidos. Intenta de nuevo en un momento.'],
-      ['no hay internet', sinRedEnRuta, 'Sin conexión. Revisa tu internet e intenta de nuevo'],
+      ['no hay internet', sinRedEnRuta, TEXTO_SIN_CONEXION],
     ])(
       'si %s lo dice y "Reintentar" muestra la lista',
       async (_caso, falla, mensaje) => {
@@ -309,8 +310,8 @@ describe('Mis pedidos con las pantallas reales (GP-06.4)', () => {
     );
 
     it.each<[string, string]>([
-      ['/pedido/705', 'Revisa tu conexión o intenta de nuevo en un momento.'],
-      ['/pedido-confirmado/705', 'Tu pedido no se pierde. Revisa tu conexión e intenta de nuevo.'],
+      ['/pedido/705', TEXTO_SERVIDOR],
+      ['/pedido-confirmado/705', `Tu pedido no se pierde. ${TEXTO_SERVIDOR}`],
     ])(
       'si %s no carga lo dice y "Reintentar" muestra el pedido',
       async (ruta, mensaje) => {

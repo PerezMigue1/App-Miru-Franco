@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EncabezadoVolver } from '@/features/auth/components/EncabezadoVolver';
 import { Button } from '@/shared/ui/Button';
 import { DatosTransferencia } from '@/shared/ui/DatosTransferencia';
-import { EmptyState } from '@/shared/ui/EmptyState';
+import { estilosDetalle } from '@/shared/ui/estilosDetalle';
 import { Skeleton } from '@/shared/ui/Skeleton';
 import {
   espacio,
@@ -16,7 +16,6 @@ import {
   icono,
   pantalla,
   radio,
-  sombra,
   tipo,
   toqueMinimo,
   tracking,
@@ -26,6 +25,7 @@ import { useTheme } from '@/shared/ui/useTheme';
 import { BadgeEstado } from '../components/BadgeEstado';
 import { CasillaPoliticaAnticipos } from '../components/CasillaPoliticaAnticipos';
 import { EnlacePolitica } from '../components/EnlacePolitica';
+import { EstadoCargaCita } from '../components/EstadoCargaCita';
 import { HojaCancelarCita } from '../components/HojaCancelarCita';
 import { Dato, ResumenCita } from '../components/ResumenCita';
 import {
@@ -79,25 +79,12 @@ export default function DetalleCitaView() {
         </View>
       ) : null}
 
-      {vm.estado === 'error' ? (
-        <ScrollView contentContainerStyle={[styles.estado, { paddingBottom: bottom + espacio.x3 }]}>
-          <EmptyState
-            titulo="No pudimos cargar tu cita"
-            mensaje="Revisa tu conexión o intenta de nuevo en un momento."
-            accion={{ titulo: 'Reintentar', onPress: vm.recargar }}
-          />
-        </ScrollView>
-      ) : null}
-
-      {vm.estado === 'noEncontrado' ? (
-        <ScrollView contentContainerStyle={[styles.estado, { paddingBottom: bottom + espacio.x3 }]}>
-          <EmptyState
-            titulo="No encontramos esta cita"
-            mensaje="Puede que ya no esté disponible. Revisa tus citas para ver su estado."
-            accion={{ titulo: 'Ver mis citas', onPress: vm.verMisCitas }}
-          />
-        </ScrollView>
-      ) : null}
+      <EstadoCargaCita
+        estado={vm.estado}
+        mensajeError={vm.mensajeError}
+        onReintentar={vm.recargar}
+        accionNoEncontrada={{ titulo: 'Ver mis citas', onPress: vm.verMisCitas }}
+      />
 
       <HojaCancelarCita
         visible={vm.hojaCancelarVisible}
@@ -379,56 +366,19 @@ const styles = StyleSheet.create({
   extras: {
     gap: espacio.s,
   },
-  tarjeta: {
-    padding: espacio.xl,
-    gap: espacio.m,
-    borderRadius: radio.tarjeta,
-    shadowOpacity: sombra.tarjeta.opacidad,
-    shadowRadius: sombra.tarjeta.radio,
-    shadowOffset: { width: 0, height: sombra.tarjeta.desplazamientoY },
-    elevation: sombra.tarjeta.elevacion,
-  },
-  tituloTarjeta: {
-    fontFamily: fuente.titulo,
-    fontSize: tipo.subtitulo.tamano,
-    lineHeight: tipo.subtitulo.linea,
-    letterSpacing: tracking.subtitulo,
-  },
-  monto: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    columnGap: espacio.m,
-  },
+  tarjeta: estilosDetalle.tarjeta,
+  tituloTarjeta: estilosDetalle.tituloTarjeta,
+  monto: estilosDetalle.monto,
   etiquetaMonto: {
     flexShrink: 1,
     fontFamily: fuente.textoMedio,
     fontSize: tipo.cuerpo.tamano,
     lineHeight: tipo.cuerpo.linea,
   },
-  cifra: {
-    fontFamily: fuente.textoFuerte,
-    fontSize: tipo.subtitulo.tamano,
-    lineHeight: tipo.subtitulo.linea,
-    fontVariant: ['tabular-nums'],
-  },
-  filaIcono: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: espacio.m,
-  },
-  iconoLinea: {
-    // Centra el ícono con la primera línea del texto.
-    paddingTop: (tipo.cuerpo.linea - icono.tamanoPequeno) / 2,
-  },
-  textoFuerte: {
-    flex: 1,
-    fontFamily: fuente.textoMedio,
-    fontSize: tipo.cuerpo.tamano,
-    lineHeight: tipo.cuerpo.linea,
-    fontVariant: ['tabular-nums'],
-  },
+  cifra: estilosDetalle.cifra,
+  filaIcono: estilosDetalle.filaIcono,
+  iconoLinea: estilosDetalle.iconoLinea,
+  textoFuerte: estilosDetalle.textoFuerte,
   // Notas, motivo y explicaciones del anticipo: párrafos con interlineado 1.625.
   cuerpo: {
     fontFamily: fuente.texto,
@@ -450,10 +400,6 @@ const styles = StyleSheet.create({
   acciones: {
     marginTop: espacio.s,
     gap: espacio.m,
-  },
-  estado: {
-    flexGrow: 1,
-    paddingHorizontal: pantalla.margen,
   },
   tarjetaEsqueleto: {
     gap: espacio.m,

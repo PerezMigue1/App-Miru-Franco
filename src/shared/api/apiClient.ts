@@ -29,20 +29,29 @@ export class ApiError extends Error {
   readonly status: number;
   /** Código estable del backend (por ejemplo, CODIGO_INVALIDO), si lo envió. */
   readonly code?: string;
+  /** Referencia de un 5xx del backend (8 caracteres hexadecimales) para buscarlo en su registro. */
+  readonly referencia?: string;
 
-  constructor(status: number, message: string, code?: string) {
+  constructor(status: number, message: string, code?: string, referencia?: string) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.code = code;
+    this.referencia = referencia;
   }
 }
 
+/** Por qué no hubo respuesta: sin red o se acabó el límite de espera de la petición. */
+export type MotivoErrorDeRed = 'sinRed' | 'tiempoAgotado';
+
 /** Sin red o sin respuesta a tiempo: nunca cierra la sesión. */
 export class ErrorDeRed extends Error {
-  constructor() {
-    super('Sin conexión con el servidor.');
+  readonly motivo: MotivoErrorDeRed;
+
+  constructor(motivo: MotivoErrorDeRed = 'sinRed') {
+    super(motivo === 'tiempoAgotado' ? 'Sin respuesta del servidor a tiempo.' : 'Sin conexión con el servidor.');
     this.name = 'ErrorDeRed';
+    this.motivo = motivo;
   }
 }
 
@@ -109,12 +118,16 @@ export function getBaseUrl(): string {
 
 async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  let vencida = false;
+  const timeoutId = setTimeout(() => {
+    vencida = true;
+    controller.abort();
+  }, TIMEOUT_MS);
   try {
     return await fetch(url, { ...init, signal: controller.signal });
   } catch {
-    // Fallo de red o timeout (AbortError).
-    throw crearErrorApi({ tipo: 'red' });
+    // Fallo de red o el límite de espera (AbortError de este temporizador).
+    throw crearErrorApi({ tipo: 'red', motivo: vencida ? 'tiempoAgotado' : 'sinRed' });
   } finally {
     clearTimeout(timeoutId);
   }
@@ -159,31 +172,56 @@ function getErrorCode(body: unknown): string | undefined {
   return undefined;
 }
 
+/** `referencia` de un 5xx del backend, solo si son 8 caracteres hexadecimales en mayúsculas. */
+function getErrorReferencia(body: unknown, status: number): string | undefined {
+  if (status < 500 || !body || typeof body !== 'object') {
+    return undefined;
+  }
+  const { referencia } = body as { referencia?: unknown };
+  return typeof referencia === 'string' && /^[0-9A-F]{8}$/.test(referencia) ? referencia : undefined;
+}
+
+/**
+ * Codes con que el servidor da por terminada una sesión. Un rechazo con otro code (por ejemplo el
+ * 409 RENOVACION_EN_CURSO de /api/auth/movil/renovar, que también consume el refreshToken) cierra
+ * la sesión igual, así que se presenta como SESION_VENCIDA y no como "intenta de nuevo".
+ */
+const CODES_SESION_TERMINADA: ReadonlySet<string> = new Set(['SESION_VENCIDA', 'SESION_REVOCADA', 'USA_RENOVAR_MOVIL']);
+
 /** Datos para crear un error de la API; el Factory decide la clase, el mensaje, el status y el code. */
 export type DatosErrorApi =
-  | { tipo: 'red' }
+  | { tipo: 'red'; motivo?: MotivoErrorDeRed }
   | { tipo: 'respuesta'; status: number; cuerpo: unknown }
   | { tipo: 'sesionTerminada'; code?: string };
 
 /**
  * Factory de errores de la API: toda creación de ApiError y ErrorDeRed de este archivo pasa por
- * aquí. 'red': sin red o sin respuesta a tiempo; 'respuesta': cuerpo de error del backend;
- * 'sesionTerminada': 401 con el mensaje para la clienta y el code del rechazo (o SESION_VENCIDA).
+ * aquí. 'red': sin red ('sinRed', por omisión) o sin respuesta a tiempo ('tiempoAgotado');
+ * 'respuesta': cuerpo de error del backend, con su code y, en un 5xx, su referencia;
+ * 'sesionTerminada': 401 con el mensaje para la clienta y el code del rechazo si es de sesión
+ *   terminada (SESION_VENCIDA en otro caso).
+ * El message de un ApiError solo sirve para clasificar: a la pantalla llega el texto de
+ * mensajeParaClienta (mensajesError.ts), nunca este.
  */
-export function crearErrorApi(datos: { tipo: 'red' }): ErrorDeRed;
+export function crearErrorApi(datos: Extract<DatosErrorApi, { tipo: 'red' }>): ErrorDeRed;
 export function crearErrorApi(datos: Exclude<DatosErrorApi, { tipo: 'red' }>): ApiError;
 export function crearErrorApi(datos: DatosErrorApi): ApiError | ErrorDeRed {
   switch (datos.tipo) {
     case 'red':
-      return new ErrorDeRed();
+      return new ErrorDeRed(datos.motivo);
     case 'respuesta':
       return new ApiError(
         datos.status,
         getErrorMessage(datos.cuerpo, datos.status),
         getErrorCode(datos.cuerpo),
+        getErrorReferencia(datos.cuerpo, datos.status),
       );
     case 'sesionTerminada':
-      return new ApiError(401, MENSAJE_SESION_TERMINADA, datos.code ?? 'SESION_VENCIDA');
+      return new ApiError(
+        401,
+        MENSAJE_SESION_TERMINADA,
+        datos.code && CODES_SESION_TERMINADA.has(datos.code) ? datos.code : 'SESION_VENCIDA',
+      );
   }
 }
 
@@ -412,13 +450,30 @@ async function renovarMovil(
   return { resultado: 'rechazada', code: respuesta.tipo === 'rechazo' ? respuesta.code : undefined };
 }
 
-/** Sesiones sin refreshToken (guardadas antes de la renovación móvil): POST /api/auth/refresh. */
+/**
+ * /api/auth/refresh responde 400 con este code si el token es de la app móvil: esa sesión no se
+ * renueva nunca por el camino anterior (le falta su refreshToken), así que cuenta como rechazo.
+ */
+const CODIGO_USA_RENOVAR_MOVIL = 'USA_RENOVAR_MOVIL';
+
+/** El servidor ya no renovará este token por el camino anterior: 401, o 400 USA_RENOVAR_MOVIL. */
+async function esRechazoClasico(respuesta: Response): Promise<boolean> {
+  if (respuesta.status === 401) {
+    return true;
+  }
+  return respuesta.status === 400 && getErrorCode(await parseBody(respuesta)) === CODIGO_USA_RENOVAR_MOVIL;
+}
+
+/**
+ * Sesiones sin refreshToken (guardadas antes de la renovación móvil): POST /api/auth/refresh. Sin
+ * red lanza ErrorDeRed (ejecutarRenovacion lo convierte en 'fallida').
+ */
 async function renovarClasica(sesion: SesionGuardada, generacion: number): Promise<ResultadoRenovacion> {
   const respuesta = await enviar('POST', '/api/auth/refresh', undefined, sesion.token);
   if (generacion !== generacionActual()) {
     return 'descartada';
   }
-  if (respuesta.status === 401) {
+  if (await esRechazoClasico(respuesta)) {
     return 'rechazada';
   }
   if (!respuesta.ok) {
@@ -430,7 +485,15 @@ async function renovarClasica(sesion: SesionGuardada, generacion: number): Promi
     return 'fallida';
   }
   // Solo se escribe si la sesión sigue siendo la misma: nunca se revive una sesión cerrada.
-  const guardado = await reemplazarToken(sesion.token, nuevo, Date.now(), generacion);
+  let guardado = false;
+  try {
+    guardado = await reemplazarToken(sesion.token, nuevo, Date.now(), generacion);
+  } catch {
+    // El servidor ya revocó el token anterior y el nuevo no se pudo guardar: la sesión se perdió.
+    // Se cierra y se avisa ahora, en lugar de dejar guardado un token que ya no sirve.
+    await expirarSesion(sesion.token, generacion);
+    return 'rechazada';
+  }
   return guardado ? 'renovada' : 'descartada';
 }
 

@@ -44,6 +44,7 @@ import {
 import { enSecuencia } from '../../helpers/pantallasServicios';
 import type { Manejador } from '../../helpers/servidorSimulado';
 import { sesionGuardada } from '../../helpers/sesionGuardada';
+import { TEXTO_SIN_CONEXION } from '../../helpers/textosError';
 
 jest.mock('expo-web-browser', () => require('../../helpers/google').navegadorSimulado());
 
@@ -58,7 +59,7 @@ const NOTAS = 'Traigo foto de referencia';
 /** Plazo bajo la opción en el salón, con las reglas de la configuración (GP-07.4). */
 const NOTA_SALON = () => plazoDeOpcion('salon');
 const ERROR_RESERVA = 'No pudimos reservar tu cita. Intenta de nuevo.';
-const SIN_CONEXION = 'Sin conexión. Revisa tu internet e intenta de nuevo';
+const SIN_CONEXION = TEXTO_SIN_CONEXION;
 const SESION_TERMINADA = 'Tu sesión terminó. Inicia sesión de nuevo.';
 
 /** Textos técnicos de los cuerpos de error (campo `error` del filtro, el 503 y la red caída). */

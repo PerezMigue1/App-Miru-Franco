@@ -35,6 +35,7 @@ import { FiltroCategorias } from '../components/FiltroCategorias';
 import { HojaFiltrosTienda } from '../components/HojaFiltrosTienda';
 import { TarjetaProducto, TarjetaProductoEsqueleto } from '../components/TarjetaProducto';
 import { useCatalogoViewModel, type ProductoCatalogo } from '../viewmodels/useCatalogoViewModel';
+import { useTextosTienda } from '../viewmodels/textosTienda';
 
 /** Filas del skeleton: tarjetasEsqueleto repartidas en las columnas de la cuadrícula. */
 const FILAS_ESQUELETO = Array.from(
@@ -51,6 +52,7 @@ export default function TiendaView() {
   const { colores } = useTheme();
   const { width } = useWindowDimensions();
   const vm = useCatalogoViewModel();
+  const { catalogo: textos } = useTextosTienda();
   const refLista = useRef<FlatList<ProductoCatalogo>>(null);
   // La cuadrícula aparece una sola vez al terminar de cargar (en el contenedor, no en cada fila).
   const entrada = useEntradaContenido();
@@ -66,10 +68,7 @@ export default function TiendaView() {
 
   // El carrito tiene su propia pestaña: la cabecera de Productos solo lleva el título.
   const encabezadoPantalla = (
-    <ScreenHeader
-      titulo="Productos"
-      subtitulo="Explora nuestro catálogo de productos profesionales"
-    />
+    <ScreenHeader titulo={textos.titulo} subtitulo={textos.subtitulo} />
   );
 
   const refresco = (
@@ -92,7 +91,7 @@ export default function TiendaView() {
         <View
           accessible
           accessibilityRole="progressbar"
-          accessibilityLabel="Cargando productos"
+          accessibilityLabel={textos.cargando}
           style={styles.esqueleto}
         >
           <View style={styles.filaBuscador}>
@@ -127,18 +126,14 @@ export default function TiendaView() {
         <View style={styles.estado}>
           {vm.estado === 'error' ? (
             <EmptyState
-              titulo={vm.errorRed ? 'Sin conexión' : 'No pudimos cargar la tienda'}
-              mensaje={
-                vm.errorRed
-                  ? 'Revisa tu internet e intenta de nuevo.'
-                  : 'Ocurrió un problema al traer los productos. Intenta de nuevo en un momento.'
-              }
+              titulo={vm.errorRed ? textos.sinRedTitulo : textos.errorTitulo}
+              mensaje={vm.errorRed ? textos.sinRedTexto : textos.errorTexto}
               accion={{ titulo: 'Reintentar', onPress: vm.recargar }}
             />
           ) : (
             <EmptyState
-              titulo="Aún no hay productos"
-              mensaje="El salón todavía no publica productos en la app. Vuelve pronto."
+              titulo={textos.vacioTitulo}
+              mensaje={textos.vacioTexto}
             />
           )}
         </View>
@@ -161,7 +156,7 @@ export default function TiendaView() {
         <FiltroCategorias categorias={vm.categorias} elegida={vm.categoria} onElegir={vm.setCategoria} />
         {vm.errorRefresco ? (
           <Text accessibilityLiveRegion="polite" style={[styles.aviso, { color: colores.peligro }]}>
-            No pudimos actualizar la tienda. Desliza hacia abajo para intentar de nuevo.
+            {textos.refresco}
           </Text>
         ) : null}
       </View>
@@ -171,9 +166,9 @@ export default function TiendaView() {
   const sinResultados = (
     <View style={styles.estado}>
       <EmptyState
-        titulo="No encontramos productos"
-        mensaje="Prueba con otra búsqueda, categoría o filtro."
-        accion={{ titulo: 'Ver todos', onPress: vm.limpiarFiltros }}
+        titulo={textos.sinResultadosTitulo}
+        mensaje={textos.sinResultadosTexto}
+        accion={{ titulo: textos.verTodos, onPress: vm.limpiarFiltros }}
       />
     </View>
   );

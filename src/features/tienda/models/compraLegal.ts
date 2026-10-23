@@ -8,6 +8,7 @@ import {
   type DocumentoLegalVigente,
   type SlugDocumentoLegal,
 } from '@/shared/api/documentosLegales';
+import { tipoDeError } from '@/shared/api/mensajesError';
 import { obtenerTexto } from '@/shared/api/textosSitio';
 
 import type { MetodoPago } from './pedidoModel';
@@ -434,7 +435,10 @@ export function esVersionCambiadaCompra(error: unknown): boolean {
 export function mensajeConsentimientoCompra(error: ErrorConsentimientoCompra, config: ConfiguracionPublica): string {
   const t = (clave: string) => obtenerTexto(clave, {}, config);
   if (error.paso === 'version') {
-    return `${t('tienda.checkout.consentimientoSinVersion')} ${t('tienda.checkout.consentimientoSinRed')}`;
+    // "Revisa tu conexión" solo sin red; con un 5xx (u otra respuesta) se pide intentar en un momento.
+    const detalleVersion =
+      tipoDeError(error.causa) === 'sinConexion' ? t('tienda.checkout.consentimientoSinRed') : t('tienda.checkout.consentimientoGenerico');
+    return `${t('tienda.checkout.consentimientoSinVersion')} ${detalleVersion}`;
   }
   let detalle = t('tienda.checkout.consentimientoGenerico');
   if (esSinRed(error.causa)) {

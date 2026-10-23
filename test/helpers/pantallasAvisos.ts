@@ -5,6 +5,7 @@ import { act, fireEvent, screen, waitFor, within } from 'expo-router/testing-lib
 import { AppState, type AppStateStatus } from 'react-native';
 
 import { limpiarAvisos } from '@/features/notificaciones/viewmodels/avisosEstado';
+import { reiniciarPreferenciaAvisos } from '@/features/notificaciones/viewmodels/preferenciaAvisosEstado';
 
 import { avisoCrudo, RUTA_AVISOS, rutasAvisos } from './avisosFicticios';
 import { AHORA, citaCruda, CLIENTA_CITAS, cuerpoCita, rutaCita } from './citasFicticias';
@@ -72,6 +73,8 @@ export function prepararPruebasAvisos(): () => void {
   beforeEach(() => {
     reiniciarFlujos();
     limpiarAvisos();
+    // GP-07.6: la preferencia "Avisos en la app" vive en memoria del módulo; cada prueba la lee otra vez.
+    reiniciarPreferenciaAvisos();
   });
   return prepararPruebasDePantalla();
 }

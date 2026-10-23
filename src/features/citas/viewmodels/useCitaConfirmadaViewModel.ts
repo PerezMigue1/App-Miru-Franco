@@ -4,6 +4,7 @@ import { BackHandler } from 'react-native';
 
 import { ApiError } from '@/shared/api/apiClient';
 import { obtenerConfiguracion, suscribir } from '@/shared/api/configuracionPublica';
+import { mensajeParaClienta } from '@/shared/api/mensajesError';
 import { obtenerTexto } from '@/shared/api/textosSitio';
 
 import {
@@ -28,6 +29,8 @@ export type EstadoCitaConfirmada = 'cargando' | 'listo' | 'error' | 'noEncontrad
 export type AnticipoConfirmacion = 'pagado' | 'pendiente' | 'enRevision' | 'noAplica';
 
 export interface CitaConfirmadaViewModel {
+  /** Con estado 'error': que la reserva no se pierde y por qué no se cargó (sin red, servidor...). */
+  mensajeError: string | null;
   estado: EstadoCitaConfirmada;
   cita: Cita | null;
   anticipo: AnticipoConfirmacion;
@@ -54,6 +57,7 @@ export function useCitaConfirmadaViewModel(citaId: string | undefined): CitaConf
   const router = useRouter();
   const configuracion = useSyncExternalStore(suscribir, obtenerConfiguracion, obtenerConfiguracion);
   const [estado, setEstado] = useState<EstadoCitaConfirmada>('cargando');
+  const [errorCarga, setErrorCarga] = useState<unknown>(null);
   const [cita, setCita] = useState<Cita | null>(null);
   const [anticipo, setAnticipo] = useState<AnticipoConfirmacion>('noAplica');
   // Solo la última solicitud escribe el estado (reintentos rápidos o pantalla desmontada).
@@ -104,6 +108,7 @@ export function useCitaConfirmadaViewModel(citaId: string | undefined): CitaConf
           return;
         }
         setCita(null);
+        setErrorCarga(error);
         setEstado(error instanceof ApiError && error.status === 404 ? 'noEncontrado' : 'error');
       });
   }, [idLimpio]);
@@ -151,6 +156,10 @@ export function useCitaConfirmadaViewModel(citaId: string | undefined): CitaConf
   const limite = pendiente && !enSalon ? limiteAnticipo(cita.anticipoVenceEn) : null;
 
   return {
+    mensajeError:
+      estado === 'error'
+        ? `${obtenerTexto('citas.confirmada.noSePierde', {}, configuracion)} ${mensajeParaClienta(errorCarga)}`
+        : null,
     estado,
     cita,
     anticipo,

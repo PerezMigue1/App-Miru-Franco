@@ -6,7 +6,7 @@ import '../../helpers/mocksPantallas';
 import { fireEvent, screen, waitFor } from 'expo-router/testing-library';
 import { Linking } from 'react-native';
 
-import { MENSAJE_SIN_CONEXION } from '@/features/auth/models/AuthModel';
+import { MENSAJE_SIN_CONEXION } from '@/shared/api/mensajesError';
 import { fechaYHora } from '@/features/tienda/models/pedidoModel';
 import { reiniciarVerificacion } from '@/features/tienda/models/verificacionPago';
 import { obtenerConfiguracion, reiniciarConfiguracionPublica } from '@/shared/api/configuracionPublica';

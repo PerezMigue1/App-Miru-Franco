@@ -2,6 +2,8 @@ import { usePathname, useRouter } from 'expo-router';
 import { openBrowserAsync } from 'expo-web-browser';
 import { useEffect, useRef, useState } from 'react';
 
+import { mensajeParaClienta } from '@/shared/api/mensajesError';
+import { obtenerTexto } from '@/shared/api/textosSitio';
 import { soloDigitos, telefonoSinLada } from '@/shared/ui/digitos';
 import { duracion, reintentosCorreo } from '@/shared/ui/tokens';
 import { useCandado } from '@/shared/ui/useCandado';
@@ -10,15 +12,12 @@ import {
   AVISO_DATOS_PERSONALES_CLAVE,
   AYUDA_TELEFONO,
   ERROR_TELEFONO,
-  MENSAJE_DEMASIADOS_INTENTOS,
-  MENSAJE_SIN_CONEXION,
   TIPOS_CABELLO,
   convertirFechaNacimiento,
   esCorreoValido,
   esErrorDeRed,
   esTelefonoValido,
   estadoHttp,
-  mensajeDelServidor,
   normalizarCorreo,
   normalizarTelefono,
   problemaDeAlergias,
@@ -124,7 +123,8 @@ export interface RegistroViewModel {
   ayudaTelefono: string;
   /** Opciones de tipo de cabello del paso 2, en el orden en que se muestran. */
   tiposCabello: { valor: TipoCabello; etiqueta: string }[];
-  preguntas: { estado: EstadoPreguntas; lista: PreguntaSeguridad[]; cargar: () => void };
+  /** error: con estado 'error', por qué no se cargaron las preguntas (sin red, servidor...). */
+  preguntas: { estado: EstadoPreguntas; error: string | null; lista: PreguntaSeguridad[]; cargar: () => void };
   abrirAviso: () => void;
   /** Abre los Términos y Condiciones del sitio en el navegador. */
   abrirTerminos: () => void;
@@ -192,10 +192,10 @@ const PASO_2: CampoRegistro[] = [
 const DATOS_DE_LA_CLAVE: CampoRegistro[] = ['nombre', 'correo', 'telefono', 'nacimiento', 'respuesta'];
 
 const NO_COINCIDEN = 'Las contraseñas no coinciden';
-const REVISA_CAMPOS = 'Revisa los campos marcados.';
-const NO_PUDIMOS_CREAR = 'No pudimos crear tu cuenta. Intenta de nuevo.';
-const CORREO_CON_CUENTA =
-  'Este correo ya tiene una cuenta. Toca Iniciar sesión para entrar o recuperar tu contraseña.';
+// Mensajes propios del registro, del catálogo de textos (se leen al usarse: siguen a la configuración).
+const revisaCampos = () => obtenerTexto('auth.revisaCampos');
+const noPudimosCrear = () => obtenerTexto('auth.registro.noSePudo');
+const correoConCuenta = () => obtenerTexto('auth.registro.correoConCuenta');
 
 function problemaDeTelefono(telefono: string): string | null {
   if (!telefono) {
@@ -311,14 +311,11 @@ function cuerpoDeRegistro(
   };
 }
 
+/** 400 sin code del registro (datos o regla de contraseña): el texto del servidor no se muestra. */
 function mensajeDeRegistro(error: unknown): string {
-  if (esErrorDeRed(error)) {
-    return MENSAJE_SIN_CONEXION;
-  }
-  if (estadoHttp(error) === 429) {
-    return MENSAJE_DEMASIADOS_INTENTOS;
-  }
-  return mensajeDelServidor(error, NO_PUDIMOS_CREAR);
+  return mensajeParaClienta(error, {
+    respaldo: estadoHttp(error) === 400 ? obtenerTexto('auth.registro.revisaDatos') : noPudimosCrear(),
+  });
 }
 
 /** Espera la promesa o el límite, lo que pase primero. Nunca rechaza. */
@@ -363,6 +360,7 @@ export function useRegistroViewModel(): RegistroViewModel {
   const [estadoCorreo, setEstadoCorreo] = useState<EstadoCorreo>('inactivo');
   const [enfoque, setEnfoque] = useState<PedidoEnfoque | null>(null);
   const [estadoPreguntas, setEstadoPreguntas] = useState<EstadoPreguntas>('inactivo');
+  const [errorPreguntas, setErrorPreguntas] = useState<string | null>(null);
   const [listaPreguntas, setListaPreguntas] = useState<PreguntaSeguridad[]>([]);
 
   // Verificación del correo por rondas: una ronda es un correo; cambia al escribir otro (o con el
@@ -612,10 +610,10 @@ export function useRegistroViewModel(): RegistroViewModel {
       siguientes.clave = null;
     }
     setErrores(siguientes);
-    if (errorGeneral === REVISA_CAMPOS && !Object.values(siguientes).some(Boolean)) {
+    if (errorGeneral === revisaCampos() && !Object.values(siguientes).some(Boolean)) {
       setErrorGeneral(null);
     }
-    if (campo === 'correo' && errorGeneral === CORREO_CON_CUENTA) {
+    if (campo === 'correo' && errorGeneral === correoConCuenta()) {
       // El aviso del 409 era de ese correo: con otro ya no aplica.
       setErrorGeneral(null);
     }
@@ -682,7 +680,8 @@ export function useRegistroViewModel(): RegistroViewModel {
         setListaPreguntas(lista);
         setEstadoPreguntas('listo');
       })
-      .catch(() => {
+      .catch((error: unknown) => {
+        setErrorPreguntas(mensajeParaClienta(error, { respaldo: obtenerTexto('auth.registro.preguntasNoCargadas') }));
         setEstadoPreguntas('error');
       });
   };
@@ -699,18 +698,18 @@ export function useRegistroViewModel(): RegistroViewModel {
   };
 
   const abrirAviso = () => {
-    abrirPagina(urlAvisoPrivacidad(), 'No pudimos abrir el aviso de privacidad.');
+    abrirPagina(urlAvisoPrivacidad(), obtenerTexto('auth.avisoPrivacidad.noAbre'));
   };
 
   const abrirTerminos = () => {
-    abrirPagina(urlTerminos(), 'No pudimos abrir los términos y condiciones.');
+    abrirPagina(urlTerminos(), obtenerTexto('auth.terminos.noAbre'));
   };
 
   const avanzar = async () => {
     const valores = limpiarTelefono(campos);
     const primero = revisar(PASO_1, valores);
     if (primero) {
-      setErrorGeneral(REVISA_CAMPOS);
+      setErrorGeneral(revisaCampos());
       pedirEnfoque(primero);
       return;
     }
@@ -745,13 +744,13 @@ export function useRegistroViewModel(): RegistroViewModel {
       revisar(PASO_1, valores) ?? (estadoCorreo === 'registrado' ? 'correo' : undefined);
     if (primeroCuenta) {
       irAPaso(1);
-      setErrorGeneral(REVISA_CAMPOS);
+      setErrorGeneral(revisaCampos());
       pedirEnfoque(primeroCuenta);
       return;
     }
     const primeroCabello = revisar(PASO_2, valores);
     if (primeroCabello || !valores.tipoCabello || !valores.pregunta) {
-      setErrorGeneral(REVISA_CAMPOS);
+      setErrorGeneral(revisaCampos());
       if (primeroCabello) {
         pedirEnfoque(primeroCabello);
       }
@@ -765,7 +764,7 @@ export function useRegistroViewModel(): RegistroViewModel {
         cuerpoDeRegistro(valores, email, valores.tipoCabello, valores.pregunta),
       );
       if (respuesta?.success === false) {
-        setErrorGeneral(respuesta.message ?? NO_PUDIMOS_CREAR);
+        setErrorGeneral(noPudimosCrear());
         return;
       }
       // Los datos de salud ya viajaron: no se conservan ni en memoria.
@@ -783,7 +782,7 @@ export function useRegistroViewModel(): RegistroViewModel {
             marcarRegistrado(email);
           }
           irAPaso(1);
-          setErrorGeneral(mismoCorreo ? CORREO_CON_CUENTA : REVISA_CAMPOS);
+          setErrorGeneral(mismoCorreo ? correoConCuenta() : revisaCampos());
           pedirEnfoque('correo');
         }
       } else {
@@ -854,7 +853,7 @@ export function useRegistroViewModel(): RegistroViewModel {
     enfoque,
     ayudaTelefono: AYUDA_TELEFONO,
     tiposCabello: TIPOS_CABELLO,
-    preguntas: { estado: estadoPreguntas, lista: listaPreguntas, cargar: cargarPreguntas },
+    preguntas: { estado: estadoPreguntas, error: errorPreguntas, lista: listaPreguntas, cargar: cargarPreguntas },
     abrirAviso,
     abrirTerminos,
     crearCuenta,

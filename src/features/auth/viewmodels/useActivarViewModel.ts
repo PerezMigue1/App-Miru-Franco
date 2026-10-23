@@ -1,26 +1,40 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BackHandler } from 'react-native';
 
+import { mensajeParaClienta } from '@/shared/api/mensajesError';
+import { obtenerTexto } from '@/shared/api/textosSitio';
+import { useTextos } from '@/shared/api/useTextos';
 import { soloDigitos } from '@/shared/ui/digitos';
 import { useCandado } from '@/shared/ui/useCandado';
 
-import {
-  MENSAJE_DEMASIADOS_INTENTOS,
-  MENSAJE_SIN_CONEXION,
-  esCodigoValido,
-  esErrorDeRed,
-  estadoHttp,
-  mensajeDelServidor,
-} from '../models/AuthModel';
+import { esCodigoValido, esCuentaYaActivada, estadoHttp } from '../models/AuthModel';
 import { reenviarCodigo, verificarCodigo } from '../models/authService';
 import type { RutaAcceso } from './useRetornoActivacion';
 
 const ESPERA_REENVIO_S = 60;
+/** Dígitos del código de activación. */
 const LARGO_CODIGO = 6;
+/** Minutos de vigencia del código de activación (usuarios.service.ts del backend: "expira en 2 minutos"). */
+const VIGENCIA_CODIGO_MINUTOS = 2;
 const UN_SEGUNDO_MS = 1000;
-const MENSAJE_CODIGO_INCORRECTO =
-  'El código es incorrecto o ha expirado. Solicita uno nuevo con «Reenviar código».';
+const mensajeCodigoIncorrecto = () => obtenerTexto('auth.activar.codigoInvalido');
+
+/** Textos de la pantalla de activación, del catálogo, con el correo y las cifras ya puestos. */
+export interface TextosActivar {
+  titulo: string;
+  /** "Escribe el código de 6 dígitos que enviamos a {correo}." (o "a tu correo" sin él). */
+  instrucciones: string;
+  /** "El código vence en 2 minutos." */
+  vigencia: string;
+  verificar: string;
+  verificando: string;
+  /** "Podrás pedir otro código en {segundos} s" con la espera que queda. */
+  espera: string;
+  reenviar: string;
+  reenviando: string;
+  volver: string;
+}
 
 export interface ActivarViewModel {
   email: string;
@@ -35,20 +49,21 @@ export interface ActivarViewModel {
   verificar: () => void;
   reenviar: () => void;
   volver: () => void;
+  textos: TextosActivar;
 }
 
 function mensajeDeVerificacion(error: unknown): string {
-  if (esErrorDeRed(error)) {
-    return MENSAJE_SIN_CONEXION;
-  }
   const estado = estadoHttp(error);
-  if (estado === 429) {
-    return MENSAJE_DEMASIADOS_INTENTOS;
-  }
   if (estado === 400 || estado === 401 || estado === 404) {
-    return MENSAJE_CODIGO_INCORRECTO;
+    return mensajeCodigoIncorrecto();
   }
-  return mensajeDelServidor(error, MENSAJE_CODIGO_INCORRECTO);
+  return mensajeParaClienta(error, { respaldo: obtenerTexto('auth.activar.noSeVerifico') });
+}
+
+function mensajeDeReenvio(error: unknown): string {
+  return esCuentaYaActivada(error)
+    ? obtenerTexto('auth.activar.yaActivada')
+    : mensajeParaClienta(error, { respaldo: obtenerTexto('auth.activar.noSeReenvio') });
 }
 
 /**
@@ -63,6 +78,7 @@ export function useActivarViewModel(
   volverA: RutaAcceso,
 ): ActivarViewModel {
   const { dismissTo } = useRouter();
+  const texto = useTextos();
   const [codigo, setCodigoCrudo] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState<string | null>(null);
@@ -114,7 +130,7 @@ export function useActivarViewModel(
 
   const enviarVerificacion = async () => {
     if (!email) {
-      setError('No sabemos a qué correo se envió el código. Vuelve a iniciar sesión.');
+      setError(obtenerTexto('auth.activar.sinCorreo'));
       return;
     }
     if (!esCodigoValido(codigo)) {
@@ -127,7 +143,7 @@ export function useActivarViewModel(
     try {
       const respuesta = await verificarCodigo(email, codigo);
       if (respuesta?.success === false) {
-        setError(MENSAJE_CODIGO_INCORRECTO);
+        setError(mensajeCodigoIncorrecto());
         return;
       }
       regresar(true);
@@ -145,17 +161,13 @@ export function useActivarViewModel(
     try {
       await reenviarCodigo(email);
       setCodigoCrudo('');
-      setMensaje('Te enviamos un código nuevo. Revisa tu correo.');
+      setMensaje(obtenerTexto('auth.codigo.reenviado'));
       setEspera(ESPERA_REENVIO_S);
     } catch (fallo) {
       if (estadoHttp(fallo) === 429) {
         setEspera(ESPERA_REENVIO_S);
       }
-      setError(
-        esErrorDeRed(fallo)
-          ? MENSAJE_SIN_CONEXION
-          : mensajeDelServidor(fallo, 'No pudimos reenviar el código. Intenta de nuevo.'),
-      );
+      setError(mensajeDeReenvio(fallo));
     } finally {
       setReenviando(false);
     }
@@ -181,6 +193,23 @@ export function useActivarViewModel(
 
   const volver = () => regresar(false);
 
+  const textos = useMemo<TextosActivar>(
+    () => ({
+      titulo: texto('auth.activar.titulo'),
+      instrucciones: email
+        ? texto('auth.activar.instrucciones', { digitos: LARGO_CODIGO, correo: email })
+        : texto('auth.activar.instruccionesSinCorreo', { digitos: LARGO_CODIGO }),
+      vigencia: texto('auth.activar.vigencia', { minutos: VIGENCIA_CODIGO_MINUTOS }),
+      verificar: texto('auth.activar.verificar'),
+      verificando: texto('auth.activar.verificando'),
+      espera: texto('auth.activar.espera', { segundos: espera }),
+      reenviar: texto('auth.activar.reenviar'),
+      reenviando: texto('auth.activar.reenviando'),
+      volver: texto('auth.activar.volver'),
+    }),
+    [texto, email, espera],
+  );
+
   return {
     email,
     codigo,
@@ -193,5 +222,6 @@ export function useActivarViewModel(
     verificar,
     reenviar,
     volver,
+    textos,
   };
 }

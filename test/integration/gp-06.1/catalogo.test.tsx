@@ -19,6 +19,7 @@ import {
 } from '../../helpers/pantallasServicios';
 import { CATALOGO_CRUDO, cuerpoLista } from '../../helpers/serviciosFicticios';
 import { llamadasA, respuesta } from '../../helpers/servidorSimulado';
+import { TEXTO_SERVIDOR } from '../../helpers/textosError';
 
 /**
  * GP-06.1: catálogo de servicios en la pestaña Servicios (ruta /citas) con las pantallas reales y
@@ -217,7 +218,7 @@ describe('Catálogo de servicios con las pantallas reales (GP-06.1)', () => {
       });
 
       expect(await screen.findByText('No pudimos cargar los servicios')).toBeOnTheScreen();
-      expect(screen.getByText('Revisa tu conexión e intenta de nuevo.')).toBeOnTheScreen();
+      expect(screen.getByText(TEXTO_SERVIDOR)).toBeOnTheScreen();
       expect(screen.queryByText('Error interno ficticio')).not.toBeOnTheScreen();
 
       await fireEvent.press(screen.getByRole('button', { name: 'Reintentar' }));

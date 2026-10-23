@@ -1,5 +1,3 @@
-import { apiGet } from '@/shared/api/apiClient';
-
 /** Producto del catálogo: los campos de la interfaz Producto de la web que usa la app. */
 export interface Producto {
   id: string | number;
@@ -70,35 +68,4 @@ export function primeraImagen(...valores: unknown[]): string | undefined {
     }
   }
   return undefined;
-}
-
-/** Como en la web: si hay presentaciones manda el menor de sus precios. */
-function precioDe(crudo: Crudo): string {
-  if (Array.isArray(crudo.presentaciones)) {
-    const precios = crudo.presentaciones
-      .filter(esObjeto)
-      .map((presentacion) => Number(texto(presentacion.precio).split('$').join('').split(',').join('')))
-      .filter((numero) => Number.isFinite(numero) && numero > 0);
-    if (precios.length > 0) {
-      return String(Math.min(...precios));
-    }
-  }
-  return texto(crudo.precio);
-}
-
-function normalizarProducto(crudo: Crudo): Producto {
-  return {
-    id: idDe(crudo),
-    nombre: texto(crudo.nombre),
-    precio: precioDe(crudo),
-    categoria: texto(crudo.categoria),
-    imagen: primeraImagen(crudo.imagen, crudo.imagenes),
-  };
-}
-
-/** Lectura pública del catálogo: GET /api/productos. */
-export function obtenerProductos(): Promise<Producto[]> {
-  return apiGet<unknown>('/api/productos', { publica: true }).then((respuesta) =>
-    listaDe(respuesta, ['data', 'productos', 'producto']).map(normalizarProducto),
-  );
 }

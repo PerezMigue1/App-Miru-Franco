@@ -1,4 +1,5 @@
 import { obtenerConfiguracion, type ConfiguracionPublica } from './configuracionPublica';
+import TEXTOS_PROPIOS_APP from './textosPropiosApp.json';
 
 /**
  * Textos del sitio para la app (Admin > Textos del sitio). GET /api/textos-sitio es solo para la
@@ -495,6 +496,15 @@ export const RESPALDO_TEXTOS = Object.freeze({
   'tienda.carrito.productoRetirado': '{producto} ya no está a la venta y lo quitamos de tu carrito.',
   'tienda.carrito.presentacionRetirada': '{producto} ya no está disponible y lo quitamos de tu carrito.',
   'tienda.carrito.cerrarAviso': 'Cerrar aviso',
+  // Propias de la app agregadas en GP-07.6 (textosPropiosApp.json): no existen en el catálogo del
+  // backend y son respaldos de la app hasta que el backend agregue las claves. Viven en JSON porque
+  // son datos, no código. Traen los defectos de citas, los avisos por tipo de falla, los textos que
+  // estaban escritos a mano en acceso, perfil, inicio y tienda (mismos textos), los errores para la
+  // clienta de mensajesError.ts (por tipo y por code estable del backend), la nota de Google al
+  // recuperar la contraseña, el regreso a la reserva, el interruptor de avisos en Perfil y los errores
+  // de reservar, reprogramar y cancelar una cita. Las cifras van en variables ({digitos}, {minutos},
+  // {megas}...) con el valor de una constante de la app o de la configuración.
+  ...TEXTOS_PROPIOS_APP,
 });
 
 /** Claves con respaldo en la app. */

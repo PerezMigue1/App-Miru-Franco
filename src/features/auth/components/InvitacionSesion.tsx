@@ -6,6 +6,8 @@ import { Monograma } from '@/shared/ui/Monograma';
 import { espacio, fuente, pantalla, tipo, tracking } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
+import { useTextosAuth } from '../viewmodels/textosAuth';
+
 interface InvitacionSesionProps {
   titulo: string;
   /** Una línea con lo que gana al entrar. */
@@ -16,6 +18,7 @@ interface InvitacionSesionProps {
 export function InvitacionSesion({ titulo, beneficio }: InvitacionSesionProps) {
   const { colores } = useTheme();
   const { push } = useRouter();
+  const { acceso } = useTextosAuth();
   return (
     <View style={styles.contenedor}>
       <Monograma tamano="mediano" />
@@ -24,8 +27,8 @@ export function InvitacionSesion({ titulo, beneficio }: InvitacionSesionProps) {
       </Text>
       <Text style={[styles.beneficio, { color: colores.textoSuave }]}>{beneficio}</Text>
       <View style={styles.botones}>
-        <Button titulo="Crear cuenta" onPress={() => push('/registro')} />
-        <Button titulo="Iniciar sesión" variante="secundario" onPress={() => push('/login')} />
+        <Button titulo={acceso.crearCuenta} onPress={() => push('/registro')} />
+        <Button titulo={acceso.iniciarSesion} variante="secundario" onPress={() => push('/login')} />
       </View>
     </View>
   );

@@ -9,14 +9,13 @@ import { Linking } from 'react-native';
 import {
   ERROR_CONSENTIMIENTO_SALUD,
   ERROR_TELEFONO,
-  MENSAJE_ERROR_SERVIDOR,
-  MENSAJE_SIN_CONEXION,
 } from '@/features/auth/models/AuthModel';
+import { MENSAJE_SIN_CONEXION } from '@/shared/api/mensajesError';
 import {
   MENSAJE_ESPERA_UN_MOMENTO,
   MENSAJE_FOTO_FALLIDA,
   MENSAJE_FOTO_NO_GUARDADA,
-  MENSAJE_FOTO_PESADA,
+  mensajeFotoPesada,
   MENSAJE_QUITAR_FALLIDO,
   MENSAJE_SUBIDA_NO_DISPONIBLE,
   PESO_MAXIMO_FOTO,
@@ -492,7 +491,7 @@ describe('usePerfilViewModel', () => {
         preparar: () => {
           mockArchivos.tamano = PESO_MAXIMO_FOTO + 1;
         },
-        mensaje: MENSAJE_FOTO_PESADA,
+        mensaje: mensajeFotoPesada(),
         pasos: [0, 0, 0],
       },
       {
@@ -779,12 +778,12 @@ describe('useEditarPerfilViewModel', () => {
   });
 
   it.each<[string, () => Salida, string]>([
-    ['un error interno con detalle técnico', fallaInterna, MENSAJE_ERROR_SERVIDOR],
+    ['un error interno con detalle técnico', fallaInterna, 'No pudimos guardar tus cambios. Intenta de nuevo.'],
     ['sin conexión', sinRed, MENSAJE_SIN_CONEXION],
     [
-      'una regla del backend (400)',
+      'una regla del backend (400; su texto no se muestra)',
       () => errorServidor(400, 'El teléfono ya está registrado en otra cuenta.'),
-      'El teléfono ya está registrado en otra cuenta.',
+      'No pudimos guardar tus cambios. Intenta de nuevo.',
     ],
   ])('si el guardado falla por %s, avisa en español y se queda', async (_caso, salida, mensaje) => {
     const { result } = await montarEdicion({ [RUTA_PATCH]: salida });
@@ -1119,9 +1118,9 @@ describe('useCambiarContrasenaViewModel', () => {
     [
       'demasiados códigos en la hora',
       () => errorServidor(429, 'Pediste demasiados códigos. Intenta en 20 minutos.', 'DEMASIADOS_CODIGOS'),
-      { aviso: 'Pediste demasiados códigos. Intenta en 20 minutos.' },
+      { aviso: 'Pediste demasiados códigos. Espera unos minutos e intenta de nuevo.' },
     ],
-    ['error interno con detalle técnico', fallaInterna, { aviso: MENSAJE_ERROR_SERVIDOR }],
+    ['error interno con detalle técnico', fallaInterna, { aviso: 'No pudimos cambiar tu contraseña. Intenta de nuevo.' }],
     ['sin conexión', sinRed, { aviso: MENSAJE_SIN_CONEXION }],
     [
       'sesión no confirmada (401)',
@@ -1191,9 +1190,9 @@ describe('useCambiarContrasenaViewModel', () => {
 
   it.each<[string, () => Salida, ReturnType<typeof destino>, number]>([
     [
-      'una regla de la nueva (400 sin code)',
+      'una regla de la nueva (400 sin code; su texto no se muestra)',
       () => errorServidor(400, 'La nueva contraseña no puede ser igual a la contraseña actual'),
-      { campo: 'nueva', mensaje: 'La nueva contraseña no puede ser igual a la contraseña actual' },
+      { campo: 'nueva', mensaje: 'Tu contraseña nueva no cumple los requisitos o es igual a la actual. Elige otra.' },
       1,
     ],
     [
@@ -1202,7 +1201,7 @@ describe('useCambiarContrasenaViewModel', () => {
       { campo: 'actual', mensaje: 'La contraseña actual no es correcta.' },
       1,
     ],
-    ['un error interno con detalle técnico', fallaInterna, { aviso: MENSAJE_ERROR_SERVIDOR }, 2],
+    ['un error interno con detalle técnico', fallaInterna, { aviso: 'No pudimos cambiar tu contraseña. Intenta de nuevo.' }, 2],
     ['sin conexión', sinRed, { aviso: MENSAJE_SIN_CONEXION }, 2],
   ])('al cambiarla, %s se muestra en español en el paso %#', async (_caso, salida, esperado, paso) => {
     const { result } = await llegarAlPaso2({ [RUTA_CAMBIO]: salida });

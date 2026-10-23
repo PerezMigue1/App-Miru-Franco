@@ -16,8 +16,10 @@ import { HojaBienvenida } from '@/features/auth/components/HojaBienvenida';
 import { sesionCabecera } from '@/features/auth/viewmodels/sesionCabecera';
 import { AuthProvider, useAuth } from '@/features/auth/viewmodels/useAuth';
 import { SesionRequeridaProvider } from '@/features/auth/viewmodels/useRequiereSesion';
+import { useRegresoReserva } from '@/features/citas/viewmodels/useRegresoReserva';
 import { AvisoEnPantalla } from '@/features/notificaciones/components/AvisoEnPantalla';
 import { useNoLeidos } from '@/features/notificaciones/viewmodels/avisosEstado';
+import { useAvisosEnApp } from '@/features/notificaciones/viewmodels/preferenciaAvisosEstado';
 import { useAvisosEnVivo } from '@/features/notificaciones/viewmodels/useAvisosEnVivo';
 import { useCargaConfiguracion, useConfiguracionPublica } from '@/shared/api/useConfiguracionPublica';
 import { SesionCabeceraProvider, type SesionCabecera } from '@/shared/ui/AccionesCabecera';
@@ -65,7 +67,7 @@ export default function RootLayout() {
 
 function Navegacion({ fuentesListas }: { fuentesListas: boolean }) {
   const { colores } = useTheme();
-  const { estado, sesionVencida } = useAuth();
+  const { estado, sesionVencida, usuario } = useAuth();
   const { lista: aparienciaLista } = useApariencia();
   const { navigate } = useRouter();
   const [introTerminada, setIntroTerminada] = useState(false);
@@ -75,8 +77,12 @@ function Navegacion({ fuentesListas }: { fuentesListas: boolean }) {
   // Montado en la raíz para refrescar la configuración al volver a primer plano.
   useConfiguracionPublica();
   // Avisos internos en vivo (GP-07.2): una sola conexión para toda la app, solo con sesión y con la
-  // app en primer plano. Se monta aquí y en ningún otro lugar.
-  useAvisosEnVivo(estado === 'autenticado');
+  // app en primer plano. Se monta aquí y en ningún otro lugar. Si la clienta apagó "Avisos en la
+  // app" en Perfil (GP-07.6), no hay conexión en vivo: la bandeja se pide al abrirla.
+  const avisosEnApp = useAvisosEnApp(estado === 'autenticado' ? (usuario?.id ?? null) : null);
+  useAvisosEnVivo(estado === 'autenticado', avisosEnApp);
+  // Tras una sesión vencida a mitad de una reserva, al volver a entrar regresa sola a ella.
+  useRegresoReserva();
   // La apariencia guardada se aplica antes de mostrar nada: sin parpadeo de tema.
   const listo = fuentesListas && estado !== 'cargando' && aparienciaLista && configuracionLista;
 

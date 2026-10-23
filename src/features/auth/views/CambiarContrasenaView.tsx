@@ -72,7 +72,7 @@ export default function CambiarContrasenaView() {
         <View style={styles.cuerpo}>
           <EmptyState
             titulo="No pudimos cargar tu cuenta"
-            mensaje="Revisa tu conexión a internet e inténtalo de nuevo."
+            mensaje={vm.mensajeError ?? ''}
             accion={{ titulo: 'Reintentar', onPress: vm.reintentar }}
           />
         </View>

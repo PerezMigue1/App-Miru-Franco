@@ -15,11 +15,10 @@ import { useTheme } from '@/shared/ui/useTheme';
 import { AvisoTienda } from '../components/AvisoTienda';
 import { FilaCarrito, FilaCarritoEsqueleto } from '../components/FilaCarrito';
 import { formatoPrecio } from '../viewmodels/presentacionTienda';
+import { useTextosTienda } from '../viewmodels/textosTienda';
 import { useCarritoViewModel, type ItemCarrito } from '../viewmodels/useCarritoViewModel';
 
 const ESQUELETOS = [0, 1, 2];
-const TITULO = 'Carrito';
-const SUBTITULO = 'Revisa tus productos antes de finalizar la compra';
 
 /**
  * Pestaña Carrito: productos con su cantidad, total y el paso a finalizar la compra. Como pestaña
@@ -28,6 +27,8 @@ const SUBTITULO = 'Revisa tus productos antes de finalizar la compra';
 export default function CarritoView() {
   const { colores } = useTheme();
   const vm = useCarritoViewModel();
+  const textos = useTextosTienda();
+  const t = textos.carrito;
   // La lista aparece una vez al terminar de cargar (en el contenedor, nunca en cada fila).
   const entrada = useEntradaContenido();
 
@@ -56,7 +57,7 @@ export default function CarritoView() {
       <View
         accessible
         accessibilityRole="progressbar"
-        accessibilityLabel="Cargando tu carrito"
+        accessibilityLabel={t.cargando}
         style={styles.lista}
       >
         {ESQUELETOS.map((i) => (
@@ -67,18 +68,15 @@ export default function CarritoView() {
   } else if (!vm.conSesion) {
     cuerpo = (
       <ScrollView contentContainerStyle={styles.relleno}>
-        <InvitacionSesion
-          titulo="Tu carrito te espera"
-          beneficio="Inicia sesión para guardar tus productos y apartarlos en el salón."
-        />
+        <InvitacionSesion titulo={t.sesionTitulo} beneficio={t.sesionBeneficio} />
       </ScrollView>
     );
   } else if (vm.estado === 'error') {
     cuerpo = (
       <ScrollView contentContainerStyle={[styles.estado, styles.relleno]}>
         <EmptyState
-          titulo="No pudimos cargar tu carrito"
-          mensaje="Revisa tu conexión e intenta de nuevo."
+          titulo={t.errorTitulo}
+          mensaje={vm.mensajeError ?? ''}
           accion={{ titulo: 'Reintentar', onPress: vm.recargar }}
         />
       </ScrollView>
@@ -87,9 +85,9 @@ export default function CarritoView() {
     cuerpo = (
       <ScrollView contentContainerStyle={[styles.estado, styles.relleno]}>
         <EmptyState
-          titulo="Tu carrito está vacío"
-          mensaje="Agrega productos desde la tienda y aparecerán aquí."
-          accion={{ titulo: 'Ver la tienda', onPress: vm.verTienda }}
+          titulo={t.vacioTitulo}
+          mensaje={t.vacioTexto}
+          accion={{ titulo: t.verTienda, onPress: vm.verTienda }}
         />
       </ScrollView>
     );
@@ -104,7 +102,7 @@ export default function CarritoView() {
           keyboardShouldPersistTaps="handled"
           ListHeaderComponent={
             <View style={styles.tituloEnLista}>
-              <TituloPagina titulo={TITULO} subtitulo={SUBTITULO} />
+              <TituloPagina titulo={t.titulo} subtitulo={t.subtitulo} />
             </View>
           }
         />
@@ -114,7 +112,7 @@ export default function CarritoView() {
 
   return (
     <View style={[styles.raiz, { backgroundColor: colores.fondo }]}>
-      <ScreenHeader titulo={TITULO} subtitulo={SUBTITULO} tituloEnContenido={conLista} />
+      <ScreenHeader titulo={t.titulo} subtitulo={t.subtitulo} tituloEnContenido={conLista} />
       {/* Región en vivo siempre montada: TalkBack anuncia qué se quitó del carrito y por qué. */}
       <View collapsable={false} accessibilityLiveRegion="polite" style={styles.avisos}>
         {vm.conSesion && vm.avisosRetirados.length > 0 ? (
@@ -136,23 +134,19 @@ export default function CarritoView() {
           <View
             style={styles.filaTotal}
             accessible
-            accessibilityLabel={`Total: ${formatoPrecio(vm.total)}`}
+            accessibilityLabel={textos.totalEtiqueta(formatoPrecio(vm.total))}
           >
-            <Text style={[styles.etiquetaTotal, { color: colores.texto }]}>Total</Text>
+            <Text style={[styles.etiquetaTotal, { color: colores.texto }]}>{textos.total}</Text>
             <Text style={[styles.cifraTotal, { color: colores.texto }]}>{formatoPrecio(vm.total)}</Text>
           </View>
-          <Text style={[styles.nota, { color: colores.textoSuave }]}>
-            Recoges tu pedido en el salón. Pagas en línea o al recogerlo.
-          </Text>
+          <Text style={[styles.nota, { color: colores.textoSuave }]}>{t.recoges}</Text>
           <View collapsable={false} accessibilityLiveRegion="polite">
             {vm.hayProblemas ? (
-              <Text style={[styles.nota, styles.notaFuerte, { color: colores.texto }]}>
-                Ajusta los productos marcados para continuar.
-              </Text>
+              <Text style={[styles.nota, styles.notaFuerte, { color: colores.texto }]}>{t.ajusta}</Text>
             ) : null}
           </View>
           <Button
-            titulo="Continuar compra"
+            titulo={t.continuar}
             onPress={vm.continuar}
             deshabilitado={vm.hayProblemas || vm.ocupados.size > 0}
           />
@@ -162,13 +156,13 @@ export default function CarritoView() {
       <Hoja
         visible={porQuitar !== null}
         onCerrar={vm.cancelarQuitar}
-        titulo="¿Quitar este producto?"
+        titulo={t.quitarTitulo}
         texto={porQuitar ? [porQuitar.nombre, porQuitar.tamanio].filter(Boolean).join(', ') : undefined}
       >
         <View style={styles.accionesHoja}>
-          <Button titulo="Quitar" variante="peligro" onPress={vm.confirmarQuitar} cargando={vm.quitando} />
+          <Button titulo={t.quitar} variante="peligro" onPress={vm.confirmarQuitar} cargando={vm.quitando} />
           <Button
-            titulo="Conservar"
+            titulo={t.conservar}
             variante="secundario"
             onPress={vm.cancelarQuitar}
             deshabilitado={vm.quitando}

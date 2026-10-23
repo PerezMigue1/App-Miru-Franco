@@ -102,7 +102,7 @@ export default function DetalleServicioView() {
         >
           <EmptyState
             titulo="No pudimos cargar este servicio"
-            mensaje="Revisa tu conexión e intenta de nuevo."
+            mensaje={vm.mensajeError ?? ''}
             accion={{ titulo: 'Reintentar', onPress: vm.recargar }}
           />
         </ScrollView>

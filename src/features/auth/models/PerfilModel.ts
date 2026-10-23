@@ -1,3 +1,4 @@
+import { obtenerTexto } from '@/shared/api/textosSitio';
 import { telefonoSinLada } from '@/shared/ui/digitos';
 
 import { normalizarTelefono, type TipoCabello } from './AuthModel';
@@ -231,7 +232,10 @@ export const PESO_MAXIMO_FOTO = 5 * 1024 * 1024;
 /** Calidad del JPEG: buena para un avatar y muy por debajo de 5 MB a 1024 px. */
 export const CALIDAD_FOTO = 0.85;
 
-export const MENSAJE_FOTO_PESADA = 'La foto pesa más de 5 MB aun después de reducirla. Elige otra.';
+/** "La foto pesa más de 5 MB...", del catálogo, con el tope de PESO_MAXIMO_FOTO en megas. */
+export function mensajeFotoPesada(): string {
+  return obtenerTexto('perfil.foto.pesada', { megas: PESO_MAXIMO_FOTO / (1024 * 1024) });
+}
 export const MENSAJE_SUBIDA_NO_DISPONIBLE = 'La subida de fotos no está disponible por ahora. Intenta más tarde.';
 export const MENSAJE_ESPERA_UN_MOMENTO = 'Espera un momento antes de volver a intentarlo.';
 export const MENSAJE_FOTO_NO_GUARDADA = 'No pudimos guardar la foto. Intenta con otra imagen.';

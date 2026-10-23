@@ -6,7 +6,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EncabezadoVolver } from '@/features/auth/components/EncabezadoVolver';
 import { Button } from '@/shared/ui/Button';
-import { EmptyState } from '@/shared/ui/EmptyState';
 import { Skeleton } from '@/shared/ui/Skeleton';
 import {
   espacio,
@@ -25,6 +24,7 @@ import { useTheme } from '@/shared/ui/useTheme';
 
 import { CalendarioMensual } from '../components/CalendarioMensual';
 import { EnlacePolitica } from '../components/EnlacePolitica';
+import { EstadoCargaCita, EstadoCita } from '../components/EstadoCargaCita';
 import { Dato } from '../components/ResumenCita';
 import { CuadriculaHorarios, CuadriculaHorariosEsqueleto } from '../components/SelectorHorario';
 import {
@@ -75,45 +75,29 @@ export default function ReprogramarCitaView() {
         </View>
       ) : null}
 
-      {vm.estado === 'error' ? (
-        <ScrollView contentContainerStyle={[styles.estado, relleno]}>
-          <EmptyState
-            titulo="No pudimos cargar tu cita"
-            mensaje="Revisa tu conexión o intenta de nuevo en un momento."
-            accion={{ titulo: 'Reintentar', onPress: vm.recargar }}
-          />
-        </ScrollView>
-      ) : null}
-
-      {vm.estado === 'noEncontrado' ? (
-        <ScrollView contentContainerStyle={[styles.estado, relleno]}>
-          <EmptyState
-            titulo="No encontramos esta cita"
-            mensaje="Puede que ya no esté disponible. Revisa tus citas para ver su estado."
-            accion={{ titulo: 'Volver', onPress: vm.regresar }}
-          />
-        </ScrollView>
-      ) : null}
+      <EstadoCargaCita
+        estado={vm.estado}
+        mensajeError={vm.mensajeError}
+        onReintentar={vm.recargar}
+        accionNoEncontrada={{ titulo: 'Volver', onPress: vm.regresar }}
+      />
 
       {vm.estado === 'sinCambios' ? (
-        <ScrollView contentContainerStyle={[styles.estado, relleno]}>
-          <EmptyState
-            titulo="Esta cita ya no se puede reprogramar"
-            mensaje="Solo se pueden cambiar las citas pendientes, confirmadas o ya reprogramadas. Si necesitas otro horario, reserva una cita nueva."
-            accion={{ titulo: 'Volver a tu cita', onPress: vm.regresar }}
-          />
-        </ScrollView>
+        <EstadoCita
+          titulo="Esta cita ya no se puede reprogramar"
+          mensaje="Solo se pueden cambiar las citas pendientes, confirmadas o ya reprogramadas. Si necesitas otro horario, reserva una cita nueva."
+          accion={{ titulo: 'Volver a tu cita', onPress: vm.regresar }}
+        />
       ) : null}
 
       {vm.estado === 'fueraDeAviso' ? (
-        <ScrollView contentContainerStyle={[styles.estado, relleno]}>
-          <EmptyState
-            titulo="Reagenda con el salón"
-            mensaje={vm.avisoFueraDePlazo}
-            accion={{ titulo: 'Volver a tu cita', onPress: vm.regresar }}
-          />
+        <EstadoCita
+          titulo="Reagenda con el salón"
+          mensaje={vm.avisoFueraDePlazo}
+          accion={{ titulo: 'Volver a tu cita', onPress: vm.regresar }}
+        >
           <ContactoSalon vm={vm} />
-        </ScrollView>
+        </EstadoCita>
       ) : null}
 
       {vm.estado === 'listo' && vm.cita ? (
@@ -355,10 +339,6 @@ const styles = StyleSheet.create({
   contenido: {
     paddingHorizontal: pantalla.margen,
     gap: espacio.xl,
-  },
-  estado: {
-    flexGrow: 1,
-    paddingHorizontal: pantalla.margen,
   },
   encabezadoSeccion: {
     gap: espacio.xs,

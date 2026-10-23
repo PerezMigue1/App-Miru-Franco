@@ -4,7 +4,6 @@ import {
   ErrorConsentimiento,
   esSesionTerminada,
   MENSAJE_SESION_RESERVA,
-  MENSAJE_SIN_VERSION_POLITICA,
   mensajeConsentimiento,
 } from '@/features/citas/models/consentimientosReserva';
 import {
@@ -130,7 +129,10 @@ describe('anticipoVigente, montoDePrecio y el aviso del detalle', () => {
 
 describe('mensajes de los consentimientos', () => {
   it('sin versión, sesión terminada, sin red y un 400 de las fotos', () => {
-    expect(mensajeConsentimiento(new ErrorConsentimiento('version'))).toBe(MENSAJE_SIN_VERSION_POLITICA);
+    // GP-07.6: "Revisa tu conexión" solo cuando la versión no se pudo confirmar por falta de red.
+    expect(mensajeConsentimiento(new ErrorConsentimiento('version', new ErrorDeRed()))).toBe(
+      'No pudimos confirmar la versión vigente de la Política de anticipos y cancelación, así que no continuamos. Revisa tu conexión a internet e intenta de nuevo.',
+    );
     expect(mensajeConsentimiento(new ErrorConsentimiento('fotos', new ApiError(401, 'Sin sesión ficticia')))).toBe(
       MENSAJE_SESION_RESERVA,
     );

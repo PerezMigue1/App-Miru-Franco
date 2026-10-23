@@ -3,7 +3,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 import { AppState } from 'react-native';
 
-import { MENSAJE_SIN_CONEXION } from '@/features/auth/models/AuthModel';
+import { MENSAJE_SIN_CONEXION } from '@/shared/api/mensajesError';
 import { MENSAJE_SESION_RESERVA } from '@/features/citas/models/consentimientosReserva';
 import { useAnticipoViewModel } from '@/features/citas/viewmodels/useAnticipoViewModel';
 import {

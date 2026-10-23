@@ -1,10 +1,10 @@
-import { MENSAJE_SIN_CONEXION, esErrorDeRed } from '@/features/auth/models/AuthModel';
 import { precioParaMostrar } from '@/features/inicio/models/FluidoModel';
 import { enlaceTelefono, enlaceWhatsApp } from '@/features/salon/models/salonModel';
 import { ApiError } from '@/shared/api/apiClient';
 import { obtenerConfiguracion, type ConfiguracionPublica } from '@/shared/api/configuracionPublica';
 import { aceptacionDeDocumento, registrarConsentimientos } from '@/shared/api/consentimientos';
 import { obtenerDocumentoVigente, type DocumentoLegalVigente } from '@/shared/api/documentosLegales';
+import { mensajeParaClienta } from '@/shared/api/mensajesError';
 import { obtenerTexto, obtenerTextoConReglas, type ClaveTextoSitio } from '@/shared/api/textosSitio';
 
 import {
@@ -217,15 +217,12 @@ export function textoAnticipoPendiente(
     opciones.includes('linea') ? 'en línea' : null,
     opciones.includes('salon') && puedeElegirPagoEnSalon(cita, ahora) ? 'en el salón' : null,
   ].filter(Boolean);
-  return obtenerTexto(
-    'anticipos.pendiente',
-    {
-      // Sin ninguna forma a la mano (solo el salón y sin margen), el texto va sin ellas.
-      formasPago: formas.join(' o ') || null,
-      plazoAnticipo: conUnidad(cita.reglas.plazoAnticipoHoras, 'hora', 'horas'),
-    },
-    config,
-  );
+  const plazoAnticipo = conUnidad(cita.reglas.plazoAnticipoHoras, 'hora', 'horas');
+  // Sin ninguna forma a la mano (solo el salón y sin margen), otra frase: "Págalo. Si no..." no se entiende.
+  if (formas.length === 0) {
+    return obtenerTexto('anticipos.pendienteSinFormas', { plazoAnticipo }, config);
+  }
+  return obtenerTexto('anticipos.pendiente', { formasPago: formas.join(' o '), plazoAnticipo }, config);
 }
 
 // ── Consentimiento de la Política de anticipos ───────────────────────────────────────────────
@@ -256,7 +253,7 @@ export async function registrarAceptacionAnticipos(
     });
     return null;
   } catch (error) {
-    return esErrorDeRed(error) ? MENSAJE_SIN_CONEXION : obtenerTexto('citas.detalle.consentimientoFallo', {}, config);
+    return mensajeParaClienta(error, { respaldo: obtenerTexto('citas.detalle.consentimientoFallo', {}, config) });
   }
 }
 
@@ -264,6 +261,14 @@ export async function registrarAceptacionAnticipos(
 
 /** La política del anticipo para cancelar: 'cargando' mientras se consulta; null sin datos. */
 export type PoliticaConsultada = PoliticaCancelacion | null | 'cargando';
+
+/**
+ * Qué se supo, al abrir la hoja de cancelar, del pago en línea de un anticipo que la cita todavía no
+ * marca como pagado (GET /api/pagos-en-linea/citas/:id/estado): 'sinPago' (nada en proceso, o no se
+ * consultó porque no aplica), 'cargando', 'enProceso' (pendiente o en revisión en Mercado Pago),
+ * 'aprobado' (se aprobó y la cita aún no lo refleja) o 'sinDatos' (la consulta falló).
+ */
+export type PagoPorConfirmar = 'sinPago' | 'cargando' | 'enProceso' | 'aprobado' | 'sinDatos';
 
 /**
  * Lo pagado del anticipo que importa al cancelar: con estado 'pagado', o algo pagado que no se
@@ -274,6 +279,42 @@ export function anticipoPagadoAlCancelar(cita: Cita): number {
   const pagado = montoPagadoAnticipo(cita);
   const conPago = estado === 'pagado' || (pagado > 0 && estado !== 'retenido' && estado !== 'reembolsado');
   return conPago ? pagado : 0;
+}
+
+/**
+ * Anticipos que la clienta sí pagó pero que el backend no devuelve por la política de reembolso:
+ * el retenido (decisión firme: retenidoEn, o la cita no_asistio) y el pago en revisión (el salón
+ * decide). Cancelar no es "sin costo" para ellos.
+ */
+const AVISO_ANTICIPO_SIN_POLITICA: Partial<Record<EstadoAnticipoCita, ClaveTextoSitio>> = {
+  retenido: 'citas.cancelar.anticipoRetenido',
+  en_revision: 'citas.cancelar.anticipoEnRevision',
+};
+
+/** Clave del aviso para un anticipo retenido o en revisión; undefined para los demás estados. */
+const claveAnticipoSinPolitica = (cita: Cita): ClaveTextoSitio | undefined =>
+  AVISO_ANTICIPO_SIN_POLITICA[estadoAnticipo(cita)];
+
+/**
+ * El anticipo se pide y la cita aún no lo ve pagado: antes de decir que cancelar no tiene costo, la
+ * hoja de cancelar pregunta si hay un pago de Mercado Pago aprobado o en proceso.
+ */
+export function anticipoPorConfirmarAlCancelar(cita: Cita): boolean {
+  return anticipoPagadoAlCancelar(cita) <= 0 && estadoAnticipo(cita) === 'pendiente';
+}
+
+/** Textos para un pago en línea que no se pudo descartar: nunca dicen que cancelar no tiene costo. */
+const AVISO_PAGO_POR_CONFIRMAR: Partial<Record<PagoPorConfirmar, ClaveTextoSitio>> = {
+  enProceso: 'citas.cancelar.anticipoEnProceso',
+  sinDatos: 'citas.cancelar.anticipoSinConfirmar',
+};
+
+/**
+ * Hay un anticipo que importa al cancelar: pagado (se consulta su reembolso), retenido o en
+ * revisión. La hoja de cancelar ofrece entonces el enlace a la política.
+ */
+export function anticipoComprometidoAlCancelar(cita: Cita): boolean {
+  return anticipoPagadoAlCancelar(cita) > 0 || claveAnticipoSinPolitica(cita) !== undefined;
 }
 
 /**
@@ -298,8 +339,24 @@ function reembolsableAhora(politica: PoliticaConsultada, ahora: Date): boolean {
   return Number.isFinite(limite) && ahora.getTime() <= limite;
 }
 
-/** Sin anticipo pagado: cancelar no cuesta; con aviso mínimo, se agrega el de reagendar. */
-function avisoSinAnticipo(cita: Cita, restriccion: string | null, config: ConfiguracionPublica): string {
+/**
+ * Sin anticipo pagado: mientras se revisa el pago en línea, el texto de espera; con un pago en
+ * proceso o sin poder revisarlo, un texto neutro; si no hay pago, cancelar no cuesta. Con aviso
+ * mínimo se agrega el de reagendar.
+ */
+function avisoSinAnticipo(
+  cita: Cita,
+  pago: PagoPorConfirmar,
+  restriccion: string | null,
+  config: ConfiguracionPublica,
+): string {
+  if (pago === 'cargando') {
+    return obtenerTexto('citas.detalle.cancelarRevisando', {}, config);
+  }
+  const porConfirmar = AVISO_PAGO_POR_CONFIRMAR[pago];
+  if (porConfirmar) {
+    return [obtenerTexto(porConfirmar, {}, config), restriccion].filter(Boolean).join(' ');
+  }
   const aviso =
     restriccion ??
     (cita.reglas.horasAvisoCancelarReagendar > 0
@@ -342,23 +399,34 @@ function avisoConAnticipo(
 
 /**
  * Aviso antes de cancelar (textoAnticipoAlCancelar y textoCancelarSinAnticipo de la web) con la
- * regla de la cita: sin anticipo pagado, que no tiene costo (y el aviso para reagendar si la regla lo
- * pide); con anticipo pagado, mientras carga la política un texto de espera y después si se devuelve
- * (con su fecha límite), si el plazo terminó, si no se devuelve o, sin datos, la regla general.
- * Dentro de las horas de aviso se dice que ya no se puede reagendar desde la cuenta.
+ * regla de la cita: con el anticipo retenido, que no se devuelve; en revisión, que el salón decide;
+ * sin anticipo pagado, según `pago` (anticipoPorConfirmarAlCancelar): mientras se revisa, un texto
+ * de espera; con un pago en línea en proceso o sin poder revisarlo, un texto neutro; aprobado, como
+ * pagado; sin pago, que no tiene costo (y el aviso para reagendar si la regla lo pide). Con anticipo
+ * pagado, mientras carga la política un texto de espera y después si se devuelve (con su fecha
+ * límite), si el plazo terminó, si no se devuelve o, sin datos, la regla general. Dentro de las horas
+ * de aviso se dice que ya no se puede reagendar desde la cuenta.
  */
 export function avisoCancelacion(
   cita: Cita,
   politica: PoliticaConsultada,
   ahora: Date = new Date(),
   config: ConfiguracionPublica = obtenerConfiguracion(),
+  pago: PagoPorConfirmar = 'sinPago',
 ): string {
   const restriccion = dentroDelAviso(cita, ahora)
     ? obtenerTexto('citas.detalle.cancelarSinReagendar', { horasAviso: horasDeAviso(cita) }, config)
     : null;
-  const monto = anticipoPagadoAlCancelar(cita);
+  // Un pago en línea recién aprobado que la cita aún no refleja cuenta como pagado.
+  const monto = pago === 'aprobado' ? cita.anticipoRequerido : anticipoPagadoAlCancelar(cita);
   if (monto <= 0) {
-    return avisoSinAnticipo(cita, restriccion, config);
+    // Retenido o en revisión sin otro pago vigente: la clienta pagó; nunca se dice que no tiene costo.
+    const sinPolitica = claveAnticipoSinPolitica(cita);
+    if (sinPolitica) {
+      const anticipo = precioParaMostrar(String(montoPagadoAnticipo(cita))) ?? cita.anticipoMonto;
+      return [obtenerTexto(sinPolitica, { anticipo }, config), restriccion].filter(Boolean).join(' ');
+    }
+    return avisoSinAnticipo(cita, pago, restriccion, config);
   }
   if (politica === 'cargando') {
     return obtenerTexto('citas.detalle.cancelarRevisando', {}, config);
@@ -415,6 +483,25 @@ export function avisoAnticipoAlReprogramar(
  */
 export function esEspecialistaInactiva(error: unknown): boolean {
   return error instanceof ApiError && error.status === 404 && error.message.toLowerCase().includes('especialista');
+}
+
+/**
+ * 404 de GET /api/citas/disponibilidad porque el servicio ya no se ofrece ("Servicio no encontrado o
+ * inactivo"): tampoco sirve reintentar; la cita se cancela o se habla con el salón.
+ */
+export function esServicioInactivo(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 404 && error.message.toLowerCase().includes('servicio');
+}
+
+/**
+ * Aviso cuando la disponibilidad dice que ya no hay agenda para la cita (la especialista ya no
+ * atiende o el servicio ya no se ofrece); null si es otro error.
+ */
+export function avisoSinAgenda(error: unknown, config: ConfiguracionPublica = obtenerConfiguracion()): string | null {
+  if (esEspecialistaInactiva(error)) {
+    return obtenerTexto('citas.reprogramar.especialistaInactiva', {}, config);
+  }
+  return esServicioInactivo(error) ? obtenerTexto('citas.reprogramar.servicioInactivo', {}, config) : null;
 }
 
 // ── Contacto con el salón ────────────────────────────────────────────────────────────────────

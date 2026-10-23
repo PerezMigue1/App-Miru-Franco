@@ -5,6 +5,7 @@ import Animated from 'react-native-reanimated';
 
 import { Button } from './Button';
 import { Contador } from './Contador';
+import { soloDigitos } from './digitos';
 import { Input } from './Input';
 import { transicionSeleccion, usePresion } from './movimiento';
 import { PastillaFiltro } from './PastillaFiltro';
@@ -75,8 +76,6 @@ interface RangoFiltroProps {
   placeholderMinimo?: string;
   placeholderMaximo?: string;
 }
-
-const soloDigitos = (texto: string) => texto.replace(/\D/g, '');
 
 /** Mínimo y máximo lado a lado (precio, duración): campos numéricos que solo aceptan dígitos. */
 export function RangoFiltro({

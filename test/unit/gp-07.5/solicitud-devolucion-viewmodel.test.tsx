@@ -5,7 +5,7 @@ import { act, renderHook, waitFor } from '@testing-library/react-native';
 import type { Devolucion } from '@/features/tienda/models/devolucionesModel';
 import type { Pedido } from '@/features/tienda/models/pedidoModel';
 import { useSolicitudDevolucion } from '@/features/tienda/viewmodels/useSolicitudDevolucion';
-import { MENSAJE_SIN_CONEXION } from '@/features/auth/models/AuthModel';
+import { MENSAJE_SIN_CONEXION } from '@/shared/api/mensajesError';
 import { obtenerTexto } from '@/shared/api/textosSitio';
 
 import { CLIENTA_CITAS, conPromesa, sinRedEnRuta, usarRelojFijo } from '../../helpers/citasFicticias';

@@ -6,7 +6,11 @@ import type {
   PreguntaFrecuente,
   Promocion,
 } from '@/features/salon/models/contenidoSalonModel';
-import { useContenidoSalon, type EstadoLista } from '@/features/salon/viewmodels/useListaContenido';
+import {
+  useContenidoSalon,
+  type EstadoLista,
+  type ListaContenido,
+} from '@/features/salon/viewmodels/useListaContenido';
 import { useConfiguracionPublica } from '@/shared/api/useConfiguracionPublica';
 import { useTextos, type FuncionTexto } from '@/shared/api/useTextos';
 
@@ -22,6 +26,8 @@ import { fotosDeGaleria, type FotoGaleria } from '../models/FotoModel';
 export interface SeccionContenidoInicio<T> {
   titulo: string;
   estado: EstadoLista;
+  /** Con estado 'error': por qué no se cargó (sin red, servidor...); null si no hay error. */
+  mensajeError: string | null;
   datos: T[];
   reintentar: () => void;
 }
@@ -96,6 +102,9 @@ export function useContenidoInicio(): ContenidoInicioViewModel {
   const texto = useTextos();
   const { galeria, promociones, equipo, preguntas, recargarTodo } = useContenidoSalon();
   const inicio = configuracion.contenido.inicio;
+  // Sin red se usa el texto del catálogo (Admin > Textos); con otro error, el de mensajeParaClienta.
+  const mensajeSeccion = (lista: Pick<ListaContenido<unknown>, 'tipoError' | 'mensajeError'>): string | null =>
+    lista.tipoError === 'sinConexion' ? texto('inicio.contenido.errorTexto') : lista.mensajeError;
 
   const fotos = useMemo(() => fotosDeGaleria(galeria.datos), [galeria.datos]);
   const listaPromociones = useMemo(
@@ -117,6 +126,7 @@ export function useContenidoInicio(): ContenidoInicioViewModel {
       titulo: texto('inicio.galeria.titulo'),
       descripcion: oNulo(inicio.trabajoDescripcion),
       estado: galeria.estado,
+      mensajeError: mensajeSeccion(galeria),
       datos: fotos,
       reintentar: galeria.reintentar,
       vaciaTitulo: texto('inicio.galeria.vaciaTitulo'),
@@ -126,18 +136,21 @@ export function useContenidoInicio(): ContenidoInicioViewModel {
     promociones: {
       titulo: texto('inicio.promociones.titulo'),
       estado: promociones.estado,
+      mensajeError: mensajeSeccion(promociones),
       datos: listaPromociones,
       reintentar: promociones.reintentar,
     },
     equipo: {
       titulo: texto('inicio.equipo.titulo'),
       estado: equipo.estado,
+      mensajeError: mensajeSeccion(equipo),
       datos: equipo.datos,
       reintentar: equipo.reintentar,
     },
     preguntas: {
       titulo: texto('inicio.preguntas.titulo'),
       estado: preguntas.estado,
+      mensajeError: mensajeSeccion(preguntas),
       datos: preguntas.datos,
       reintentar: preguntas.reintentar,
     },

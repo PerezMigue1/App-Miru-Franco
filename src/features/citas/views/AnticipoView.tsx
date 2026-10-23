@@ -5,7 +5,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EncabezadoVolver } from '@/features/auth/components/EncabezadoVolver';
 import { Button } from '@/shared/ui/Button';
-import { EmptyState } from '@/shared/ui/EmptyState';
 import { Skeleton } from '@/shared/ui/Skeleton';
 import {
   espacio,
@@ -23,6 +22,7 @@ import { useTheme } from '@/shared/ui/useTheme';
 import { BadgeEstado } from '../components/BadgeEstado';
 import { CasillaPoliticaAnticipos } from '../components/CasillaPoliticaAnticipos';
 import { EnlacePolitica } from '../components/EnlacePolitica';
+import { EstadoCargaCita } from '../components/EstadoCargaCita';
 import { ResumenCita } from '../components/ResumenCita';
 import { useAnticipoViewModel, type AnticipoViewModel, type EstadoPago } from '../viewmodels/useAnticipoViewModel';
 
@@ -101,25 +101,12 @@ export default function AnticipoView() {
         </View>
       ) : null}
 
-      {vm.estado === 'error' ? (
-        <ScrollView contentContainerStyle={[styles.estado, { paddingBottom: bottom + espacio.x3 }]}>
-          <EmptyState
-            titulo="No pudimos cargar tu cita"
-            mensaje="Revisa tu conexión e intenta de nuevo."
-            accion={{ titulo: 'Reintentar', onPress: vm.recargar }}
-          />
-        </ScrollView>
-      ) : null}
-
-      {vm.estado === 'noEncontrado' ? (
-        <ScrollView contentContainerStyle={[styles.estado, { paddingBottom: bottom + espacio.x3 }]}>
-          <EmptyState
-            titulo="No encontramos esta cita"
-            mensaje="Puede que ya no esté disponible. Revisa tus citas para ver su estado."
-            accion={{ titulo: 'Ver mis citas', onPress: vm.verMisCitas }}
-          />
-        </ScrollView>
-      ) : null}
+      <EstadoCargaCita
+        estado={vm.estado}
+        mensajeError={vm.mensajeError}
+        onReintentar={vm.recargar}
+        accionNoEncontrada={{ titulo: 'Ver mis citas', onPress: vm.verMisCitas }}
+      />
     </View>
   );
 }
@@ -337,10 +324,6 @@ const styles = StyleSheet.create({
   pie: {
     paddingHorizontal: pantalla.margen,
     paddingTop: espacio.m,
-  },
-  estado: {
-    flexGrow: 1,
-    paddingHorizontal: pantalla.margen,
   },
   tarjetaEsqueleto: {
     gap: espacio.m,

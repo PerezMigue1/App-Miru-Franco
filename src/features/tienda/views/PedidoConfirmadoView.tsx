@@ -82,7 +82,7 @@ export default function PedidoConfirmadoView() {
           <>
             <EmptyState
               titulo={textos.errorCargaTitulo}
-              mensaje={textos.errorCargaTexto}
+              mensaje={vm.mensajeError ?? textos.errorCargaTexto}
               accion={{ titulo: textos.botonReintentarCarga, onPress: vm.recargar }}
             />
             <Button titulo={textos.botonMisPedidos} variante="contorno" onPress={vm.verMisPedidos} />

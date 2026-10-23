@@ -12,6 +12,7 @@ import {
   type DocumentoLegalVigente,
   type OrigenDocumento,
 } from './documentosLegales';
+import { mensajeParaClienta } from './mensajesError';
 
 export interface DocumentoLegalHook {
   /** El documento vigente (de la red, la memoria o el archivo guardado), o null. */
@@ -25,6 +26,8 @@ export interface DocumentoLegalHook {
   sinRed: boolean;
   /** Por qué no hay documento (solo cuando no hay). Nunca se muestra a la clienta. */
   error: ApiError | ErrorDeRed | null;
+  /** Sin documento: por qué no se cargó, en texto para la clienta (sin red, servidor...); null con documento. */
+  mensajeError: string | null;
   /** El slug no es de un documento legal. */
   desconocido: boolean;
   /** El servidor respondió 404: el documento no tiene versión publicada. */
@@ -120,6 +123,7 @@ export function useDocumentoLegal(slug: string | string[] | undefined): Document
     cargando: valido && carga.pidiendo && !documento,
     sinRed,
     error: documento ? null : carga.error,
+    mensajeError: documento ? null : mensajeParaClienta(carga.error),
     desconocido: !valido,
     noPublicado,
     titulo: documento?.titulo ?? (valido ? TITULO_DOCUMENTO_LEGAL[slug] : ''),

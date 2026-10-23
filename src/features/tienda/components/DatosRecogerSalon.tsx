@@ -7,6 +7,7 @@ import { espacio, fuente, icono, radio, tipo, toqueMinimo } from '@/shared/ui/to
 import { useTheme } from '@/shared/ui/useTheme';
 
 import { abrirEnlace, useDatosRecoger } from '../viewmodels/checkoutTienda';
+import { useTextosTienda } from '../viewmodels/textosTienda';
 
 interface DatosRecogerSalonProps {
   /** Muestra el aviso de cuánto tarda en estar listo (checkout). */
@@ -21,6 +22,7 @@ interface DatosRecogerSalonProps {
 export function DatosRecogerSalon({ conAviso = false }: DatosRecogerSalonProps) {
   const { colores } = useTheme();
   const datos = useDatosRecoger();
+  const textos = useTextosTienda();
 
   return (
     <View style={styles.contenedor}>
@@ -60,7 +62,7 @@ export function DatosRecogerSalon({ conAviso = false }: DatosRecogerSalonProps) 
         <FilaEnlace
           Icono={Phone}
           texto={datos.llamanos}
-          etiqueta={`Llamar al salón, ${datos.telefono}`}
+          etiqueta={textos.llamarSalonEtiqueta(datos.telefono)}
           onPress={() => abrirEnlace(datos.enlaceTelefono)}
         />
       ) : null}

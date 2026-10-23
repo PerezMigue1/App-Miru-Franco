@@ -75,6 +75,7 @@ import {
 import { useMovimientoReducido } from '@/shared/ui/useMovimientoReducido';
 import { useTheme } from '@/shared/ui/useTheme';
 
+import { useTextosAuth, type TextosAuth } from '../viewmodels/textosAuth';
 import type { GoogleViewModel } from '../viewmodels/useGoogleViewModel';
 import type { LoginViewModel } from '../viewmodels/useLoginViewModel';
 import type { RetornoActivacion } from '../viewmodels/useRetornoActivacion';
@@ -109,26 +110,30 @@ interface AuthContainerProps {
  * Lo que muestra el campo de correo según la verificación (solo lo que dice el endpoint). La
  * respuesta sin "existe" no muestra nada: la app nunca afirma que un correo está disponible.
  */
-const ESTADO_CORREO: Record<EstadoCorreo, EstadoCampo | null> = {
-  inactivo: null,
-  verificando: { tipo: 'verificando', texto: 'Verificando correo…' },
-  sinAviso: null,
-  registrado: { tipo: 'error', texto: 'Este correo ya está registrado' },
-  revisando: { tipo: 'aviso', texto: 'Revisando si el correo ya tiene cuenta…' },
-  sinConexion: { tipo: 'aviso', texto: 'Sin conexión. Revisaremos el correo cuando haya red.' },
-  sinVerificar: { tipo: 'aviso', texto: 'Se verificará al crear la cuenta.' },
-};
+function estadoCorreoCon({ registro }: TextosAuth): Record<EstadoCorreo, EstadoCampo | null> {
+  return {
+    inactivo: null,
+    verificando: { tipo: 'verificando', texto: registro.correoVerificando },
+    sinAviso: null,
+    registrado: { tipo: 'error', texto: registro.correoRegistrado },
+    revisando: { tipo: 'aviso', texto: registro.correoRevisando },
+    sinConexion: { tipo: 'aviso', texto: registro.correoSinRed },
+    sinVerificar: { tipo: 'aviso', texto: registro.correoSinVerificar },
+  };
+}
 /**
  * Líneas que reserva el mensaje del correo: "Sin conexión…" ocupa dos a 360dp, y "ya está
  * registrado" lleva "Iniciar sesión" en la segunda. Así el formulario no salta.
  */
 const LINEAS_ESTADO_CORREO = 2;
 
-/** Pasos del registro, como la web. */
-const PASOS: { numero: PasoRegistro; etiqueta: string }[] = [
-  { numero: 1, etiqueta: 'Tu cuenta' },
-  { numero: 2, etiqueta: 'Tu cabello' },
-];
+/** Pasos del registro, como la web, con su nombre del catálogo. */
+function pasosCon({ registro }: TextosAuth): { numero: PasoRegistro; etiqueta: string }[] {
+  return [
+    { numero: 1, etiqueta: registro.pasoCuenta },
+    { numero: 2, etiqueta: registro.pasoCabello },
+  ];
+}
 
 export type SiNo = 'si' | 'no';
 export const OPCIONES_SI_NO: { valor: SiNo; etiqueta: string }[] = [
@@ -147,7 +152,6 @@ export function aSiNo(valor: boolean | null): SiNo | null {
 export const TEXTO_CONSENTIMIENTO_SALUD =
   'Autorizo el uso de mis datos de salud (alergias y sensibilidad) solo para valorar si un tratamiento es seguro para mí, conforme al';
 const VISTAS: VistaAcceso[] = ['acceso', 'registro'];
-const ETIQUETA_PESTANA: Record<VistaAcceso, string> = { acceso: 'Acceso', registro: 'Registro' };
 
 /**
  * Acceso y registro (DESIGN.md, piezas de marca): panel carbón compacto con el monograma y
@@ -167,6 +171,7 @@ export function AuthContainer({
   onCerrar,
 }: AuthContainerProps) {
   const { colores } = useTheme();
+  const textos = useTextosAuth();
   const { width: ancho } = useWindowDimensions();
   const reducido = useMovimientoReducido();
   const [vista, setVista] = useState<VistaAcceso>(vistaInicial);
@@ -281,7 +286,7 @@ export function AuthContainer({
                     { color: activa ? colores.texto : colores.textoSuave },
                   ]}
                 >
-                  {ETIQUETA_PESTANA[v]}
+                  {textos.pestanas[v]}
                 </Text>
               </Pressable>
             );
@@ -339,6 +344,7 @@ export function PantallaAuth({
   const { colores } = useTheme();
   const { top, bottom } = useSafeAreaInsets();
   const { estilo: estiloPresion, hundir, soltar } = usePresion();
+  const { acceso } = useTextosAuth();
   return (
     <KeyboardAvoidingView behavior="padding" style={[styles.raiz, { backgroundColor: colores.fondo }]}>
       <StatusBar style="light" />
@@ -346,7 +352,7 @@ export function PantallaAuth({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Cerrar"
-          accessibilityHint="Vuelve a la app sin iniciar sesión"
+          accessibilityHint={acceso.cerrarAyuda}
           onPress={onCerrar}
           onPressIn={hundir}
           onPressOut={soltar}
@@ -369,10 +375,14 @@ export function PantallaAuth({
   );
 }
 
-/** Panel de marca carbón compacto: monograma, "Mirú Franco" y "Beauty Salón". */
+/**
+ * Panel de marca carbón compacto: monograma, "Mirú Franco" y "BEAUTY SALÓN" como la web. TalkBack lee
+ * el nombre del salón de la configuración ("Mirú Franco Salón Beauty" en el respaldo).
+ */
 export function PanelMarca() {
   const { colores } = useTheme();
   const { top } = useSafeAreaInsets();
+  const { nombreSalon } = useTextosAuth();
   return (
     <View
       style={[
@@ -382,7 +392,7 @@ export function PanelMarca() {
       ]}
     >
       <Monograma tamano="mediano" />
-      <View accessible accessibilityRole="header" accessibilityLabel="Mirú Franco Beauty Salón">
+      <View accessible accessibilityRole="header" accessibilityLabel={nombreSalon}>
         <View style={styles.marca}>
           <Text style={[styles.marcaMiru, { color: colores.textoSobrePanel }]}>Mirú</Text>
           {/* Oro sobre carbón (--oro-sobre-carbon, como .mf-logotipo): el panel es carbón en los dos temas. */}
@@ -478,6 +488,7 @@ function FormularioAcceso({
   const { correo, setCorreo, salirCorreo, clave, setClave, errores, errorGeneral, cargando, entrar } =
     login;
   const refClaveAcceso = useRef<TextInput>(null);
+  const { login: textos } = useTextosAuth();
   // Con Google abierto no se entra con correo (ni con la tecla del teclado); al entrar con correo,
   // el error anterior de Google ya no aplica.
   const entrarConCorreo = () => {
@@ -489,7 +500,7 @@ function FormularioAcceso({
   };
   return (
     <>
-      <Encabezado titulo="Inicia sesión" texto="Consulta tus citas, tus pedidos y tus recordatorios." />
+      <Encabezado titulo={textos.titulo} texto={textos.texto} />
       <Aviso tipo="exito" texto={aviso} />
       <Input
         etiqueta="Correo electrónico"
@@ -511,11 +522,11 @@ function FormularioAcceso({
           alEnviar={entrarConCorreo}
           error={errores.clave}
         />
-        <Enlace texto="¿Olvidaste tu contraseña?" onPress={onRecuperar} alinear="fin" />
+        <Enlace texto={textos.olvidaste} onPress={onRecuperar} alinear="fin" />
       </View>
       <Aviso tipo="error" texto={errorGeneral} />
       <Button
-        titulo={cargando ? 'Entrando…' : 'Entrar'}
+        titulo={cargando ? textos.entrando : textos.entrar}
         onPress={entrarConCorreo}
         cargando={cargando}
         deshabilitado={google.abriendo}
@@ -529,14 +540,15 @@ function FormularioAcceso({
  * Separador "o", botón "Continuar con Google" y su error, debajo del botón principal de cada
  * formulario. "ocupado": hay otro inicio en curso en ese formulario y Google queda deshabilitado.
  */
-function AccesoGoogle({ google, ocupado }: { google: GoogleViewModel; ocupado: boolean }) {
+export function AccesoGoogle({ google, ocupado }: { google: GoogleViewModel; ocupado: boolean }) {
   const { abriendo, error, entrar } = google;
+  const { google: textos } = useTextosAuth();
   return (
     <>
       <Separador />
       <Button
-        titulo={abriendo ? 'Abriendo Google…' : 'Continuar con Google'}
-        accessibilityHint="Abre Google para entrar con tu cuenta"
+        titulo={abriendo ? textos.abriendo : textos.boton}
+        accessibilityHint={textos.ayuda}
         variante="secundario"
         posicionIcono="inicio"
         icono={<MarcaGoogle />}
@@ -564,6 +576,7 @@ function FormularioRegistro({
   activo: boolean;
 }) {
   const { paso, direccionPaso, atras, enfoque } = registro;
+  const { registro: textos } = useTextosAuth();
   const reducido = useMovimientoReducido();
   const refIndicador = useRef<View>(null);
   const refsTexto = useRef<Partial<Record<CampoRegistro, TextInput | null>>>({});
@@ -650,7 +663,7 @@ function FormularioRegistro({
 
   return (
     <>
-      <Encabezado titulo="Crea tu cuenta" texto="Reserva tus citas y compra en la tienda del salón." />
+      <Encabezado titulo={textos.titulo} texto={textos.texto} />
       <IndicadorPasos paso={paso} refIndicador={refIndicador} />
       <Animated.View key={paso} entering={entrada} style={styles.paso}>
         {paso === 1 ? (
@@ -671,21 +684,23 @@ interface RefsRegistro {
 }
 
 /**
- * Indicador "1 Tu cuenta — 2 Tu cabello", como la web: el paso actual en vino con anillo de oro,
+ * Indicador "1 Tu cuenta, 2 Tu cabello", como la web: el paso actual en vino con anillo de oro,
  * el hecho en vino con palomita y el pendiente solo con contorno.
  */
 function IndicadorPasos({ paso, refIndicador }: { paso: PasoRegistro; refIndicador: Ref<View> }) {
   const { colores } = useTheme();
-  const actual = PASOS[paso - 1];
+  const textos = useTextosAuth();
+  const pasos = pasosCon(textos);
+  const actual = pasos[paso - 1];
   return (
     <View
       ref={refIndicador}
       accessible
       accessibilityRole="header"
-      accessibilityLabel={`Paso ${actual.numero} de ${PASOS.length}: ${actual.etiqueta}`}
+      accessibilityLabel={textos.registro.pasoDe(actual.numero, pasos.length, actual.etiqueta)}
       style={styles.pasos}
     >
-      {PASOS.map((item, indice) => {
+      {pasos.map((item, indice) => {
         const hecho = item.numero < paso;
         const esActual = item.numero === paso;
         const marcado = hecho || esActual;
@@ -769,6 +784,8 @@ function PasoCuenta({
     cargando,
     continuar,
   } = registro;
+  const textosAuth = useTextosAuth();
+  const textos = textosAuth.registro;
   // Con Google abierto no se continúa (ni con la tecla del teclado); al continuar, el error
   // anterior de Google ya no aplica.
   const continuarConCorreo = () => {
@@ -788,10 +805,10 @@ function PasoCuenta({
     estadoCorreo === 'registrado'
       ? {
           tipo: 'error',
-          texto: 'Este correo ya está registrado',
-          accion: { texto: 'Iniciar sesión', onPress: () => onIrAAcceso(campos.correo.trim()) },
+          texto: textos.correoRegistrado,
+          accion: { texto: textosAuth.acceso.iniciarSesion, onPress: () => onIrAAcceso(campos.correo.trim()) },
         }
-      : ESTADO_CORREO[estadoCorreo];
+      : estadoCorreoCon(textosAuth)[estadoCorreo];
 
   return (
     <>
@@ -847,6 +864,7 @@ function PasoCuenta({
         valor={campos.pregunta}
         opciones={preguntas.lista}
         estado={preguntas.estado}
+        errorCarga={preguntas.error}
         onCargar={preguntas.cargar}
         onElegir={(p) => cambiar('pregunta', p)}
         error={errores.pregunta ?? null}
@@ -869,7 +887,7 @@ function PasoCuenta({
         onSalir={() => salir('clave')}
         siguiente={refs.enfocar('confirmacion')}
         error={errorClave}
-        estado={marcarFaltantes ? { tipo: 'error', texto: 'Te faltan requisitos de la contraseña.' } : null}
+        estado={marcarFaltantes ? { tipo: 'error', texto: textos.faltanRequisitos } : null}
         debajo={
           <RequisitosClave
             requisitos={requisitosClave}
@@ -890,7 +908,7 @@ function PasoCuenta({
       />
       <Aviso tipo="error" texto={errorGeneral} />
       <Button
-        titulo={verificandoCorreo ? 'Verificando correo…' : 'Continuar'}
+        titulo={verificandoCorreo ? textos.correoVerificando : 'Continuar'}
         onPress={continuarConCorreo}
         cargando={verificandoCorreo}
         deshabilitado={google.abriendo}
@@ -906,6 +924,7 @@ function PasoCuenta({
  */
 function PasoCabello({ registro, refs }: { registro: RegistroViewModel; refs: RefsRegistro }) {
   const { colores } = useTheme();
+  const { registro: textos } = useTextosAuth();
   const {
     campos,
     cambiar,
@@ -927,7 +946,7 @@ function PasoCabello({ registro, refs }: { registro: RegistroViewModel; refs: Re
   return (
     <>
       <Text accessibilityRole="header" style={[styles.subtituloPaso, { color: colores.texto }]}>
-        Cuéntanos sobre tu cabello
+        {textos.cabelloTitulo}
       </Text>
       <Opciones
         refContenedor={refs.bloqueDe('tipoCabello')}
@@ -1029,7 +1048,7 @@ function PasoCabello({ registro, refs }: { registro: RegistroViewModel; refs: Re
       <Aviso tipo="error" texto={errorGeneral} />
       <View style={styles.botonesPaso}>
         <Button
-          titulo={cargando ? 'Registrando…' : 'Finalizar registro'}
+          titulo={cargando ? textos.registrando : textos.finalizar}
           onPress={crearCuenta}
           cargando={cargando}
         />
@@ -1352,6 +1371,7 @@ function Selector({
   valor,
   opciones,
   estado,
+  errorCarga,
   onCargar,
   onElegir,
   error,
@@ -1362,6 +1382,8 @@ function Selector({
   valor: PreguntaSeguridad | null;
   opciones: PreguntaSeguridad[];
   estado: EstadoPreguntas;
+  /** Con estado 'error': por qué no se cargaron las preguntas. */
+  errorCarga: string | null;
   onCargar: () => void;
   onElegir: (opcion: PreguntaSeguridad) => void;
   error: string | null;
@@ -1369,6 +1391,7 @@ function Selector({
   const { colores } = useTheme();
   const { estilo: estiloPresion, hundir, soltar } = usePresion();
   const id = useId();
+  const { registro: textos } = useTextosAuth();
   const [abierto, setAbierto] = useState(false);
   const cerrar = () => setAbierto(false);
   const abrir = () => {
@@ -1389,7 +1412,7 @@ function Selector({
       <Pressable
         accessibilityRole="button"
         accessibilityLabelledBy={`${id}-etiqueta`}
-        accessibilityHint="Abre la lista de preguntas"
+        accessibilityHint={textos.preguntasAyuda}
         onPress={abrir}
         onPressIn={hundir}
         onPressOut={soltar}
@@ -1426,6 +1449,7 @@ function Selector({
       <Hoja visible={abierto} onCerrar={cerrar} titulo={etiqueta}>
         <ContenidoSelector
           estado={estado}
+          errorCarga={errorCarga}
           opciones={opciones}
           valor={valor}
           onReintentar={onCargar}
@@ -1442,21 +1466,24 @@ function Selector({
 
 function ContenidoSelector({
   estado,
+  errorCarga,
   opciones,
   valor,
   onReintentar,
   onElegir,
 }: {
   estado: EstadoPreguntas;
+  errorCarga: string | null;
   opciones: PreguntaSeguridad[];
   valor: PreguntaSeguridad | null;
   onReintentar: () => void;
   onElegir: (opcion: PreguntaSeguridad) => void;
 }) {
   const { colores } = useTheme();
+  const { registro: textos } = useTextosAuth();
   if (estado === 'cargando' || estado === 'inactivo') {
     return (
-      <View accessible accessibilityLabel="Cargando preguntas de seguridad" style={styles.cargandoHoja}>
+      <View accessible accessibilityLabel={textos.preguntasCargando} style={styles.cargandoHoja}>
         <Skeleton estilo={styles.lineaHoja} />
         <Skeleton estilo={styles.lineaHoja} />
         <Skeleton estilo={styles.lineaHojaCorta} />
@@ -1466,7 +1493,7 @@ function ContenidoSelector({
   if (estado === 'error') {
     return (
       <>
-        <Aviso tipo="error" texto="No pudimos cargar las preguntas. Revisa tu conexión." />
+        <Aviso tipo="error" texto={errorCarga} />
         <Button titulo="Reintentar" variante="secundario" onPress={onReintentar} />
       </>
     );
@@ -1474,7 +1501,7 @@ function ContenidoSelector({
   if (opciones.length === 0) {
     return (
       <Text style={[styles.parrafo, { color: colores.textoCuerpo }]}>
-        Todavía no hay preguntas de seguridad disponibles.
+        {textos.preguntasVacias}
       </Text>
     );
   }

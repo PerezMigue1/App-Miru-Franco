@@ -3,6 +3,8 @@ import { openBrowserAsync } from 'expo-web-browser';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BackHandler } from 'react-native';
 
+import { mensajeParaClienta } from '@/shared/api/mensajesError';
+import { obtenerTexto } from '@/shared/api/textosSitio';
 import { generacionActual } from '@/shared/api/tokenStorage';
 import { telefonoSinLada } from '@/shared/ui/digitos';
 import { useCandado } from '@/shared/ui/useCandado';
@@ -11,12 +13,9 @@ import {
   AYUDA_TELEFONO,
   ERROR_CONSENTIMIENTO_SALUD,
   ERROR_TELEFONO,
-  MENSAJE_SIN_CONEXION,
   TIPOS_CABELLO,
   convertirFechaNacimiento,
-  esErrorDeRed,
   esTelefonoValido,
-  mensajeDelServidor,
   problemaDeAlergias,
   problemaDeNombre,
   problemaDeTieneTratamientos,
@@ -48,6 +47,8 @@ export interface EnfoquePerfil {
 
 export interface EditarPerfilViewModel {
   estado: EstadoEdicion;
+  /** Con estado 'error': por qué no se cargó el perfil (sin red, servidor...); null si no hay error. */
+  mensajeError: string | null;
   reintentar: () => void;
   correo: string;
   formulario: FormularioPerfil;
@@ -143,10 +144,7 @@ function validarCampo(
 }
 
 function mensajeDeGuardado(error: unknown): string {
-  if (esErrorDeRed(error)) {
-    return MENSAJE_SIN_CONEXION;
-  }
-  return mensajeDelServidor(error, 'No pudimos guardar tus cambios. Intenta de nuevo.');
+  return mensajeParaClienta(error, { respaldo: obtenerTexto('perfil.editar.noSeGuardo') });
 }
 
 /**
@@ -157,6 +155,7 @@ export function useEditarPerfilViewModel(): EditarPerfilViewModel {
   const { back, dismissTo } = useRouter();
   const { actualizarNombre } = useAuth();
   const [estado, setEstado] = useState<EstadoEdicion>('cargando');
+  const [errorCarga, setErrorCarga] = useState<unknown>(null);
   const [perfil, setPerfil] = useState<PerfilCuenta | null>(null);
   const [formulario, setFormulario] = useState<FormularioPerfil>(FORMULARIO_VACIO);
   const [consiente, setConsienteCrudo] = useState(false);
@@ -188,6 +187,7 @@ export function useEditarPerfilViewModel(): EditarPerfilViewModel {
           return;
         }
         const leido = normalizarPerfil(respuesta);
+        setErrorCarga(null);
         if (!leido) {
           setEstado('error');
           return;
@@ -196,8 +196,9 @@ export function useEditarPerfilViewModel(): EditarPerfilViewModel {
         setFormulario(formularioDesdePerfil(leido));
         setEstado('listo');
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (id === solicitud.current) {
+          setErrorCarga(error);
           setEstado('error');
         }
       });
@@ -265,7 +266,7 @@ export function useEditarPerfilViewModel(): EditarPerfilViewModel {
     setEnVivo(Object.fromEntries(ORDEN.map((campo) => [campo, Boolean(nuevos[campo])])));
     const primero = ORDEN.find((campo) => nuevos[campo]);
     if (primero || 'problema' in fecha) {
-      setErrorGeneral('Revisa los campos marcados.');
+      setErrorGeneral(obtenerTexto('auth.revisaCampos'));
       pedirEnfoque(primero ?? 'nacimiento');
       return;
     }
@@ -322,16 +323,17 @@ export function useEditarPerfilViewModel(): EditarPerfilViewModel {
   const abrirAviso = () => {
     const url = urlAvisoPrivacidad();
     if (!url) {
-      setErrorGeneral('No pudimos abrir el aviso de privacidad.');
+      setErrorGeneral(obtenerTexto('auth.avisoPrivacidad.noAbre'));
       return;
     }
     openBrowserAsync(url).catch(() => {
-      setErrorGeneral('No pudimos abrir el aviso de privacidad.');
+      setErrorGeneral(obtenerTexto('auth.avisoPrivacidad.noAbre'));
     });
   };
 
   return {
     estado,
+    mensajeError: estado === 'error' ? mensajeParaClienta(errorCarga) : null,
     reintentar: cargar,
     correo: perfil?.email ?? '',
     formulario,

@@ -190,7 +190,7 @@ export interface Colores {
   peligro: string;
   /** Fondo de una fila mientras se presiona. */
   presionado: string;
-  /** Confirmación de un estado (por ejemplo, "Correo disponible"). */
+  /** Confirmación de un estado (por ejemplo, "Cambios guardados"). */
   exito: string;
   /** Estado en espera o que pide atención sin ser error. */
   aviso: string;

@@ -7,6 +7,7 @@ import { enlaceTelefono } from '@/features/salon/models/salonModel';
 import { ApiError } from '@/shared/api/apiClient';
 import type { DatosTransferencia } from '@/shared/api/configuracionPublica';
 import { obtenerDocumentoVigente, rutaVisorDocumento, type SlugDocumentoLegal } from '@/shared/api/documentosLegales';
+import { mensajeParaClienta } from '@/shared/api/mensajesError';
 import { obtenerTexto } from '@/shared/api/textosSitio';
 import { useConfiguracionPublica } from '@/shared/api/useConfiguracionPublica';
 import { useCandado } from '@/shared/ui/useCandado';
@@ -78,6 +79,8 @@ export interface CasillaCheckout extends EtiquetaCasillaCompra {
 }
 
 export interface CheckoutViewModel {
+  /** Con estado 'error': por qué no se cargó el carrito (sin red, servidor...); null si no hay error. */
+  mensajeError: string | null;
   estado: EstadoCheckout;
   recargar: () => void;
   items: ItemCarrito[];
@@ -157,6 +160,7 @@ export function useCheckoutViewModel(): CheckoutViewModel {
   const { configuracion } = useConfiguracionPublica();
 
   const [estado, setEstado] = useState<EstadoCheckout>('cargando');
+  const [errorCarga, setErrorCarga] = useState<unknown>(null);
   const [items, setItems] = useState<ItemCarrito[]>([]);
   const [paso, setPaso] = useState<PasoCheckout>(1);
   // Por omisión, pagar al recoger (como la web); si está apagado, la otra forma activa.
@@ -224,10 +228,11 @@ export function useCheckoutViewModel(): CheckoutViewModel {
         setItems(lista);
         setEstado('listo');
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (actual !== solicitud.current) {
           return;
         }
+        setErrorCarga(error);
         setEstado('error');
       });
   }, [irAlCarrito]);
@@ -433,6 +438,7 @@ export function useCheckoutViewModel(): CheckoutViewModel {
   const marcadas = casillas.terminosVenta && casillas.reembolsos;
 
   return {
+    mensajeError: estado === 'error' ? mensajeParaClienta(errorCarga) : null,
     estado,
     recargar,
     items,

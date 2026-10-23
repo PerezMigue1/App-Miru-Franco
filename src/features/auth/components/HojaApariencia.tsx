@@ -6,11 +6,16 @@ import type { PreferenciaApariencia } from '@/shared/ui/preferencias';
 import { espacio, fuente, icono, radio, tipo, toqueMinimo } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
-const OPCIONES: { valor: PreferenciaApariencia; etiqueta: string; detalle: string }[] = [
-  { valor: 'sistema', etiqueta: 'Sistema', detalle: 'Sigue la configuración del teléfono' },
-  { valor: 'claro', etiqueta: 'Claro', detalle: 'Lino y vino' },
-  { valor: 'oscuro', etiqueta: 'Oscuro', detalle: 'Carbón y oro' },
-];
+import { useTextosAuth, type TextosAuth } from '../viewmodels/textosAuth';
+
+/** Las tres opciones con sus textos del catálogo. */
+function opciones({ apariencia }: TextosAuth): { valor: PreferenciaApariencia; etiqueta: string; detalle: string }[] {
+  return [
+    { valor: 'sistema', etiqueta: apariencia.sistema, detalle: apariencia.sistemaDetalle },
+    { valor: 'claro', etiqueta: apariencia.claro, detalle: apariencia.claroDetalle },
+    { valor: 'oscuro', etiqueta: apariencia.oscuro, detalle: apariencia.oscuroDetalle },
+  ];
+}
 
 interface HojaAparienciaProps {
   visible: boolean;
@@ -22,10 +27,11 @@ interface HojaAparienciaProps {
 /** Apariencia: Sistema, Claro u Oscuro. Se aplica al instante. */
 export function HojaApariencia({ visible, preferencia, onElegir, onCerrar }: HojaAparienciaProps) {
   const { colores } = useTheme();
+  const textos = useTextosAuth();
   return (
-    <Hoja visible={visible} onCerrar={onCerrar} titulo="Apariencia">
-      <View accessibilityRole="radiogroup" accessibilityLabel="Apariencia" style={styles.lista}>
-        {OPCIONES.map((opcion) => {
+    <Hoja visible={visible} onCerrar={onCerrar} titulo={textos.apariencia.titulo}>
+      <View accessibilityRole="radiogroup" accessibilityLabel={textos.apariencia.titulo} style={styles.lista}>
+        {opciones(textos).map((opcion) => {
           const elegida = opcion.valor === preferencia;
           return (
             <Pressable

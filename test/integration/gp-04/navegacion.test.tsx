@@ -155,7 +155,8 @@ const PESTANAS = [
   {
     titulo: 'Inicio',
     nombre: 'Inicio',
-    etiqueta: undefined,
+    // GP-07.6: las cinco pestañas llevan su etiqueta accesible (antes Inicio y Perfil no la tenían).
+    etiqueta: 'Inicio',
     ruta: '/inicio',
     segmentos: ['(cliente)', 'inicio'],
     textoPropio: 'Nuestro trabajo',
@@ -187,7 +188,7 @@ const PESTANAS = [
   {
     titulo: 'Perfil',
     nombre: 'Perfil',
-    etiqueta: undefined,
+    etiqueta: 'Perfil',
     ruta: '/perfil',
     segmentos: ['(cliente)', 'perfil'],
     textoPropio: 'Tu perfil en Mirú Franco',

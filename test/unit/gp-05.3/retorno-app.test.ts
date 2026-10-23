@@ -77,15 +77,23 @@ describe('regreso de Mercado Pago', () => {
   it.each([
     ['anticipo', ANTICIPO(`15?${RETORNO_MERCADO_PAGO}`), `/anticipo/15?${RETORNO_MERCADO_PAGO}`],
     ['anticipo con más parámetros', ANTICIPO(`15?${RETORNO_MERCADO_PAGO}&estado=x`), `/anticipo/15?${RETORNO_MERCADO_PAGO}`],
-    ['anticipo con / tras el id', ANTICIPO(`15/?${RETORNO_MERCADO_PAGO}`), `/anticipo/15?${RETORNO_MERCADO_PAGO}`],
     ['pedido', PEDIDO(`22?${RETORNO_MERCADO_PAGO}`), `/pedido-confirmado/22?${RETORNO_MERCADO_PAGO}`],
-    ['pedido con fragmento', PEDIDO(`22#${RETORNO_MERCADO_PAGO}`), `/pedido-confirmado/22?${RETORNO_MERCADO_PAGO}`],
-    ['anticipo sin id numérico', ANTICIPO(`abc?${RETORNO_MERCADO_PAGO}`), '/'],
-    ['anticipo con id mezclado', ANTICIPO(`12abc?${RETORNO_MERCADO_PAGO}`), '/'],
-    ['anticipo sin id', ANTICIPO(`?${RETORNO_MERCADO_PAGO}`), '/'],
-    ['pedido sin id numérico', PEDIDO(`x?${RETORNO_MERCADO_PAGO}`), '/'],
   ])('%s: con la app abierta no navega y en frío abre %s', (_caso, path, esperado) => {
     expect(conAppAbierta(path)).toBeNull();
+    expect(enFrio(path)).toBe(esperado);
+  });
+
+  // GP-07.6: solo `<base>/<id numérico>?...` con retorno=mp como parámetro de la query es un
+  // regreso; lo demás se abre como cualquier otra ruta (el anticipo sin sus parámetros).
+  it.each([
+    ['anticipo con / tras el id', ANTICIPO(`15/?${RETORNO_MERCADO_PAGO}`), ANTICIPO('15/')],
+    ['pedido con retorno solo en el fragmento', PEDIDO(`22#${RETORNO_MERCADO_PAGO}`), PEDIDO(`22#${RETORNO_MERCADO_PAGO}`)],
+    ['anticipo sin id numérico', ANTICIPO(`abc?${RETORNO_MERCADO_PAGO}`), ANTICIPO('abc')],
+    ['anticipo con id mezclado', ANTICIPO(`12abc?${RETORNO_MERCADO_PAGO}`), ANTICIPO('12abc')],
+    ['anticipo sin id', ANTICIPO(`?${RETORNO_MERCADO_PAGO}`), ANTICIPO('')],
+    ['pedido sin id numérico', PEDIDO(`x?${RETORNO_MERCADO_PAGO}`), PEDIDO(`x?${RETORNO_MERCADO_PAGO}`)],
+  ])('%s no es un regreso: se abre como %s', (_caso, path, esperado) => {
+    expect(conAppAbierta(path)).toBe(esperado);
     expect(enFrio(path)).toBe(esperado);
   });
 });

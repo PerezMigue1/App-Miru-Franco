@@ -1,6 +1,6 @@
 import { ChevronRight, type LucideIcon } from 'lucide-react-native';
 import { Children, isValidElement, type ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, Switch, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import Animated from 'react-native-reanimated';
 
 import { usePresion } from './movimiento';
@@ -89,17 +89,98 @@ export function FilaTarjeta({
       style={[styles.fila, deshabilitada ? styles.deshabilitada : null]}
     >
       <Animated.View style={[styles.contenido, estiloPresion]}>
-        <View style={[styles.cuadrito, { backgroundColor: colores.cuadritoIcono }]}>
-          <Icono color={colorIcono} size={perfil.icono} strokeWidth={icono.trazo} />
-        </View>
-        <View style={styles.textos}>
-          <Text style={[styles.titulo, { color: colorTitulo }]}>{titulo}</Text>
-          <Text style={[styles.descripcion, { color: colores.textoSuave }]}>{descripcion}</Text>
-        </View>
+        <IconoYTextos icono={Icono} titulo={titulo} descripcion={descripcion} colorTitulo={colorTitulo} colorIcono={colorIcono} />
         {destructiva || deshabilitada ? null : (
           <ChevronRight color={colores.textoSuave} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
         )}
       </Animated.View>
+    </Pressable>
+  );
+}
+
+/** Cuadrito con el ícono, título y descripción: lo comparten las filas de la tarjeta. */
+function IconoYTextos({
+  icono: Icono,
+  titulo,
+  descripcion,
+  colorTitulo,
+  colorIcono,
+}: {
+  icono: LucideIcon;
+  titulo: string;
+  descripcion: string;
+  colorTitulo: string;
+  colorIcono: string;
+}) {
+  const { colores } = useTheme();
+  return (
+    <>
+      <View style={[styles.cuadrito, { backgroundColor: colores.cuadritoIcono }]}>
+        <Icono color={colorIcono} size={perfil.icono} strokeWidth={icono.trazo} />
+      </View>
+      <View style={styles.textos}>
+        <Text style={[styles.titulo, { color: colorTitulo }]}>{titulo}</Text>
+        <Text style={[styles.descripcion, { color: colores.textoSuave }]}>{descripcion}</Text>
+      </View>
+    </>
+  );
+}
+
+interface FilaInterruptorProps {
+  icono: LucideIcon;
+  titulo: string;
+  /** Una línea que dice qué pasa con el interruptor como está. */
+  descripcion: string;
+  encendido: boolean;
+  onCambiar: (encendido: boolean) => void;
+  /** Aún no se puede cambiar (por ejemplo, mientras se lee): atenuada y anunciada como deshabilitada. */
+  deshabilitada?: boolean;
+}
+
+/**
+ * Fila con un interruptor nativo (Switch) a la derecha. Toda la fila es el objetivo táctil (48dp o
+ * más) y se anuncia como un solo "switch" con su estado; el Switch no recibe el foco aparte. Colores
+ * con 3:1 o más contra la tarjeta en claro y oscuro: encendido en el color de foco (vino u oro),
+ * apagado en el texto suave y la perilla en el fondo de los campos.
+ */
+export function FilaInterruptor({
+  icono: Icono,
+  titulo,
+  descripcion,
+  encendido,
+  onCambiar,
+  deshabilitada = false,
+}: FilaInterruptorProps) {
+  const { colores } = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="switch"
+      accessibilityLabel={titulo}
+      accessibilityHint={descripcion}
+      accessibilityState={{ checked: encendido, disabled: deshabilitada }}
+      disabled={deshabilitada}
+      onPress={() => onCambiar(!encendido)}
+      style={[styles.fila, deshabilitada ? styles.deshabilitada : null]}
+    >
+      <View style={styles.contenido}>
+        <IconoYTextos
+          icono={Icono}
+          titulo={titulo}
+          descripcion={descripcion}
+          colorTitulo={colores.texto}
+          colorIcono={colores.oroTexto}
+        />
+        <Switch
+          value={encendido}
+          onValueChange={onCambiar}
+          disabled={deshabilitada}
+          trackColor={{ false: colores.textoSuave, true: colores.foco }}
+          thumbColor={colores.campoFondo}
+          ios_backgroundColor={colores.textoSuave}
+          accessible={false}
+          importantForAccessibility="no-hide-descendants"
+        />
+      </View>
     </Pressable>
   );
 }

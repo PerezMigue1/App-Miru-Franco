@@ -1,4 +1,4 @@
-import { ApiError, ErrorDeRed, apiGet, apiPatch, apiPost } from '@/shared/api/apiClient';
+import { ApiError, apiGet, apiPatch, apiPost, ErrorDeRed } from '@/shared/api/apiClient';
 import { precioParaMostrar } from '@/features/inicio/models/FluidoModel';
 import {
   esObjeto,
@@ -10,6 +10,7 @@ import {
   type Crudo,
 } from '@/features/inicio/models/inicioService';
 import type { ConfiguracionPublica, DiaSemana } from '@/shared/api/configuracionPublica';
+import { esSinRespuesta, mensajeParaClienta, mensajeSinContexto } from '@/shared/api/mensajesError';
 import { obtenerTexto, obtenerTextoConReglas } from '@/shared/api/textosSitio';
 import { reglasDeCita, type ReglasCita } from './reglasCitaModel';
 import { especialistaOculta, type Especialista as EspecialistaDeServicio } from './servicioModel';
@@ -306,15 +307,116 @@ export function obtenerCita(id: string | number): Promise<Cita> {
   return apiGet<unknown>(`/api/citas/${encodeURIComponent(String(id))}?propios=true`).then(citaDe);
 }
 
+/** Filtro opcional de listarMisCitas: una especialista y un rango de inicio (ISO, inclusivo). */
+export interface FiltroMisCitas {
+  especialistaId: string | number;
+  desde: string;
+  hasta: string;
+}
+
 /**
  * Citas de la clienta: GET /api/citas?propios=true&orden=fechaHoraInicio&limit=100. Responde
  * { success, count, page, limit, totalPages, data } con las relaciones y los pagos de cada cita.
- * Se descartan las que no traen id o un inicio válido. Para separarlas usa separarMisCitas.
+ * Se descartan las que no traen id o un inicio válido. Para separarlas usa separarMisCitas. Con
+ * filtro, solo las de esa especialista con inicio entre desde y hasta (especialistaId, desde y hasta
+ * de ListCitasDto; el backend respeta la hora de un ISO completo).
  */
-export function listarMisCitas(): Promise<Cita[]> {
-  return apiGet<unknown>('/api/citas?propios=true&orden=fechaHoraInicio&limit=100').then((respuesta) =>
+export function listarMisCitas(filtro?: FiltroMisCitas): Promise<Cita[]> {
+  const extra = filtro
+    ? `&especialistaId=${encodeURIComponent(String(filtro.especialistaId).trim())}` +
+      `&desde=${encodeURIComponent(filtro.desde)}&hasta=${encodeURIComponent(filtro.hasta)}`
+    : '';
+  return apiGet<unknown>(`/api/citas?propios=true&orden=fechaHoraInicio&limit=100${extra}`).then((respuesta) =>
     listaDe(respuesta, ['data', 'citas']).map(normalizarCita).filter(citaValida),
   );
+}
+
+/**
+ * Lanzado por crearCitaVerificada cuando no se sabe si la cita quedó registrada: la clienta revisa
+ * Mis citas antes de intentar de nuevo (citas.reserva.sinConfirmar). La causa es el error original.
+ */
+export class ReservaSinConfirmar extends Error {
+  readonly causa: unknown;
+
+  constructor(causa: unknown) {
+    super('No se pudo confirmar si la cita quedó registrada.');
+    this.name = 'ReservaSinConfirmar';
+    this.causa = causa;
+  }
+}
+
+/** Qué se encontró al buscar la cita recién creada. */
+export type BusquedaCitaReciente =
+  | { estado: 'encontrada'; cita: Cita }
+  | { estado: 'ninguna' }
+  | { estado: 'sinVerificar' };
+
+/** Mismo instante (no mismo texto): '...T17:00:00Z' y '...T17:00:00.000Z' son la misma hora. */
+function mismoInstante(a: string, b: string): boolean {
+  const ms = new Date(a).getTime();
+  return Number.isFinite(ms) && ms === new Date(b).getTime();
+}
+
+/**
+ * Busca entre las citas de la clienta una vigente con la misma especialista, el mismo servicio y el
+ * mismo inicio que la enviada (la consulta se acota a esa especialista y ese instante, así el límite
+ * de 100 no la deja fuera). Una sola es la recién creada; ninguna, no se creó; varias o sin poder
+ * consultar, no se sabe. Nunca lanza.
+ */
+export async function buscarCitaRecienCreada(
+  datos: Pick<DatosNuevaCita, 'especialistaId' | 'servicioId' | 'fechaHoraInicio'>,
+): Promise<BusquedaCitaReciente> {
+  let citas: Cita[];
+  try {
+    citas = await listarMisCitas({
+      especialistaId: datos.especialistaId,
+      desde: datos.fechaHoraInicio,
+      hasta: datos.fechaHoraInicio,
+    });
+  } catch {
+    return { estado: 'sinVerificar' };
+  }
+  const candidatas = citas.filter(
+    (cita) =>
+      esVigente(cita) &&
+      String(cita.especialistaId) === String(datos.especialistaId).trim() &&
+      String(cita.servicioId) === String(datos.servicioId) &&
+      mismoInstante(cita.fechaHoraInicio, datos.fechaHoraInicio),
+  );
+  if (candidatas.length === 1) {
+    return { estado: 'encontrada', cita: candidatas[0] };
+  }
+  return candidatas.length === 0 ? { estado: 'ninguna' } : { estado: 'sinVerificar' };
+}
+
+/**
+ * crearCita sin dejar una cita huérfana. El backend no tiene clave de idempotencia: sin respuesta
+ * (sin red o tiempo agotado), con un 5xx (el proxy pudo cortar la respuesta después de guardar) o con
+ * una respuesta que no se pudo leer, la cita pudo quedar creada, y al reintentar el horario saldría
+ * ocupado por ella misma (pendiente de anticipo o por pagar en el salón, que cuenta para el tope).
+ * Antes de dejar reintentar se busca (buscarCitaRecienCreada): si está, se sigue con ella como con un
+ * éxito; si con certeza no se creó, se lanza el error original (se puede reintentar); si no se sabe,
+ * se lanza ReservaSinConfirmar. Cualquier otro error se lanza tal cual.
+ */
+export async function crearCitaVerificada(datos: DatosNuevaCita): Promise<Cita> {
+  try {
+    return await crearCita(datos);
+  } catch (error) {
+    const ilegible = !(error instanceof ApiError) && !(error instanceof ErrorDeRed);
+    const sinRespuesta = ilegible || esSinRespuesta(error) || (error instanceof ApiError && error.status >= 500);
+    if (!sinRespuesta) {
+      throw error;
+    }
+    const busqueda = await buscarCitaRecienCreada(datos);
+    if (busqueda.estado === 'encontrada') {
+      return busqueda.cita;
+    }
+    // Una respuesta ilegible es una respuesta correcta del servidor: la cita sí se creó.
+    if (busqueda.estado === 'sinVerificar' || ilegible) {
+      throw new ReservaSinConfirmar(error);
+    }
+    throw error;
+  }
 }
 
 /**
@@ -377,18 +479,21 @@ function leerEstadoAnticipo(citaId: string | number): Promise<Crudo | undefined>
   return apiGet<unknown>(`/api/pagos-en-linea/citas/${encodeURIComponent(String(citaId))}/estado`).then(cuerpoDe);
 }
 
+/** El estado de la respuesta de GET /api/pagos-en-linea/citas/:id/estado, agrupado para la app. */
+function estadoAnticipoDe(cuerpo: Crudo | undefined): EstadoAnticipo {
+  const estado = texto(cuerpo?.estado);
+  if (estado === 'aprobado' || estado === 'no_requiere') {
+    return 'aprobado';
+  }
+  if (estado === 'pendiente' || estado === 'revision') {
+    return 'pendiente';
+  }
+  return 'sin_pago';
+}
+
 /** Estado real del anticipo: GET /api/pagos-en-linea/citas/:id/estado (consulta a Mercado Pago). */
 export function obtenerEstadoAnticipo(citaId: string | number): Promise<EstadoAnticipo> {
-  return leerEstadoAnticipo(citaId).then((cuerpo) => {
-    const estado = texto(cuerpo?.estado);
-    if (estado === 'aprobado' || estado === 'no_requiere') {
-      return 'aprobado';
-    }
-    if (estado === 'pendiente' || estado === 'revision') {
-      return 'pendiente';
-    }
-    return 'sin_pago';
-  });
+  return leerEstadoAnticipo(citaId).then(estadoAnticipoDe);
 }
 
 /**
@@ -408,18 +513,36 @@ export interface PoliticaCancelacion {
  * null si no viene. Los errores llegan como ApiError o ErrorDeRed; quien la usa decide qué mostrar.
  */
 export function obtenerPoliticaCancelacion(citaId: string | number): Promise<PoliticaCancelacion | null> {
-  return leerEstadoAnticipo(citaId).then((cuerpo) => {
-    const politica = cuerpo?.cancelacion;
-    if (!esObjeto(politica)) {
-      return null;
-    }
-    const dias = Number(politica.diasHabilesHastaCita);
-    return {
-      reembolsable: politica.reembolsable === true,
-      reembolsableHasta: textoONull(politica.reembolsableHasta),
-      diasHabilesHastaCita: Number.isFinite(dias) ? dias : 0,
-    };
-  });
+  return leerEstadoAnticipo(citaId).then(politicaCancelacionDe);
+}
+
+/** El campo `cancelacion` de la respuesta del estado del anticipo, o null si no viene. */
+function politicaCancelacionDe(cuerpo: Crudo | undefined): PoliticaCancelacion | null {
+  const politica = cuerpo?.cancelacion;
+  if (!esObjeto(politica)) {
+    return null;
+  }
+  const dias = Number(politica.diasHabilesHastaCita);
+  return {
+    reembolsable: politica.reembolsable === true,
+    reembolsableHasta: textoONull(politica.reembolsableHasta),
+    diasHabilesHastaCita: Number.isFinite(dias) ? dias : 0,
+  };
+}
+
+/**
+ * Estado del anticipo y su política de cancelación en una sola consulta (GET
+ * /api/pagos-en-linea/citas/:id/estado), para la hoja de cancelar de una cita cuyo anticipo aún no
+ * se ve pagado: el pago pudo aprobarse o seguir en proceso en Mercado Pago. Los errores llegan como
+ * ApiError o ErrorDeRed.
+ */
+export function obtenerAnticipoAlCancelar(
+  citaId: string | number,
+): Promise<{ estado: EstadoAnticipo; politica: PoliticaCancelacion | null }> {
+  return leerEstadoAnticipo(citaId).then((cuerpo) => ({
+    estado: estadoAnticipoDe(cuerpo),
+    politica: politicaCancelacionDe(cuerpo),
+  }));
 }
 
 /**
@@ -453,10 +576,11 @@ export function esHorarioOcupado(error: unknown): boolean {
 }
 
 /**
- * 400 de crearCita por el anticipo, con mensajes del backend ya escritos para la clienta. Solo estos
- * (y la variante de MENSAJE_VARIAS_CITAS_POR_PAGAR_EN_SALON) se muestran tal cual; cualquier otro
- * mensaje del servidor nunca llega a la pantalla. "El anticipo se paga en línea." llega cuando el
- * salón apagó la regla permitirAnticipoEnSalon.
+ * Textos propios para los 400 de crearCita por el anticipo (el backend no manda code). El 400 se
+ * reconoce cuando su mensaje es igual a uno de estos (o es la variante de
+ * MENSAJE_VARIAS_CITAS_POR_PAGAR_EN_SALON) y entonces se muestra el texto de esta lista, nunca el
+ * del servidor. "El anticipo se paga en línea." llega cuando el salón apagó la regla
+ * permitirAnticipoEnSalon.
  */
 export const MENSAJES_ANTICIPO_PARA_CLIENTA: readonly string[] = [
   'Ya no da tiempo de pagar en el salón. Paga el anticipo en línea.',
@@ -473,21 +597,48 @@ export const MENSAJES_ANTICIPO_PARA_CLIENTA: readonly string[] = [
  * con N = 1 el backend manda el texto en singular, que sí está en la lista.
  */
 const MENSAJE_VARIAS_CITAS_POR_PAGAR_EN_SALON =
-  /^Ya tienes \d+ citas por pagar en el salón\. Paga su anticipo o elige pagar en línea\.$/;
+  /^Ya tienes (\d+) citas por pagar en el salón\. Paga su anticipo o elige pagar en línea\.$/;
+
+/** Una forma de reconocer un mensaje del servidor y el texto propio que le toca. */
+interface TextosPropios {
+  /** Textos que se reconocen tal cual (el que se muestra es el de esta lista). */
+  iguales: readonly string[];
+  /** Variante con un número N (distinto de 1) en el primer grupo y su texto propio con ese número. */
+  conNumero?: { patron: RegExp; armar: (numero: string) => string };
+}
 
 /**
- * El mensaje del 400 de crearCita (recortado) si es uno de MENSAJES_ANTICIPO_PARA_CLIENTA o la
+ * El texto propio de la app que corresponde al mensaje del servidor (recortado): el igual de la
+ * lista o la variante armada con su número. null si no es ninguno. Nunca devuelve el del servidor.
+ */
+function textoPropio(mensajeServidor: string, propios: TextosPropios): string | null {
+  const mensaje = mensajeServidor.trim();
+  const igual = propios.iguales.find((texto) => texto === mensaje);
+  if (igual !== undefined) {
+    return igual;
+  }
+  const variante = propios.conNumero;
+  const numero = variante?.patron.exec(mensaje)?.[1];
+  return variante && numero !== undefined ? variante.armar(numero) : null;
+}
+
+const PROPIOS_ANTICIPO: TextosPropios = {
+  iguales: MENSAJES_ANTICIPO_PARA_CLIENTA,
+  conNumero: {
+    patron: MENSAJE_VARIAS_CITAS_POR_PAGAR_EN_SALON,
+    armar: (n) => `Ya tienes ${n} citas por pagar en el salón. Paga su anticipo o elige pagar en línea.`,
+  },
+};
+
+/**
+ * El texto propio para un 400 de crearCita que es uno de MENSAJES_ANTICIPO_PARA_CLIENTA o la
  * variante con N citas por pagar en el salón; null si no.
  */
 export function mensajeAnticipoParaClienta(error: unknown): string | null {
   if (!(error instanceof ApiError) || error.status !== 400) {
     return null;
   }
-  const mensaje = error.message.trim();
-  if (MENSAJES_ANTICIPO_PARA_CLIENTA.includes(mensaje) || MENSAJE_VARIAS_CITAS_POR_PAGAR_EN_SALON.test(mensaje)) {
-    return mensaje;
-  }
-  return null;
+  return textoPropio(error.message, PROPIOS_ANTICIPO);
 }
 
 /**
@@ -512,22 +663,30 @@ export const MENSAJES_ANTICIPO_EN_SALON: Readonly<Record<number, readonly string
 
 /** 400 de anticipo-en-salon con N citas por pagar en el salón (N distinto de 1). */
 const MENSAJE_VARIAS_CITAS_EN_SALON =
-  /^Ya tienes \d+ citas por pagar en el salón\. Paga su anticipo o paga esta en línea\.$/;
+  /^Ya tienes (\d+) citas por pagar en el salón\. Paga su anticipo o paga esta en línea\.$/;
+
+/** Solo los 400 de anticipo-en-salon tienen la variante con N citas. */
+const VARIAS_CITAS_EN_SALON: TextosPropios['conNumero'] = {
+  patron: MENSAJE_VARIAS_CITAS_EN_SALON,
+  armar: (n) => `Ya tienes ${n} citas por pagar en el salón. Paga su anticipo o paga esta en línea.`,
+};
 
 /**
- * Mensaje para la clienta al fallar cambiarAnticipoASalon: el del servidor si está en
- * MENSAJES_ANTICIPO_EN_SALON para su status (o es la variante con N citas); si no, uno propio por
- * tipo de error. Nunca el texto técnico del servidor.
+ * Mensaje para la clienta al fallar cambiarAnticipoASalon: el texto propio de
+ * MENSAJES_ANTICIPO_EN_SALON que corresponde al del servidor para su status (o la variante con N
+ * citas); si no, uno propio por tipo de error. Nunca el texto del servidor.
  */
 export function mensajeAnticipoEnSalon(error: unknown): string {
   if (error instanceof ApiError) {
-    const mensaje = error.message.trim();
-    const permitidos = MENSAJES_ANTICIPO_EN_SALON[error.status] ?? [];
-    if (permitidos.includes(mensaje) || (error.status === 400 && MENSAJE_VARIAS_CITAS_EN_SALON.test(mensaje))) {
-      return mensaje;
+    const propio = textoPropio(error.message, {
+      iguales: MENSAJES_ANTICIPO_EN_SALON[error.status] ?? [],
+      conNumero: error.status === 400 ? VARIAS_CITAS_EN_SALON : undefined,
+    });
+    if (propio) {
+      return propio;
     }
   }
-  return mensajeComunDeCita(error) ?? obtenerTexto('citas.anticipoSalon.noSePudo');
+  return mensajeComunDeCita(error) ?? mensajeParaClienta(error, { respaldo: obtenerTexto('citas.anticipoSalon.noSePudo') });
 }
 
 /**
@@ -756,32 +915,25 @@ export function separarMisCitas(
 
 // ── Errores de reprogramar y cancelar ──────────────────────────────────────────────────────
 
-const MENSAJE_SIN_CONEXION = 'Sin conexión. Revisa tu internet e intenta de nuevo.';
-const MENSAJE_SESION_TERMINADA = 'Tu sesión terminó. Inicia sesión de nuevo.';
-const MENSAJE_CITA_NO_ENCONTRADA = 'No encontramos esta cita.';
-const MENSAJE_HORARIO_OCUPADO = 'Ese horario ya se ocupó. Elige otro.';
-const MENSAJE_CITA_COBRADA = 'Esta cita ya se cobró en el salón y no se puede cambiar.';
-
 /**
- * Lo común a reprogramar y cancelar: sin red, sesión terminada (401), 404, 409 de cita ya cobrada o
- * uno de MENSAJES_ANTICIPO_PARA_CLIENTA. null si no es ninguno; cada función decide el resto.
+ * Lo común a reprogramar y cancelar: lo que no depende de la pantalla (sin red, tiempo agotado,
+ * sesión terminada, límite de solicitudes; mensajeSinContexto), 404, 409 de cita ya cobrada o uno
+ * de MENSAJES_ANTICIPO_PARA_CLIENTA. null si no es ninguno; cada función decide el resto.
  */
 function mensajeComunDeCita(error: unknown): string | null {
-  if (error instanceof ErrorDeRed || (error instanceof ApiError && error.status === 0)) {
-    return MENSAJE_SIN_CONEXION;
+  const sinContexto = mensajeSinContexto(error);
+  if (sinContexto) {
+    return sinContexto;
   }
   if (!(error instanceof ApiError)) {
     return null;
   }
-  if (error.status === 401) {
-    return MENSAJE_SESION_TERMINADA;
-  }
   if (error.status === 404) {
-    return MENSAJE_CITA_NO_ENCONTRADA;
+    return obtenerTexto('citas.errores.citaNoEncontrada');
   }
   // "La cita ya se cobró; no se puede editar ni reprogramar. Cancela la venta primero."
   if (error.status === 409 && error.message.toLowerCase().includes('cobr')) {
-    return MENSAJE_CITA_COBRADA;
+    return obtenerTexto('citas.errores.citaCobrada');
   }
   return mensajeAnticipoParaClienta(error);
 }
@@ -840,17 +992,17 @@ function mensajeAvisoReagendar(error: unknown): string | null {
 }
 
 /**
- * Mensaje para la clienta al fallar reprogramarCita. Del servidor solo se muestran los textos de
+ * Mensaje para la clienta al fallar reprogramarCita. Solo textos propios: los de
  * MENSAJES_ANTICIPO_PARA_CLIENTA (p. ej. "Ya no da tiempo de pagar el anticipo antes de tu cita.",
  * que llega si el nuevo horario no deja tiempo para pagar el anticipo pendiente); el horario que ya
  * pasó y el aviso mínimo para reagendar llevan mensajes propios, que no invitan a reintentar.
  */
 export function mensajeReprogramacion(error: unknown): string {
   if (esHorarioOcupado(error)) {
-    return MENSAJE_HORARIO_OCUPADO;
+    return obtenerTexto('citas.errores.horarioOcupado');
   }
   if (esHorarioPasado(error)) {
-    return 'Ese horario ya pasó. Elige otro.';
+    return obtenerTexto('citas.errores.horarioPasado');
   }
   const aviso = mensajeAvisoReagendar(error);
   if (aviso) {
@@ -867,9 +1019,9 @@ export function mensajeReprogramacion(error: unknown): string {
     return comun;
   }
   if (esCitaSinCambios(error)) {
-    return 'Esta cita ya no se puede reprogramar.';
+    return obtenerTexto('citas.errores.noSeReprograma');
   }
-  return 'No pudimos cambiar tu cita. Intenta de nuevo en un momento.';
+  return mensajeParaClienta(error, { respaldo: obtenerTexto('citas.errores.reprogramar') });
 }
 
 /** Mensaje para la clienta al fallar cancelarCita. Nunca el texto técnico del servidor. */
@@ -879,20 +1031,20 @@ export function mensajeCancelacion(error: unknown): string {
     return comun;
   }
   if (esCitaSinCambios(error)) {
-    return 'Esta cita ya no se puede cancelar.';
+    return obtenerTexto('citas.errores.noSeCancela');
   }
   if (error instanceof ApiError && error.status === 400) {
     const mensaje = error.message.toLowerCase();
     // "El motivo contiene caracteres no permitidos" (filtro de inyección SQL del backend).
     if (mensaje.includes('caracteres no permitidos')) {
-      return 'Tu motivo tiene caracteres que no podemos guardar. Escríbelo de otra forma.';
+      return obtenerTexto('citas.errores.motivoCaracteres');
     }
     // Validación del DTO: "motivoCancelacion should not be empty".
     if (mensaje.includes('motivocancelacion')) {
-      return 'Escribe el motivo de la cancelación.';
+      return obtenerTexto('citas.errores.motivoVacio');
     }
   }
-  return 'No pudimos cancelar tu cita. Intenta de nuevo en un momento.';
+  return mensajeParaClienta(error, { respaldo: obtenerTexto('citas.errores.cancelar') });
 }
 
 // ── Fechas locales (México, UTC-6) ─────────────────────────────────────────────────────────

@@ -35,6 +35,7 @@ export function ListaServicios({ catalogo }: { catalogo: CatalogoServiciosViewMo
   const { push } = useRouter();
   const {
     estado,
+    mensajeError,
     recargar,
     busqueda,
     setBusqueda,
@@ -74,7 +75,7 @@ export function ListaServicios({ catalogo }: { catalogo: CatalogoServiciosViewMo
     contenido = (
       <EmptyState
         titulo="No pudimos cargar los servicios"
-        mensaje="Revisa tu conexión e intenta de nuevo."
+        mensaje={mensajeError ?? ''}
         accion={{ titulo: 'Reintentar', onPress: recargar }}
       />
     );

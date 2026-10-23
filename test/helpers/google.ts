@@ -32,18 +32,23 @@ export function bytesFijos(largo: number): Uint8Array {
 }
 
 /**
- * Módulo expo-crypto simulado: getRandomBytes con bytes fijos, digest con el SHA-256 real de Node y
- * getRandomValues (lo usa Inicio para barajar) que llena el arreglo con 0, 1, 2, ...
+ * Módulo expo-crypto simulado: getRandomBytes con bytes fijos, digest y digestStringAsync (en
+ * hexadecimal) con el SHA-256 real de Node y getRandomValues (lo usa Inicio para barajar) que llena
+ * el arreglo con 0, 1, 2, ...
  */
 export function cryptoSimulado() {
   const { createHash } = jest.requireActual<typeof import('node:crypto')>('node:crypto');
   return {
     CryptoDigestAlgorithm: { SHA256: 'SHA-256' },
+    CryptoEncoding: { HEX: 'hex', BASE64: 'base64' },
     getRandomBytes: jest.fn((largo: number) => bytesFijos(largo)),
     digest: jest.fn((_algoritmo: string, datos: Uint8Array) => {
       const resumen = createHash('sha256').update(datos).digest();
       return Promise.resolve(resumen.buffer.slice(resumen.byteOffset, resumen.byteOffset + resumen.length));
     }),
+    digestStringAsync: jest.fn((_algoritmo: string, datos: string) =>
+      Promise.resolve(createHash('sha256').update(datos, 'utf8').digest('hex')),
+    ),
     getRandomValues: jest.fn(<T extends ArrayBufferView>(arreglo: T): T => {
       const valores = arreglo as unknown as { length: number; [i: number]: number };
       for (let i = 0; i < valores.length; i++) {

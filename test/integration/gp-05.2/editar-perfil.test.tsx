@@ -10,6 +10,7 @@ import { abrirPerfilConSesion } from '../../helpers/pantallasPerfil';
 import { CLIENTA, PERFIL_COMPLETO, respuestaPerfil, simularServidorPerfil } from '../../helpers/perfilClienta';
 import { sembrarSesion, sesionGuardada } from '../../helpers/sesionGuardada';
 import { llamadasA, respuesta, type Llamada, type Manejador } from '../../helpers/servidorSimulado';
+import { TEXTO_SIN_CONEXION } from '../../helpers/textosError';
 
 /**
  * GP-05.2: Editar perfil con las pantallas reales (renderRouter sobre src/app) y solo el servidor
@@ -158,7 +159,7 @@ describe('Editar perfil con las pantallas reales (GP-05.2)', () => {
       await fireEvent.changeText(screen.getByLabelText('Color actual'), 'Rubio ficticio');
       await fireEvent.press(screen.getByRole('button', { name: GUARDAR }));
 
-      expect(await screen.findByText('Ocurrió un problema en el servidor. Intenta de nuevo.')).toBeOnTheScreen();
+      expect(await screen.findByText('No pudimos guardar tus cambios. Intenta de nuevo.')).toBeOnTheScreen();
       expect(screen.queryByText(/Prisma/)).not.toBeOnTheScreen();
       expect(cambiosEnviados(llamadas)).toEqual([{ colorActual: 'Rubio ficticio' }]);
 
@@ -167,7 +168,7 @@ describe('Editar perfil con las pantallas reales (GP-05.2)', () => {
       expect(screen.getByRole('button', { name: GUARDAR })).toBeEnabled();
 
       await fireEvent.press(screen.getByRole('button', { name: GUARDAR }));
-      expect(await screen.findByText('Sin conexión. Revisa tu internet e intenta de nuevo')).toBeOnTheScreen();
+      expect(await screen.findByText(TEXTO_SIN_CONEXION)).toBeOnTheScreen();
       expect(screen.queryByText(/Network request failed/)).not.toBeOnTheScreen();
       expect(cambiosEnviados(llamadas)).toHaveLength(2);
       expect(screen.getByLabelText('Color actual')).toHaveDisplayValue('Rubio ficticio');

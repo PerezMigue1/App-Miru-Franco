@@ -2,6 +2,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BackHandler } from 'react-native';
 
+import { mensajeParaClienta, tipoDeError } from '@/shared/api/mensajesError';
 import { useTextos, type FuncionTexto } from '@/shared/api/useTextos';
 import { useCandado } from '@/shared/ui/useCandado';
 
@@ -84,6 +85,8 @@ export interface TextosConfirmacion {
 }
 
 export interface PedidoConfirmadoViewModel {
+  /** Con estado 'error': por qué no se cargó el pedido (sin red, servidor...); null si no hay error. */
+  mensajeError: string | null;
   estado: EstadoCargaPedido;
   pedido: Pedido | null;
   vista: VistaPedido;
@@ -257,6 +260,17 @@ function estadoVisible(
   return previo !== null && conocido.respuestas === previo.respuestas ? previo.estado : conocido.estado;
 }
 
+/**
+ * Por qué no se cargó el pedido: sin red, el texto del catálogo (tienda.pago.errorCargaTexto, que
+ * habla de la conexión); con otro error, que el pedido no se pierde y el texto de mensajeParaClienta.
+ */
+function mensajeCargaPedido(error: unknown, texto: FuncionTexto): string {
+  if (tipoDeError(error) === 'sinConexion') {
+    return texto('tienda.pago.errorCargaTexto');
+  }
+  return `${texto('tienda.pago.noSePierde')} ${mensajeParaClienta(error)}`;
+}
+
 /** El id numérico de la ruta, o null si no es un id válido. */
 function idDeRuta(idLimpio: string): number | null {
   const id = Number(idLimpio);
@@ -286,6 +300,7 @@ export function usePedidoConfirmadoViewModel(
   const texto = useTextos();
 
   const [estado, setEstado] = useState<EstadoCargaPedido>('cargando');
+  const [errorCarga, setErrorCarga] = useState<unknown>(null);
   const [pedido, setPedido] = useState<Pedido | null>(null);
   // Lo que el registro sabe del pago de este pedido y cuántas respuestas ya tenía al cargar: solo
   // cuenta lo que el servidor respondió después (la pantalla siempre verifica por su cuenta).
@@ -365,6 +380,7 @@ export function usePedidoConfirmadoViewModel(
         }
         accionTrasCarga.current = null;
         setPedido(null);
+        setErrorCarga(error);
         setEstado(esPedidoNoEncontrado(error) ? 'noEncontrado' : 'error');
       });
   }, [idLimpio, idRuta]);
@@ -571,6 +587,7 @@ export function usePedidoConfirmadoViewModel(
   const rechazado = estadoPago === 'rechazado';
 
   return {
+    mensajeError: estado === 'error' ? mensajeCargaPedido(errorCarga, texto) : null,
     estado,
     pedido,
     vista,

@@ -685,7 +685,8 @@ describe('ScreenHeader (sin sesión)', () => {
 
     expect(await screen.findByRole('header', { name: 'Mis citas' })).toBeOnTheScreen();
     expect(screen.getByText('Tus próximas visitas al salón')).toBeOnTheScreen();
-    expect(screen.getByLabelText('Mirú Franco Beauty Salón')).toBeOnTheScreen();
+    // GP-07.6: TalkBack lee el nombre correcto del salón (el de la configuración; este es el del respaldo).
+    expect(screen.getByLabelText('Mirú Franco Salón Beauty')).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: 'Abrir notificaciones' })).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: 'Iniciar sesión' })).toBeOnTheScreen();
     expect(screen.queryByRole('button', { name: 'Abrir perfil' })).not.toBeOnTheScreen();

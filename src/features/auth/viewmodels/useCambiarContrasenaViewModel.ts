@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { BackHandler } from 'react-native';
 
 import { ApiError } from '@/shared/api/apiClient';
+import { mensajeParaClienta } from '@/shared/api/mensajesError';
+import { obtenerTexto } from '@/shared/api/textosSitio';
 import { generacionActual } from '@/shared/api/tokenStorage';
 import { soloDigitos, telefonoSinLada } from '@/shared/ui/digitos';
 import { duracion } from '@/shared/ui/tokens';
@@ -11,11 +13,8 @@ import { useCandado } from '@/shared/ui/useCandado';
 
 import {
   AVISO_DATOS_PERSONALES_CLAVE,
-  MENSAJE_SIN_CONEXION,
   esCodigoValido,
-  esErrorDeRed,
   estadoHttp,
-  mensajeDelServidor,
   problemaDeClave,
   requisitosDeClave,
   urlOlvidoContrasena,
@@ -37,6 +36,8 @@ export type PasoContrasena = 1 | 2;
 
 export interface CambiarContrasenaViewModel {
   estado: EstadoContrasena;
+  /** Con estado 'error': por qué no se cargó la cuenta (sin red, servidor...); null si no hay error. */
+  mensajeError: string | null;
   reintentar: () => void;
   paso: PasoContrasena;
   valores: Record<CampoDato, string>;
@@ -74,11 +75,11 @@ const DATOS: CampoDato[] = ['actual', 'nueva', 'confirmacion'];
 const LARGO_CODIGO = 6;
 const VIGENCIA_PREDETERMINADA = 10;
 const NO_COINCIDEN = 'Las contraseñas no coinciden';
-const ACTUAL_INCORRECTA = 'La contraseña actual no es correcta.';
-const CODIGO_INVALIDO = 'El código no es válido o ya venció.';
-const CORREO_NO_ENVIADO = 'No pudimos enviar el código a tu correo. Intenta de nuevo en unos minutos.';
-const SESION_NO_CONFIRMADA = 'No pudimos confirmar tu sesión. Intenta de nuevo.';
-const CODIGO_REENVIADO = 'Te enviamos un código nuevo. Revisa tu correo.';
+// Mensajes propios, del catálogo de textos (se leen al usarse: siguen a la configuración).
+const actualIncorrecta = () => obtenerTexto('errores.passwordActualIncorrecta');
+const correoNoEnviado = () => obtenerTexto('errores.correoNoEnviado');
+const errorGenerico = () => obtenerTexto('perfil.contrasena.noSePudo');
+const recuperacionNoAbre = () => obtenerTexto('perfil.contrasena.recuperacionNoAbre');
 const ESPERA_SEGUNDOS = duracion.esperaReenvioCodigo / duracion.cuentaRegresiva;
 
 /** Solo lo que compara la regla de la contraseña (nada de datos capilares ni de salud). */
@@ -130,22 +131,20 @@ const CODIGOS = {
   demasiadosCodigos: 'DEMASIADOS_CODIGOS',
 } as const;
 
-const ERROR_GENERICO = 'No pudimos cambiar tu contraseña. Intenta de nuevo.';
-
 /** Destino de un `code` conocido; undefined si no se conoce (se decide por el estado HTTP). */
 function destinoDelCode(code: string | undefined, error: unknown): DestinoError | undefined {
   switch (code) {
     case CODIGOS.actualIncorrecta:
-      return { tipo: 'campo', campo: 'actual', mensaje: ACTUAL_INCORRECTA };
+      return { tipo: 'campo', campo: 'actual', mensaje: actualIncorrecta() };
     case CODIGOS.codigoInvalido:
-      return { tipo: 'campo', campo: 'codigo', mensaje: CODIGO_INVALIDO };
+      return { tipo: 'campo', campo: 'codigo', mensaje: obtenerTexto('perfil.contrasena.codigoInvalido') };
     case CODIGOS.correoNoEnviado:
-      return { tipo: 'aviso', mensaje: CORREO_NO_ENVIADO };
+      return { tipo: 'aviso', mensaje: correoNoEnviado() };
     case CODIGOS.cuentaSinPassword:
     case CODIGOS.cuentaNoConfirmada:
     case CODIGOS.codigoEnCurso:
     case CODIGOS.demasiadosCodigos:
-      return { tipo: 'aviso', mensaje: mensajeDelServidor(error, ERROR_GENERICO) };
+      return { tipo: 'aviso', mensaje: mensajeParaClienta(error, { respaldo: errorGenerico() }) };
     default:
       return undefined;
   }
@@ -157,33 +156,28 @@ function destinoDelCode(code: string | undefined, error: unknown): DestinoError 
  * /codigo un 400 es la contraseña actual; en /me/password, una regla de la nueva.
  */
 function destinoDelError(error: unknown, ruta: 'codigo' | 'cambio', sesionVigente: boolean): DestinoError {
-  if (esErrorDeRed(error)) {
-    return { tipo: 'aviso', mensaje: MENSAJE_SIN_CONEXION };
-  }
   const estado = estadoHttp(error);
   if (estado === 401) {
     // Si apiClient cerró la sesión, la pantalla desaparece; si no (renovación sin red), se avisa.
-    return sesionVigente ? { tipo: 'aviso', mensaje: SESION_NO_CONFIRMADA } : null;
+    return sesionVigente ? { tipo: 'aviso', mensaje: obtenerTexto('perfil.contrasena.sesionNoConfirmada') } : null;
   }
   const porCode = destinoDelCode(error instanceof ApiError ? error.code : undefined, error);
   if (porCode !== undefined) {
     return porCode;
   }
   if (estado === 502 && ruta === 'codigo') {
-    return { tipo: 'aviso', mensaje: CORREO_NO_ENVIADO };
+    return { tipo: 'aviso', mensaje: correoNoEnviado() };
   }
   if (estado === 400) {
     if (ruta === 'codigo') {
-      return { tipo: 'campo', campo: 'actual', mensaje: ACTUAL_INCORRECTA };
+      return { tipo: 'campo', campo: 'actual', mensaje: actualIncorrecta() };
     }
-    return {
-      tipo: 'campo',
-      campo: 'nueva',
-      mensaje: mensajeDelServidor(error, 'Revisa tu contraseña nueva.'),
-    };
+    // La regla que incumple ya se ve en la lista de requisitos; el texto del servidor no se muestra.
+    // 400 de /me/password sin code: la nueva no pasó una regla del servidor (o es igual a la actual).
+    return { tipo: 'campo', campo: 'nueva', mensaje: obtenerTexto('perfil.contrasena.nuevaRechazada') };
   }
-  // 409, 429 y 5xx sin `code` conocido: el mensaje del backend; con 5xx, el genérico.
-  return { tipo: 'aviso', mensaje: mensajeDelServidor(error, ERROR_GENERICO) };
+  // Sin red, tiempo agotado, 409, 429 y 5xx sin `code` conocido: el texto de mensajeParaClienta.
+  return { tipo: 'aviso', mensaje: mensajeParaClienta(error, { respaldo: errorGenerico() }) };
 }
 
 /**
@@ -194,6 +188,7 @@ export function useCambiarContrasenaViewModel(): CambiarContrasenaViewModel {
   const { back } = useRouter();
   const { cerrarTrasCambioDeContrasena } = useAuth();
   const [estado, setEstado] = useState<EstadoContrasena>('cargando');
+  const [errorCarga, setErrorCarga] = useState<unknown>(null);
   const [perfil, setPerfil] = useState<DatosCuenta | null>(null);
   const [paso, setPaso] = useState<PasoContrasena>(1);
   const [valores, setValores] = useState<Record<CampoDato, string>>({
@@ -251,10 +246,12 @@ export function useCambiarContrasenaViewModel(): CambiarContrasenaViewModel {
               }
             : null,
         );
+        setErrorCarga(null);
         setEstado(leido ? 'listo' : 'error');
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (id === solicitud.current) {
+          setErrorCarga(error);
           setEstado('error');
         }
       });
@@ -409,7 +406,7 @@ export function useCambiarContrasenaViewModel(): CambiarContrasenaViewModel {
     setReenviando(true);
     try {
       if (await solicitarCodigo()) {
-        setAvisoExito(CODIGO_REENVIADO);
+        setAvisoExito(obtenerTexto('auth.codigo.reenviado'));
         pedirEnfoque('codigo');
       }
     } finally {
@@ -477,16 +474,17 @@ export function useCambiarContrasenaViewModel(): CambiarContrasenaViewModel {
   const abrirOlvido = () => {
     const url = urlOlvidoContrasena();
     if (!url) {
-      setAviso('No pudimos abrir la recuperación de contraseña.');
+      setAviso(recuperacionNoAbre());
       return;
     }
     openBrowserAsync(url).catch(() => {
-      setAviso('No pudimos abrir la recuperación de contraseña.');
+      setAviso(recuperacionNoAbre());
     });
   };
 
   return {
     estado,
+    mensajeError: estado === 'error' ? mensajeParaClienta(errorCarga) : null,
     reintentar: cargar,
     paso,
     valores,

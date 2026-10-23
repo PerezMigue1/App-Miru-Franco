@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from '
 import { ApiError } from '@/shared/api/apiClient';
 import { obtenerConfiguracion, suscribir, type DatosTransferencia } from '@/shared/api/configuracionPublica';
 import { rutaVisorDocumento } from '@/shared/api/documentosLegales';
+import { mensajeParaClienta } from '@/shared/api/mensajesError';
 import { obtenerTexto } from '@/shared/api/textosSitio';
 import { useCandado } from '@/shared/ui/useCandado';
 
@@ -19,13 +20,17 @@ import {
   mensajeAnticipoEnSalon,
   mensajeCancelacion,
   motivoCancelacionParaClienta,
+  obtenerAnticipoAlCancelar,
   obtenerCita,
   obtenerPoliticaCancelacion,
   type Cita,
+  type EstadoAnticipo,
   type EtiquetaEstado,
 } from '../models/citaModel';
 import {
+  anticipoComprometidoAlCancelar,
   anticipoPagadoAlCancelar,
+  anticipoPorConfirmarAlCancelar,
   avisoCancelacion,
   avisoCitaCancelada,
   dentroDelAviso,
@@ -33,6 +38,7 @@ import {
   opcionesPagoDeCita,
   type FormaPagoCita,
   type OpcionesPagoCita,
+  type PagoPorConfirmar,
   type PoliticaConsultada,
 } from '../models/gestionCitaModel';
 import { duracionParaMostrar } from '../models/servicioModel';
@@ -83,6 +89,8 @@ export interface AvisoPago {
 }
 
 export interface DetalleCitaViewModel {
+  /** Con estado 'error': por qué no se cargó la cita (sin red, servidor...); null si no hay error. */
+  mensajeError: string | null;
   estado: EstadoDetalleCita;
   cita: Cita | null;
   /** Lo que pinta la vista con la cita cargada, o null. */
@@ -112,7 +120,10 @@ export interface DetalleCitaViewModel {
   reprogramar: () => void;
   /** Hoja para cancelar la cita. */
   hojaCancelarVisible: boolean;
-  /** Abre la hoja y, con anticipo pagado, consulta qué pasa con él si cancela. */
+  /**
+   * Abre la hoja y, con anticipo pagado, consulta qué pasa con él si cancela; con el anticipo sin
+   * pagar, consulta si hay un pago en línea aprobado o en proceso.
+   */
   abrirCancelar: () => void;
   /** Cierra la hoja; mientras se cancela no hace nada para no perder el resultado. */
   cerrarCancelar: () => void;
@@ -123,7 +134,10 @@ export interface DetalleCitaViewModel {
   avisoCancelacion: string;
   /** Con anticipo pagado: la hoja ofrece el enlace a la política. */
   avisoConPolitica: boolean;
-  /** El botón de confirmar se desactiva mientras carga la política del anticipo pagado. */
+  /**
+   * El botón de confirmar se desactiva mientras carga la política del anticipo pagado o se revisa si
+   * hay un pago en línea del anticipo sin pagar.
+   */
   puedeConfirmarCancelacion: boolean;
   /** "Prefiero reprogramar" solo fuera de las horas de aviso de la cita. */
   puedeReprogramar: boolean;
@@ -132,6 +146,13 @@ export interface DetalleCitaViewModel {
   /** Aviso de la cita recién cancelada en esta pantalla (con o sin reembolso), o null. */
   avisoCancelada: string | null;
 }
+
+/** Qué dice el estado del anticipo sin pagar para la hoja de cancelar. */
+const PAGO_POR_ESTADO: Readonly<Record<EstadoAnticipo, PagoPorConfirmar>> = {
+  aprobado: 'aprobado',
+  pendiente: 'enProceso',
+  sin_pago: 'sinPago',
+};
 
 /** Arma lo que pinta el detalle con la regla guardada en la cita. */
 function presentacionDe(cita: Cita, ahora: Date, config: ReturnType<typeof obtenerConfiguracion>): PresentacionDetalle {
@@ -164,12 +185,14 @@ export function useDetalleCitaViewModel(citaId: string | undefined): DetalleCita
   const configuracion = useSyncExternalStore(suscribir, obtenerConfiguracion, obtenerConfiguracion);
   const casilla = useAceptacionAnticipos(RUTA_ORIGEN_DETALLE);
   const [estado, setEstado] = useState<EstadoDetalleCita>('cargando');
+  const [errorCarga, setErrorCarga] = useState<unknown>(null);
   const [cita, setCita] = useState<Cita | null>(null);
   const [hojaCancelarVisible, setHojaCancelarVisible] = useState(false);
   const [cancelando, setCancelando] = useState(false);
   const [errorCancelacion, setErrorCancelacion] = useState<string | null>(null);
   const [avisoCancelada, setAvisoCancelada] = useState<string | null>(null);
   const [politica, setPolitica] = useState<PoliticaConsultada>(null);
+  const [pagoPorConfirmar, setPagoPorConfirmar] = useState<PagoPorConfirmar>('sinPago');
   const [pagando, setPagando] = useState<'linea' | 'salon' | null>(null);
   const [avisoPago, setAvisoPago] = useState<AvisoPago | null>(null);
   // Solo la última solicitud escribe el estado (recargas al enfocar, reintentos o pantalla desmontada).
@@ -216,6 +239,7 @@ export function useDetalleCitaViewModel(citaId: string | undefined): DetalleCita
           }
           hayDatos.current = false;
           setCita(null);
+          setErrorCarga(error);
           setEstado(noEncontrada ? 'noEncontrado' : 'error');
         });
     },
@@ -347,6 +371,28 @@ export function useDetalleCitaViewModel(citaId: string | undefined): DetalleCita
     setHojaCancelarVisible(true);
     solicitudPolitica.current += 1;
     const actual = solicitudPolitica.current;
+    setPagoPorConfirmar('sinPago');
+    if (cita && anticipoPorConfirmarAlCancelar(cita)) {
+      // Anticipo sin pagar: un pago de Mercado Pago pudo aprobarse o seguir en proceso. Mientras no se
+      // sepa (o si la consulta falla) la hoja nunca dice que cancelar no tiene costo.
+      setPolitica(null);
+      setPagoPorConfirmar('cargando');
+      void obtenerAnticipoAlCancelar(cita.id).then(
+        (respuesta) => {
+          if (actual !== solicitudPolitica.current) {
+            return;
+          }
+          setPolitica(respuesta.politica);
+          setPagoPorConfirmar(PAGO_POR_ESTADO[respuesta.estado]);
+        },
+        () => {
+          if (actual === solicitudPolitica.current) {
+            setPagoPorConfirmar('sinDatos');
+          }
+        },
+      );
+      return;
+    }
     if (!cita || anticipoPagadoAlCancelar(cita) <= 0) {
       setPolitica(null);
       return;
@@ -375,7 +421,8 @@ export function useDetalleCitaViewModel(citaId: string | undefined): DetalleCita
     (motivo: string) => {
       const actualCita = cita;
       const limpio = motivo.trim();
-      if (!actualCita || actualCita.id === '' || limpio === '' || politica === 'cargando') {
+      const consultando = politica === 'cargando' || pagoPorConfirmar === 'cargando';
+      if (!actualCita || actualCita.id === '' || limpio === '' || consultando) {
         return;
       }
       // El aviso final se decide con la política que la clienta vio al confirmar.
@@ -416,13 +463,16 @@ export function useDetalleCitaViewModel(citaId: string | undefined): DetalleCita
         setHojaCancelarVisible(false);
       });
     },
-    [cita, politica, candado],
+    [cita, politica, pagoPorConfirmar, candado],
   );
 
   const ahora = new Date();
   const conAnticipoPagado = cita != null && anticipoPagadoAlCancelar(cita) > 0;
+  // Pagado, retenido o en revisión: la hoja ofrece la política (solo el pagado espera su consulta).
+  const conAnticipo = cita != null && anticipoComprometidoAlCancelar(cita);
 
   return {
+    mensajeError: estado === 'error' ? mensajeParaClienta(errorCarga) : null,
     estado,
     cita,
     presentacion: cita ? presentacionDe(cita, ahora, configuracion) : null,
@@ -441,9 +491,10 @@ export function useDetalleCitaViewModel(citaId: string | undefined): DetalleCita
     cerrarCancelar,
     cancelar,
     cancelando,
-    avisoCancelacion: cita ? avisoCancelacion(cita, politica, ahora, configuracion) : '',
-    avisoConPolitica: conAnticipoPagado,
-    puedeConfirmarCancelacion: !cancelando && !(conAnticipoPagado && politica === 'cargando'),
+    avisoCancelacion: cita ? avisoCancelacion(cita, politica, ahora, configuracion, pagoPorConfirmar) : '',
+    avisoConPolitica: conAnticipo,
+    puedeConfirmarCancelacion:
+      !cancelando && !(conAnticipoPagado && politica === 'cargando') && pagoPorConfirmar !== 'cargando',
     puedeReprogramar: cita != null && !dentroDelAviso(cita, ahora),
     errorCancelacion,
     avisoCancelada,

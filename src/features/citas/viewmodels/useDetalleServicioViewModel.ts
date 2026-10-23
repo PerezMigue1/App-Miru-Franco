@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from '
 import { useAuth } from '@/features/auth/viewmodels/useAuth';
 import { ApiError } from '@/shared/api/apiClient';
 import { obtenerConfiguracion, suscribir, type ConfiguracionPublica } from '@/shared/api/configuracionPublica';
+import { mensajeParaClienta } from '@/shared/api/mensajesError';
 import { obtenerTexto } from '@/shared/api/textosSitio';
 
 import { anticipoVigente, obtenerServicio, type Servicio } from '../models/servicioModel';
@@ -38,6 +39,8 @@ export function avisoAnticipo(servicio: Servicio | null, config: ConfiguracionPu
 }
 
 export interface DetalleServicioViewModel {
+  /** Con estado 'error': por qué no se cargó el servicio (sin red, servidor...); null si no hay error. */
+  mensajeError: string | null;
   estado: EstadoDetalleServicio;
   servicio: Servicio | null;
   recargar: () => void;
@@ -60,6 +63,7 @@ export function useDetalleServicioViewModel(id: string | undefined): DetalleServ
   const sesion = estadoSesion === 'autenticado';
   const configuracion = useSyncExternalStore(suscribir, obtenerConfiguracion, obtenerConfiguracion);
   const [estado, setEstado] = useState<EstadoDetalleServicio>('cargando');
+  const [errorCarga, setErrorCarga] = useState<unknown>(null);
   const [servicio, setServicio] = useState<Servicio | null>(null);
   const [invitacionVisible, setInvitacionVisible] = useState(false);
   // Solo la última solicitud escribe el estado (reintentos rápidos o pantalla desmontada).
@@ -93,6 +97,7 @@ export function useDetalleServicioViewModel(id: string | undefined): DetalleServ
           return;
         }
         setServicio(null);
+        setErrorCarga(error);
         setEstado(error instanceof ApiError && error.status === 404 ? 'noEncontrado' : 'error');
       });
   }, [id]);
@@ -125,6 +130,7 @@ export function useDetalleServicioViewModel(id: string | undefined): DetalleServ
 
   const anticipo = avisoAnticipo(servicio, configuracion);
   return {
+    mensajeError: estado === 'error' ? mensajeParaClienta(errorCarga) : null,
     estado,
     servicio,
     recargar,

@@ -178,16 +178,18 @@ describe('leerRetornoGoogle', () => {
     ['el código de 64 hexadecimales', regresoConCodigo(), CODIGO_GOOGLE],
     ['hexadecimales en mayúsculas', regresoConCodigo(MAYUSCULAS), MAYUSCULAS],
     ['mayúsculas y minúsculas', regresoConCodigo(MEZCLADO), MEZCLADO],
-    ['con fragmento #', `${regresoConCodigo()}#_=_`, CODIGO_GOOGLE],
-    ['con error solo en el fragmento', `${regresoConCodigo()}#error=x`, CODIGO_GOOGLE],
-    ['con parámetros extra', `${REGRESO_GOOGLE}?estado=x&code=${CODIGO_GOOGLE}&otro`, CODIGO_GOOGLE],
-    ['con & al final', `${regresoConCodigo()}&`, CODIGO_GOOGLE],
     ['codificado con %', `${REGRESO_GOOGLE}?code=%63${CODIGO_GOOGLE.slice(1)}`, CODIGO_GOOGLE],
   ])('acepta %s', (_caso, url, code) => {
     expect(leerRetornoGoogle(url)).toEqual({ tipo: 'codigo', code });
   });
 
   it.each([
+    // GP-07.6: el regreso se valida exacto (el backend solo manda ?code=<64 hex>): un fragmento,
+    // parámetros de más o un & sobrante ya no se aceptan.
+    ['con fragmento #', `${regresoConCodigo()}#_=_`],
+    ['con error solo en el fragmento', `${regresoConCodigo()}#error=x`],
+    ['con parámetros extra', `${REGRESO_GOOGLE}?estado=x&code=${CODIGO_GOOGLE}&otro`],
+    ['con & al final', `${regresoConCodigo()}&`],
     ['error con valor', REGRESO_CON_ERROR],
     ['error sin valor', `${REGRESO_GOOGLE}?error`],
     ['error vacío', `${REGRESO_GOOGLE}?error=`],

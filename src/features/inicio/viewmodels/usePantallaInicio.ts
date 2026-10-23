@@ -2,6 +2,8 @@ import { useRouter, type Href } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking } from 'react-native';
 
+import { useTextos } from '@/shared/api/useTextos';
+
 import { tituloBotonGoji, type DestinoPromocion } from '../models/contenidoInicioModel';
 import { useContenidoInicio, type ContenidoInicioViewModel } from './useContenidoInicio';
 import { useInicioViewModel, type InicioViewModel } from './useInicioViewModel';
@@ -11,6 +13,8 @@ export interface PantallaInicioViewModel {
   catalogos: InicioViewModel;
   /** Configuración, textos y contenido administrable (galería, promociones, equipo, preguntas...). */
   contenido: ContenidoInicioViewModel;
+  /** Títulos del error de los catálogos: el general (servicios) y el del carrusel de productos. */
+  titulosError: { servicios: string; productos: string };
   /** "Ver {nombre del Fluido Di Goji}" o, sin catálogo, "Ver Fluido Di Goji". */
   tituloBotonGoji: string;
   /** Indicador del deslizar para actualizar. */
@@ -36,6 +40,7 @@ export function usePantallaInicio(): PantallaInicioViewModel {
   const catalogos = useInicioViewModel();
   const contenido = useContenidoInicio();
   const { push, navigate } = useRouter();
+  const texto = useTextos();
   const [refrescando, setRefrescando] = useState(false);
   // Sin cambiar estado si la pantalla ya se desmontó cuando termina el refresco.
   const montada = useRef(true);
@@ -78,6 +83,7 @@ export function usePantallaInicio(): PantallaInicioViewModel {
   return {
     catalogos,
     contenido,
+    titulosError: { servicios: texto('inicio.servicios.errorTitulo'), productos: texto('inicio.productos.errorTitulo') },
     tituloBotonGoji: tituloBotonGoji(goji?.nombre),
     refrescando,
     refrescar,

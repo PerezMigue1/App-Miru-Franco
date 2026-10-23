@@ -1,9 +1,9 @@
 import { useFocusEffect, useRouter, type Href } from 'expo-router';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
-import { MENSAJE_SIN_CONEXION, esErrorDeRed } from '@/features/auth/models/AuthModel';
 import { useAuth } from '@/features/auth/viewmodels/useAuth';
 import { obtenerConfiguracion, suscribir } from '@/shared/api/configuracionPublica';
+import { mensajeParaClienta } from '@/shared/api/mensajesError';
 import { obtenerTexto } from '@/shared/api/textosSitio';
 
 import { listarMisCitas, separarMisCitas, type Cita } from '../models/citaModel';
@@ -51,7 +51,7 @@ const MENSAJE_GENERICO = 'Algo salió mal al traer tus citas. Intenta de nuevo e
 const MENSAJE_REFRESCO = 'No pudimos actualizar tus citas. Desliza hacia abajo para intentar de nuevo.';
 
 function mensajeDeError(error: unknown): string {
-  return esErrorDeRed(error) ? MENSAJE_SIN_CONEXION : MENSAJE_GENERICO;
+  return mensajeParaClienta(error, { respaldo: MENSAJE_GENERICO });
 }
 
 /**
@@ -124,7 +124,7 @@ export function useMisCitasViewModel(): MisCitasViewModel {
         if (hayDatos.current) {
           // Con la lista ya mostrada, una recarga silenciosa que falla no la quita.
           if (modo === 'refresco') {
-            setAvisoRefresco(esErrorDeRed(error) ? MENSAJE_SIN_CONEXION : MENSAJE_REFRESCO);
+            setAvisoRefresco(mensajeParaClienta(error, { respaldo: MENSAJE_REFRESCO }));
           }
           return;
         }

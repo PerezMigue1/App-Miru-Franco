@@ -2,17 +2,17 @@ import { useFocusEffect, useRouter, type Href } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { BackHandler } from 'react-native';
 
-import { esErrorDeRed, MENSAJE_SIN_CONEXION } from '@/features/auth/models/AuthModel';
 import { useAuth } from '@/features/auth/viewmodels/useAuth';
 import { ApiError } from '@/shared/api/apiClient';
 import { obtenerConfiguracion, suscribir as suscribirConfiguracion } from '@/shared/api/configuracionPublica';
 import { obtenerDocumentoVigente } from '@/shared/api/documentosLegales';
+import { mensajeParaClienta } from '@/shared/api/mensajesError';
 import { obtenerTexto } from '@/shared/api/textosSitio';
 import { useCandado } from '@/shared/ui/useCandado';
 
 import {
   compararMeses,
-  crearCita,
+  crearCitaVerificada,
   esHorarioOcupado,
   fechaLocal,
   mensajeAnticipoParaClienta,
@@ -21,6 +21,7 @@ import {
   obtenerDisponibilidad,
   obtenerEspecialistas,
   pideAnticipo,
+  ReservaSinConfirmar,
   sumarMeses,
   type Disponibilidad,
   type Especialista,
@@ -70,10 +71,10 @@ export const AVISO_RESERVA_RECUPERADA =
 /** Nombres de los pasos, en orden, para el indicador. */
 export const PASOS_RESERVA = ['Especialista', 'Día y hora', 'Confirmar'] as const;
 
-const ERROR_RESERVA = 'No pudimos reservar tu cita. Intenta de nuevo.';
-const ERROR_HORARIOS = 'No pudimos cargar los horarios de este día.';
 
 export interface ReservarCitaViewModel {
+  /** Con estado 'error': por qué no se pudo preparar la reserva (sin red, servidor...); null si no hay error. */
+  mensajeError: string | null;
   estado: EstadoReserva;
   recargar: () => void;
   /** Servicio inexistente o retirado: lleva al catálogo. */
@@ -110,6 +111,11 @@ export interface ReservarCitaViewModel {
   recargarHorarios: () => void;
   /** El horario elegido se ocupó al confirmar: se pide elegir otro. */
   horarioOcupado: boolean;
+  /**
+   * Al regresar a la reserva tras una sesión vencida, el horario que había elegido ya no está libre
+   * (o su día ya no tiene citas): el aviso que lo dice y pide elegir otro; null si no aplica.
+   */
+  avisoRegresoOcupado: string | null;
 
   slot: Slot | null;
   elegirHorario: (slot: Slot) => void;
@@ -146,6 +152,14 @@ export interface ReservarCitaViewModel {
   modoEnvio: ModoReserva | null;
   /** Mensaje propio del último intento de reservar, o null. */
   errorEnvio: string | null;
+  /**
+   * No se supo si la cita quedó registrada (sin respuesta y sin poder revisarlo): en lugar de
+   * confirmar otra vez, la clienta revisa Mis citas.
+   */
+  revisarMisCitas: boolean;
+  /** Botón de revisarMisCitas ('' si no aplica). */
+  textoVerMisCitas: string;
+  verMisCitas: () => void;
   /** Registra los consentimientos marcados y, solo si se guardaron, crea la cita. */
   confirmar: () => void;
 
@@ -184,6 +198,7 @@ export function useReservarCitaViewModel(
   const candado = useCandado();
 
   const [estado, setEstado] = useState<EstadoReserva>('cargando');
+  const [errorCarga, setErrorCarga] = useState<unknown>(null);
   const [servicio, setServicio] = useState<Servicio | null>(null);
   const [especialistas, setEspecialistas] = useState<Especialista[]>([]);
 
@@ -197,12 +212,14 @@ export function useReservarCitaViewModel(
   const [disponibilidad, setDisponibilidad] = useState<Disponibilidad | null>(null);
   const [errorHorarios, setErrorHorarios] = useState('');
   const [horarioOcupado, setHorarioOcupado] = useState(false);
+  const [regresoOcupado, setRegresoOcupado] = useState(false);
   const [slot, setSlot] = useState<Slot | null>(null);
 
   const [notas, setNotas] = useState('');
   const [modoEnvio, setModoEnvio] = useState<ModoReserva | null>(null);
   const enviando = modoEnvio !== null;
   const [errorEnvio, setErrorEnvio] = useState<string | null>(null);
+  const [revisarMisCitas, setRevisarMisCitas] = useState(false);
 
   // Forma de pago y consentimientos: las casillas empiezan sin marcar.
   const configuracion = useSyncExternalStore(suscribirConfiguracion, obtenerConfiguracion, obtenerConfiguracion);
@@ -261,13 +278,16 @@ export function useReservarCitaViewModel(
             setSlot(libre);
             setDireccion(1);
             setPaso(3);
+          } else if (inicioRecuperado) {
+            // Ya no está libre: se queda en Día y hora con los horarios al día y el aviso.
+            setRegresoOcupado(true);
           }
         })
         .catch((error: unknown) => {
           if (actual !== solicitudHorarios.current) {
             return;
           }
-          setErrorHorarios(esErrorDeRed(error) ? MENSAJE_SIN_CONEXION : ERROR_HORARIOS);
+          setErrorHorarios(mensajeParaClienta(error, { respaldo: obtenerTexto('citas.errores.horarios') }));
           setEstadoHorarios('error');
         });
     },
@@ -332,7 +352,9 @@ export function useReservarCitaViewModel(
         return false;
       }
       if (pendiente.fecha < fechaLocal(new Date()) || estaBloqueado(pendiente.fecha)) {
+        // El día ya pasó o ya no tiene citas: su horario tampoco está libre.
         empezarDiaHora(elegida, idServicio);
+        setRegresoOcupado(true);
       } else {
         setEspecialista(elegida);
         setMesVisible(mesDeFecha(pendiente.fecha));
@@ -343,6 +365,10 @@ export function useReservarCitaViewModel(
         cargarHorarios(elegida.id, pendiente.fecha, idServicio);
       }
       setNotas(pendiente.notas);
+      // La forma de pago elegida vuelve si sigue activa (opcionVigente); las casillas, sin marcar.
+      if (pendiente.opcionPago) {
+        setOpcionElegida(pendiente.opcionPago);
+      }
       setRecuperada(true);
       setDireccion(1);
       setPaso(2);
@@ -384,6 +410,7 @@ export function useReservarCitaViewModel(
         const sinPropias = respuesta.especialistas.every((item) => String(item.id) === '');
         if (agenda.error != null && sinPropias) {
           setServicio(null);
+          setErrorCarga(agenda.error);
           setEstado('error');
           return;
         }
@@ -415,6 +442,7 @@ export function useReservarCitaViewModel(
           return;
         }
         setServicio(null);
+        setErrorCarga(error);
         setEstado(error instanceof ApiError && error.status === 404 ? 'noEncontrado' : 'error');
       });
   }, [servicioId, especialistaIdInicial, empezarDiaHora, recuperarReserva]);
@@ -435,6 +463,7 @@ export function useReservarCitaViewModel(
       }
       const misma = especialista != null && String(especialista.id) === String(elegida.id);
       setErrorEnvio(null);
+      setRegresoOcupado(false);
       if (!misma || fecha == null) {
         // Otra especialista: día y hora se limpian y se empieza por hoy, en el mes actual.
         empezarDiaHora(elegida, servicio.id);
@@ -456,6 +485,7 @@ export function useReservarCitaViewModel(
       setFecha(dia);
       setSlot(null);
       setHorarioOcupado(false);
+      setRegresoOcupado(false);
       cargarHorarios(especialista.id, dia, servicio.id);
     },
     [servicio, especialista, enviando, fecha, cargarHorarios, estaBloqueado],
@@ -482,6 +512,7 @@ export function useReservarCitaViewModel(
       }
       setSlot(elegido);
       setHorarioOcupado(false);
+      setRegresoOcupado(false);
       setErrorEnvio(null);
       irAPaso(3, 1);
     },
@@ -565,7 +596,8 @@ export function useReservarCitaViewModel(
     // Candado inmediato: un segundo toque se ignora mientras se envía.
     candado(async () => {
       // Sin sesión la ruta no existe; aun así, sin clienta no se envía nada.
-      if (!usuario || !servicio || !especialista || !slot || !fecha) {
+      // Sin saber si la cita anterior quedó registrada no se envía otra: primero se revisa Mis citas.
+      if (!usuario || !servicio || !especialista || !slot || !fecha || revisarMisCitas) {
         return;
       }
       const conAnticipo = anticipo !== null;
@@ -582,7 +614,8 @@ export function useReservarCitaViewModel(
       try {
         // Las casillas se registran antes de apartar el horario: si un registro falla, la cita no se crea.
         await registrarConsentimientosReserva({ conAnticipo, autorizaFotos, politicaVista: politicaVista() });
-        const cita = await crearCita({
+        // Si la respuesta se pierde, antes de dejar reintentar se busca la cita entre las de la clienta.
+        const cita = await crearCitaVerificada({
           clienteId: usuario.id,
           especialistaId: especialista.id,
           servicioId: servicio.id,
@@ -621,6 +654,7 @@ export function useReservarCitaViewModel(
             fecha,
             inicio: slot.inicio,
             notas,
+            opcionPago: conAnticipo ? modo : undefined,
           });
         }
         if (!montado.current) {
@@ -629,6 +663,11 @@ export function useReservarCitaViewModel(
         setModoEnvio(null);
         if (esSesionTerminada(causa)) {
           setErrorEnvio(MENSAJE_SESION_RESERVA);
+          return;
+        }
+        if (error instanceof ReservaSinConfirmar) {
+          setErrorEnvio(obtenerTexto('citas.reserva.sinConfirmar', {}, configuracion));
+          setRevisarMisCitas(true);
           return;
         }
         if (error instanceof ErrorConsentimiento) {
@@ -644,17 +683,18 @@ export function useReservarCitaViewModel(
           // Alguien más tomó ese horario: de vuelta a elegir hora con la disponibilidad al día.
           setSlot(null);
           setHorarioOcupado(true);
+          setRegresoOcupado(false);
           irAPaso(2, -1);
           cargarHorarios(especialista.id, fecha, servicio.id);
           return;
         }
-        // Los 400 del anticipo traen un texto ya escrito para la clienta; cualquier otro, el genérico.
+        // Los 400 del anticipo tienen su texto propio; cualquier otro error, el de mensajeParaClienta.
         const mensajeAnticipo = mensajeAnticipoParaClienta(error);
         if (mensajeAnticipo) {
           setErrorEnvio(mensajeAnticipo);
           return;
         }
-        setErrorEnvio(esErrorDeRed(error) ? MENSAJE_SIN_CONEXION : ERROR_RESERVA);
+        setErrorEnvio(mensajeParaClienta(error, { respaldo: obtenerTexto('citas.errores.reservar', {}, configuracion) }));
       }
     });
   }, [
@@ -674,7 +714,13 @@ export function useReservarCitaViewModel(
     router,
     irAPaso,
     cargarHorarios,
+    revisarMisCitas,
   ]);
+
+  const verMisCitas = useCallback(() => {
+    // Mis citas queda en lugar de la reserva: atrás no regresa a confirmar otra vez.
+    router.replace('/mis-citas' as Href);
+  }, [router]);
 
   const formaPago = useMemo(
     () => formaPagoReserva({ precio: servicio?.precio ?? null }, anticipo, configuracion, opcionPago),
@@ -682,6 +728,7 @@ export function useReservarCitaViewModel(
   );
 
   return {
+    mensajeError: estado === 'error' ? mensajeParaClienta(errorCarga) : null,
     estado,
     recargar,
     verServicios,
@@ -702,6 +749,7 @@ export function useReservarCitaViewModel(
     errorHorarios,
     recargarHorarios,
     horarioOcupado,
+    avisoRegresoOcupado: regresoOcupado ? obtenerTexto('citas.reserva.regresoOcupado', {}, configuracion) : null,
     slot,
     elegirHorario,
     notas,
@@ -722,6 +770,9 @@ export function useReservarCitaViewModel(
     enviando,
     modoEnvio,
     errorEnvio,
+    revisarMisCitas,
+    textoVerMisCitas: revisarMisCitas ? obtenerTexto('citas.reserva.verMisCitas', {}, configuracion) : '',
+    verMisCitas,
     confirmar,
     atras,
   };

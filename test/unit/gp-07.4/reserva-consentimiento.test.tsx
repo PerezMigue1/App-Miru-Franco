@@ -59,8 +59,9 @@ const NO_GUARDO_POLITICA =
 const NO_GUARDO_FOTOS =
   'No pudimos guardar tu autorización de fotos, así que tu cita no se agendó. Intenta de nuevo o desmarca esa casilla para continuar.';
 const SIN_RED = 'Revisa tu conexión a internet e intenta de nuevo.';
+/** GP-07.6: sin versión publicada (404) no es culpa de la conexión: se pide intentar en un momento. */
 const SIN_VERSION =
-  'No pudimos confirmar la versión vigente de la Política de anticipos y cancelación, así que no continuamos. Revisa tu conexión a internet e intenta de nuevo.';
+  'No pudimos confirmar la versión vigente de la Política de anticipos y cancelación, así que no continuamos. Intenta de nuevo en un momento.';
 
 /** El registro de consentimientos responde con cada manejador en orden (el último se repite). */
 function consentimientosEnOrden(...manejadores: Manejador[]): Manejador {
@@ -182,7 +183,7 @@ describe('Consentimientos al confirmar la reserva (GP-07.4)', () => {
   );
 
   it(
-    'sin versión publicada de la política no registra nada ni crea la cita y pide reintentar con conexión',
+    'sin versión publicada de la política no registra nada ni crea la cita y pide intentar de nuevo',
     async () => {
       const { llamadas } = await abrirConfirmar({ rutas: rutaSinVersion('anticipos') });
 

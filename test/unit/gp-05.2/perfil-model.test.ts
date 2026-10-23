@@ -15,7 +15,7 @@ import {
   MENSAJE_ESPERA_UN_MOMENTO,
   MENSAJE_FOTO_FALLIDA,
   MENSAJE_FOTO_NO_GUARDADA,
-  MENSAJE_FOTO_PESADA,
+  mensajeFotoPesada,
   MENSAJE_QUITAR_FALLIDO,
   MENSAJE_SUBIDA_NO_DISPONIBLE,
   normalizarPerfil,
@@ -334,8 +334,9 @@ describe('formularioDesdePerfil', () => {
     ['(771) 000-0000', '7710000000'],
     ['', ''],
     ['   ', ''],
-    // 12 dígitos que no empiezan con 52: se quedan los primeros 10.
-    ['771000000099', '7710000000'],
+    // 12 dígitos que no empiezan con 52: no se recortan a otro número; la validación del formulario
+    // pide corregirlo (GP-07.6: recortar daba un teléfono que no es el de la clienta).
+    ['771000000099', '771000000099'],
   ])('el teléfono guardado "%s" aparece como "%s"', (telefono, esperado) => {
     expect(formularioDesdePerfil({ ...PERFIL, telefono }).telefono).toBe(esperado);
   });
@@ -492,7 +493,8 @@ describe('constantes de la foto', () => {
   });
 
   it.each([
-    MENSAJE_FOTO_PESADA,
+    // GP-07.6: el de la foto pesada sale del catálogo con el tope en megas (5).
+    mensajeFotoPesada(),
     MENSAJE_SUBIDA_NO_DISPONIBLE,
     MENSAJE_ESPERA_UN_MOMENTO,
     MENSAJE_FOTO_NO_GUARDADA,

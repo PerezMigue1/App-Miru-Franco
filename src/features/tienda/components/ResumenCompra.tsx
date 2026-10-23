@@ -5,6 +5,7 @@ import { borde, espacio, fuente, radio, sombra, tipo } from '@/shared/ui/tokens'
 import { useTheme } from '@/shared/ui/useTheme';
 
 import { formatoPrecio, textoPiezas } from '../viewmodels/presentacionTienda';
+import { useTextosTienda } from '../viewmodels/textosTienda';
 
 export interface LineaResumen {
   clave: string | number;
@@ -31,6 +32,7 @@ interface ResumenCompraProps {
  */
 export function ResumenCompra({ lineas, totalCentavos, encabezado, children }: ResumenCompraProps) {
   const { colores } = useTheme();
+  const textos = useTextosTienda();
   return (
     <View
       style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombraTarjeta }]}
@@ -61,9 +63,9 @@ export function ResumenCompra({ lineas, totalCentavos, encabezado, children }: R
       <View
         style={[styles.total, { borderTopColor: colores.hairline }]}
         accessible
-        accessibilityLabel={`Total: ${formatoPrecio(totalCentavos)}`}
+        accessibilityLabel={textos.totalEtiqueta(formatoPrecio(totalCentavos))}
       >
-        <Text style={[styles.etiquetaTotal, { color: colores.texto }]}>Total</Text>
+        <Text style={[styles.etiquetaTotal, { color: colores.texto }]}>{textos.total}</Text>
         <Text style={[styles.cifraTotal, { color: colores.texto }]}>{formatoPrecio(totalCentavos)}</Text>
       </View>
       {children}

@@ -3,10 +3,10 @@ import { useRouter, type Href } from 'expo-router';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { AppState } from 'react-native';
 
-import { MENSAJE_SIN_CONEXION, esErrorDeRed } from '@/features/auth/models/AuthModel';
 import { ApiError } from '@/shared/api/apiClient';
 import { obtenerConfiguracion, suscribir } from '@/shared/api/configuracionPublica';
 import { rutaVisorDocumento } from '@/shared/api/documentosLegales';
+import { mensajeParaClienta } from '@/shared/api/mensajesError';
 import { obtenerTexto } from '@/shared/api/textosSitio';
 import { useCandado } from '@/shared/ui/useCandado';
 
@@ -55,6 +55,8 @@ export type EstadoPago =
   | { tipo: 'cerrada'; mensaje: string };
 
 export interface AnticipoViewModel {
+  /** Con estado 'error': por qué no se cargó la cita (sin red, servidor...); null si no hay error. */
+  mensajeError: string | null;
   estado: EstadoCargaAnticipo;
   cita: Cita | null;
   pago: EstadoPago;
@@ -91,7 +93,7 @@ const MENSAJE_SIN_NAVEGADOR =
   'No encontramos un navegador para abrir Mercado Pago. Activa Chrome u otro navegador e intenta de nuevo.';
 
 function mensajeDeError(error: unknown, generico: string): string {
-  return esErrorDeRed(error) ? MENSAJE_SIN_CONEXION : generico;
+  return mensajeParaClienta(error, { respaldo: generico });
 }
 
 /**
@@ -136,6 +138,7 @@ export function useAnticipoViewModel(
   const configuracion = useSyncExternalStore(suscribir, obtenerConfiguracion, obtenerConfiguracion);
   const casilla = useAceptacionAnticipos(RUTA_ORIGEN_ANTICIPO);
   const [estado, setEstado] = useState<EstadoCargaAnticipo>('cargando');
+  const [errorCarga, setErrorCarga] = useState<unknown>(null);
   const [cita, setCita] = useState<Cita | null>(null);
   const [pago, setPago] = useState<EstadoPago>({ tipo: 'inicial' });
   // Solo la última solicitud de carga escribe el estado (reintentos rápidos o pantalla desmontada).
@@ -205,6 +208,7 @@ export function useAnticipoViewModel(
           return;
         }
         setCita(null);
+        setErrorCarga(error);
         setEstado(error instanceof ApiError && error.status === 404 ? 'noEncontrado' : 'error');
       });
   }, [idLimpio, irAConfirmacion]);
@@ -396,6 +400,7 @@ export function useAnticipoViewModel(
       : null;
 
   return {
+    mensajeError: estado === 'error' ? mensajeParaClienta(errorCarga) : null,
     estado,
     cita,
     pago,

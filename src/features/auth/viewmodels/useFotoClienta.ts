@@ -46,9 +46,11 @@ function leerFoto() {
 
 /**
  * Lee la foto de /me. Con `unirse`, si ya hay una lectura en camino basta con ella (el foco de una
- * pantalla); sin él, se lee otra vez al terminar (el estado pudo cambiar después de pedirla).
+ * pantalla); sin él, se lee otra vez al terminar (el estado pudo cambiar después de pedirla). Con
+ * `reciente` (la primera lectura de una cuenta), sirve el /me con el que useAuth acaba de validar la
+ * sesión: al entrar sale una sola petición.
  */
-function leer(unirse = false) {
+function leer(unirse = false, reciente = false) {
   if (cuenta === null) {
     return;
   }
@@ -65,7 +67,7 @@ function leer(unirse = false) {
   const actual = generacion;
   const sesion = generacionActual();
   const vigente = () => actual === generacion && sesion === generacionActual() && cuenta !== null;
-  obtenerPerfilCompleto()
+  obtenerPerfilCompleto({ reciente })
     .then((respuesta) => {
       if (!vigente()) {
         return;
@@ -102,7 +104,7 @@ function cambiarCuenta(nueva: string | null): boolean {
   pendiente = false;
   ultimaLectura = 0;
   fijar(null);
-  leer();
+  leer(false, true);
   return true;
 }
 

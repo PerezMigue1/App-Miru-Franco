@@ -1,8 +1,7 @@
 import { useRouter, type Href } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { esErrorDeRed } from '@/features/auth/models/AuthModel';
-import { ApiError } from '@/shared/api/apiClient';
+import { tipoDeError } from '@/shared/api/mensajesError';
 import { tienda } from '@/shared/ui/tokens';
 
 import {
@@ -277,7 +276,7 @@ export interface CatalogoViewModel {
 }
 
 function esFallaDeRed(error: unknown): boolean {
-  return esErrorDeRed(error) || (error instanceof ApiError && error.status === 0);
+  return tipoDeError(error) === 'sinConexion';
 }
 
 /** Pestaña Tienda (GP-06.4): catálogo público con búsqueda, categorías y panel de filtros. */

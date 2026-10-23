@@ -27,24 +27,17 @@ export default function ActivarView() {
   return (
     <PantallaAuth>
       <View style={styles.formulario}>
-        <Encabezado
-          titulo="Activa tu cuenta"
-          texto={
-            activar.email
-              ? `Escribe el código de 6 dígitos que enviamos a ${activar.email}.`
-              : 'Escribe el código de 6 dígitos que enviamos a tu correo.'
-          }
-        />
+        <Encabezado titulo={activar.textos.titulo} texto={activar.textos.instrucciones} />
         <OtpInput
           etiqueta="Código de verificación"
           valor={activar.codigo}
           onCambiar={activar.setCodigo}
           error={activar.error}
         />
-        <Text style={[styles.nota, { color: colores.textoSuave }]}>El código vence en 2 minutos.</Text>
+        <Text style={[styles.nota, { color: colores.textoSuave }]}>{activar.textos.vigencia}</Text>
         <Aviso tipo="exito" texto={activar.mensaje} />
         <Button
-          titulo={activar.cargando ? 'Verificando…' : 'Verificar código'}
+          titulo={activar.cargando ? activar.textos.verificando : activar.textos.verificar}
           onPress={activar.verificar}
           cargando={activar.cargando}
         />
@@ -53,16 +46,16 @@ export default function ActivarView() {
             accessibilityLiveRegion="polite"
             style={[styles.nota, styles.espera, { color: colores.textoSuave }]}
           >
-            Podrás pedir otro código en {activar.espera} s
+            {activar.textos.espera}
           </Text>
         ) : (
           <Enlace
-            texto={activar.reenviando ? 'Enviando código…' : 'Reenviar código'}
+            texto={activar.reenviando ? activar.textos.reenviando : activar.textos.reenviar}
             onPress={activar.reenviar}
             alinear="centro"
           />
         )}
-        <Enlace texto="Volver a iniciar sesión" onPress={activar.volver} alinear="centro" />
+        <Enlace texto={activar.textos.volver} onPress={activar.volver} alinear="centro" />
       </View>
     </PantallaAuth>
   );

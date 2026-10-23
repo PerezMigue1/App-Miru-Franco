@@ -9,9 +9,6 @@ import { BackHandler } from 'react-native';
 import {
   ERROR_CONSENTIMIENTO_SALUD,
   ERROR_TELEFONO,
-  MENSAJE_DEMASIADOS_INTENTOS,
-  MENSAJE_ERROR_SERVIDOR,
-  MENSAJE_SIN_CONEXION,
   type PreguntaSeguridad,
 } from '@/features/auth/models/AuthModel';
 import { useActivarViewModel } from '@/features/auth/viewmodels/useActivarViewModel';
@@ -35,8 +32,13 @@ import {
   useRetornoActivacion,
   type RutaAcceso,
 } from '@/features/auth/viewmodels/useRetornoActivacion';
+import { MENSAJE_SIN_CONEXION } from '@/shared/api/mensajesError';
+import { RESPALDO_TEXTOS } from '@/shared/api/textosSitio';
 
 import { leerSecureStore } from '../../helpers/secureStore';
+
+// GP-07.6: los textos de error salen de shared/api/mensajesError (claves errores.* del catálogo).
+const MENSAJE_DEMASIADOS_INTENTOS = RESPALDO_TEXTOS['errores.demasiadasSolicitudes'];
 
 /**
  * GP-05, viewmodels de autenticación (caja blanca con renderHook): acceso, registro en dos pasos,
@@ -351,9 +353,12 @@ describe('useLoginViewModel', () => {
     expect(leerSecureStore().auth_sesion).toBeUndefined();
   });
 
-  it('un 403 de bloqueo temporal muestra el aviso del servidor', async () => {
-    const aviso = 'Tu cuenta está bloqueada temporalmente. Intenta en 15 minutos.';
-    servidor({ [URL_LOGIN]: { cuerpo: { message: aviso }, status: 403 } });
+  // GP-07.6: el texto del servidor (que trae los minutos) ya no se muestra; el backend no manda code.
+  it('un 403 de bloqueo temporal muestra el aviso propio, sin el texto del servidor', async () => {
+    const delServidor = 'Tu cuenta está bloqueada temporalmente. Intenta en 15 minutos.';
+    const aviso =
+      'Tu cuenta está bloqueada temporalmente por varios intentos fallidos. Espera unos minutos e intenta de nuevo.';
+    servidor({ [URL_LOGIN]: { cuerpo: { message: delServidor }, status: 403 } });
     const { result } = await montarLogin();
     await escribir(result, CORREO, CLAVE);
 
@@ -407,7 +412,7 @@ describe('useLoginViewModel', () => {
     mockNavegacion.ruta = '/registro';
     servidor({
       [URL_LOGIN]: {
-        cuerpo: { message: 'Tu cuenta no está activada. Revisa tu correo para activar tu cuenta.' },
+        cuerpo: { message: 'Tu cuenta no está activada. Revisa tu correo para activar tu cuenta.', code: 'CUENTA_NO_ACTIVADA' },
         status: 403,
       },
     });
@@ -991,10 +996,10 @@ describe('useRegistroViewModel', () => {
 
     it.each([
       ['429', { cuerpo: { message: 'ThrottlerException: Too Many Requests' }, status: 429 }, MENSAJE_DEMASIADOS_INTENTOS],
-      ['500', { cuerpo: { message: MENSAJE_TECNICO }, status: 500 }, MENSAJE_ERROR_SERVIDOR],
+      ['500', { cuerpo: { message: MENSAJE_TECNICO }, status: 500 }, 'No pudimos crear tu cuenta. Intenta de nuevo.'],
       ['sin red', { sinRed: true }, MENSAJE_SIN_CONEXION],
-      ['400 con validación', { cuerpo: { message: 'El teléfono ya está registrado' }, status: 400 }, 'El teléfono ya está registrado'],
-      ['400 sin mensaje', { cuerpo: {}, status: 400 }, 'Error en la solicitud (400).'],
+      ['400 con texto del servidor (no se muestra)', { cuerpo: { message: 'El teléfono ya está registrado' }, status: 400 }, 'No pudimos crear tu cuenta. Revisa tus datos e intenta de nuevo.'],
+      ['400 sin mensaje', { cuerpo: {}, status: 400 }, 'No pudimos crear tu cuenta. Revisa tus datos e intenta de nuevo.'],
     ] as [string, Salida, string][])('error %s: lo muestra sin salir del paso 2', async (_caso, salida, esperado) => {
       servidor({
         [URL_VERIFICAR_CORREO]: { cuerpo: { existe: false } },
@@ -1014,7 +1019,8 @@ describe('useRegistroViewModel', () => {
       expect(mockRouter.push).not.toHaveBeenCalled();
     });
 
-    it('una respuesta con success false muestra su mensaje y no abre la activación', async () => {
+    // GP-07.6: el message del cuerpo es del servidor y no se muestra; se usa el texto propio.
+    it('una respuesta con success false muestra el aviso propio y no abre la activación', async () => {
       servidor({
         [URL_VERIFICAR_CORREO]: { cuerpo: { existe: false } },
         [URL_REGISTRO]: { cuerpo: { success: false, message: 'No se pudo enviar el código' } },
@@ -1027,7 +1033,7 @@ describe('useRegistroViewModel', () => {
         result.current.crearCuenta();
       });
 
-      await waitFor(() => expect(result.current.errorGeneral).toBe('No se pudo enviar el código'));
+      await waitFor(() => expect(result.current.errorGeneral).toBe('No pudimos crear tu cuenta. Intenta de nuevo.'));
       expect(mockRouter.push).not.toHaveBeenCalled();
     });
   });
@@ -1196,7 +1202,7 @@ describe('useActivarViewModel', () => {
     ['400', { cuerpo: { message: 'Código inválido o expirado' }, status: 400 }, CODIGO_INCORRECTO],
     ['404', { cuerpo: { message: 'Usuario no encontrado' }, status: 404 }, CODIGO_INCORRECTO],
     ['429', { cuerpo: { message: 'ThrottlerException: Too Many Requests' }, status: 429 }, MENSAJE_DEMASIADOS_INTENTOS],
-    ['500', { cuerpo: { message: MENSAJE_TECNICO }, status: 500 }, MENSAJE_ERROR_SERVIDOR],
+    ['500', { cuerpo: { message: MENSAJE_TECNICO }, status: 500 }, 'No pudimos verificar el código. Intenta de nuevo en un momento.'],
     ['sin red', { sinRed: true }, MENSAJE_SIN_CONEXION],
   ] as [string, Salida, string][])('error %s: muestra un mensaje para la clienta y no sale', async (_caso, salida, esperado) => {
     servidor({ [URL_VERIFICAR_OTP]: salida });
@@ -1231,7 +1237,7 @@ describe('useActivarViewModel', () => {
 
   it.each([
     ['sin red', { sinRed: true }, MENSAJE_SIN_CONEXION],
-    ['500', { cuerpo: { message: MENSAJE_TECNICO }, status: 500 }, MENSAJE_ERROR_SERVIDOR],
+    ['500', { cuerpo: { message: MENSAJE_TECNICO }, status: 500 }, 'No pudimos reenviar el código. Intenta de nuevo.'],
   ] as [string, Salida, string][])('reenviar con error %s: muestra un mensaje para la clienta', async (_caso, salida, esperado) => {
     servidor({ [URL_REENVIAR]: salida });
     const { result } = await montarActivar();

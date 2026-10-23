@@ -100,6 +100,11 @@ function simularServidor(opciones: OpcionesServidor): ServidorSimulado {
     if (ruta === '/api/auth/logout') {
       return Promise.resolve(respuesta({ success: true }));
     }
+    // GP-07.6: las listas públicas de Inicio (galería, promociones...) van sin token; el backend real
+    // nunca les responde 401, así que aquí reciben un 404 y no el 401 de las rutas protegidas.
+    if (auth === undefined) {
+      return Promise.resolve(respuesta({ message: 'No encontrado' }, 404));
+    }
     if (auth !== `Bearer ${tokenValido}`) {
       return Promise.resolve(respuesta({ message: 'Token vencido' }, 401));
     }

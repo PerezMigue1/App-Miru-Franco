@@ -174,14 +174,21 @@ async function leer(): Promise<SesionGuardada | null> {
     await SecureStore.deleteItemAsync(CLAVE_SESION).catch(() => undefined);
     return null;
   }
-  if (!texto) {
+  if (texto === null) {
     return null;
   }
+  let sesion: SesionGuardada | null = null;
   try {
-    return aSesion(JSON.parse(texto));
+    sesion = aSesion(JSON.parse(texto));
   } catch {
-    return null;
+    sesion = null;
   }
+  if (!sesion) {
+    // Entrada vacía, dañada o con otra forma: no sirve como sesión y se borra para no volver a
+    // leerla en cada petición. Si el borrado falla, igual no hay sesión.
+    await SecureStore.deleteItemAsync(CLAVE_SESION).catch(() => undefined);
+  }
+  return sesion;
 }
 
 function escribir(sesion: SesionGuardada): Promise<void> {
@@ -197,13 +204,22 @@ export async function getToken(): Promise<string | null> {
   return (await leerSesion())?.token ?? null;
 }
 
-/** Guarda una sesión nueva si la generación sigue siendo la del inicio de sesión. */
+/**
+ * Guarda una sesión nueva si la generación sigue siendo la del inicio de sesión. Si la escritura
+ * falla, intenta borrar lo que hubiera guardado (una sesión anterior no debe quedar en lugar de la
+ * nueva) y lanza el error de la escritura.
+ */
 export function guardarSesion(sesion: SesionGuardada, generacionEsperada: number): Promise<boolean> {
   return enCola(async () => {
     if (generacionEsperada !== generacion) {
       return false;
     }
-    await escribir(sesion);
+    try {
+      await escribir(sesion);
+    } catch (error) {
+      await borrarConReintento();
+      throw error;
+    }
     return true;
   });
 }

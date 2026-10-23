@@ -21,6 +21,8 @@ export interface VisorDocumentoLegalProps {
   sinRed: boolean;
   desconocido: boolean;
   noPublicado: boolean;
+  /** Sin documento: por qué no se cargó (sin red, servidor...), ya en texto para la clienta. */
+  mensajeError: string | null;
   /** Mensaje si no se pudo abrir el sitio, o null. */
   avisoAbrir: string | null;
   reintentar: () => void;
@@ -63,6 +65,7 @@ function Contenido({
   sinRed,
   desconocido,
   noPublicado,
+  mensajeError,
   avisoAbrir,
   reintentar,
   abrirCompleto,
@@ -93,7 +96,7 @@ function Contenido({
     return (
       <EmptyState
         titulo="No pudimos cargar el documento"
-        mensaje="Revisa tu conexión a internet e inténtalo de nuevo."
+        mensaje={mensajeError ?? ''}
         accion={{ titulo: 'Reintentar', onPress: reintentar }}
       />
     );

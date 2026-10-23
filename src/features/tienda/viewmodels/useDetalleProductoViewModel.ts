@@ -1,9 +1,9 @@
 import { useRouter, type Href } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { esErrorDeRed } from '@/features/auth/models/AuthModel';
 import { useRequiereSesion } from '@/features/auth/viewmodels/useRequiereSesion';
 import { ApiError } from '@/shared/api/apiClient';
+import { tipoDeError } from '@/shared/api/mensajesError';
 import { useCandado } from '@/shared/ui/useCandado';
 
 import { agregarAlCarrito, mensajeErrorCarrito } from '../models/carritoModel';
@@ -128,7 +128,7 @@ export function useDetalleProductoViewModel(id: string | undefined): DetalleProd
           setEstado('noEncontrado');
           return;
         }
-        setErrorRed(esErrorDeRed(error) || (error instanceof ApiError && error.status === 0));
+        setErrorRed(tipoDeError(error) === 'sinConexion');
         setEstado('error');
       });
   }, [id]);

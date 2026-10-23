@@ -30,6 +30,7 @@ import { useTheme } from '@/shared/ui/useTheme';
 import { GaleriaProducto } from '../components/GaleriaProducto';
 import { SelectorCantidad } from '../components/SelectorCantidad';
 import { formatoPrecio, presentacionComprable } from '../viewmodels/presentacionTienda';
+import { useTextosTienda } from '../viewmodels/textosTienda';
 import {
   useDetalleProductoViewModel,
   type ConfirmacionCarrito,
@@ -44,6 +45,7 @@ export default function DetalleProductoView() {
   const { top, bottom } = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const vm = useDetalleProductoViewModel(id);
+  const { producto: textos, catalogo } = useTextosTienda();
 
   const listo = vm.estado === 'listo' && vm.producto != null;
   // Sin foto arriba, el estado deja libre el espacio del botón Regresar.
@@ -67,7 +69,7 @@ export default function DetalleProductoView() {
         <View
           accessible
           accessibilityRole="progressbar"
-          accessibilityLabel="Cargando producto"
+          accessibilityLabel={textos.cargando}
           style={styles.raiz}
         >
           <Skeleton estilo={styles.fotoEsqueleto} />
@@ -92,12 +94,8 @@ export default function DetalleProductoView() {
           ]}
         >
           <EmptyState
-            titulo={vm.errorRed ? 'Sin conexión' : 'No pudimos cargar este producto'}
-            mensaje={
-              vm.errorRed
-                ? 'Revisa tu internet e intenta de nuevo.'
-                : 'Ocurrió un problema al traer el producto. Intenta de nuevo en un momento.'
-            }
+            titulo={vm.errorRed ? catalogo.sinRedTitulo : textos.errorTitulo}
+            mensaje={vm.errorRed ? catalogo.sinRedTexto : textos.errorTexto}
             accion={{ titulo: 'Reintentar', onPress: vm.recargar }}
           />
         </ScrollView>
@@ -111,9 +109,9 @@ export default function DetalleProductoView() {
           ]}
         >
           <EmptyState
-            titulo="No encontramos este producto"
-            mensaje="Puede que el salón lo haya retirado. Mira los demás productos en la Tienda."
-            accion={{ titulo: 'Ir a la Tienda', onPress: vm.irATienda }}
+            titulo={textos.noEncontradoTitulo}
+            mensaje={textos.noEncontradoTexto}
+            accion={{ titulo: textos.irATienda, onPress: vm.irATienda }}
           />
         </ScrollView>
       ) : null}
@@ -253,10 +251,11 @@ function AccionAgregar({
   onVerCarrito: () => void;
 }) {
   const { colores } = useTheme();
+  const { producto: textos } = useTextosTienda();
   return (
     <View style={styles.accion}>
       <Button
-        titulo="Agregar al carrito"
+        titulo={textos.agregar}
         onPress={onAgregar}
         deshabilitado={!comprable}
         cargando={agregando}
@@ -280,35 +279,36 @@ function AccionAgregar({
 /** Descripción, características, modo de uso, ingredientes y resultado; cada sección solo si trae texto. */
 function SeccionesInformacion({ producto }: { producto: ProductoCatalogo }) {
   const { colores } = useTheme();
+  const { producto: textos } = useTextosTienda();
   const descripcion = producto.descripcionLarga.trim() || producto.descripcion.trim();
   return (
     <>
       {descripcion ? (
-        <Seccion titulo="Descripción">
+        <Seccion titulo={textos.descripcion}>
           <Text style={[styles.cuerpo, { color: colores.texto }]}>{descripcion}</Text>
         </Seccion>
       ) : null}
 
       {producto.caracteristicas.length > 0 ? (
-        <Seccion titulo="Características">
+        <Seccion titulo={textos.caracteristicas}>
           <ListaVinetas elementos={producto.caracteristicas} />
         </Seccion>
       ) : null}
 
       {producto.modoUso.length > 0 ? (
-        <Seccion titulo="Modo de uso">
+        <Seccion titulo={textos.modoUso}>
           <Parrafos lineas={producto.modoUso} />
         </Seccion>
       ) : null}
 
       {producto.ingredientes.length > 0 ? (
-        <Seccion titulo="Ingredientes">
+        <Seccion titulo={textos.ingredientes}>
           <Parrafos lineas={producto.ingredientes} />
         </Seccion>
       ) : null}
 
       {producto.resultado.length > 0 ? (
-        <Seccion titulo="Resultado">
+        <Seccion titulo={textos.resultado}>
           <Parrafos lineas={producto.resultado} />
         </Seccion>
       ) : null}
@@ -326,6 +326,7 @@ function Confirmacion({
 }) {
   const { colores } = useTheme();
   const entrada = useEntradaContenido();
+  const { producto: textos } = useTextosTienda();
   const Icono = confirmacion.tipo === 'agregado' ? Check : Info;
   return (
     <Animated.View entering={entrada} style={styles.confirmacion}>
@@ -339,7 +340,7 @@ function Confirmacion({
         </View>
         <Text style={[styles.textoConfirmacion, { color: colores.texto }]}>{confirmacion.mensaje}</Text>
       </View>
-      <Button titulo="Ver carrito" variante="secundario" onPress={onVerCarrito} />
+      <Button titulo={textos.verCarrito} variante="secundario" onPress={onVerCarrito} />
     </Animated.View>
   );
 }

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { esErrorDeRed } from '@/features/auth/models/AuthModel';
 import { enlaceTelefono } from '@/features/salon/models/salonModel';
 import { ApiError } from '@/shared/api/apiClient';
+import { mensajeParaClienta } from '@/shared/api/mensajesError';
 import { obtenerTexto } from '@/shared/api/textosSitio';
 import { useConfiguracionPublica } from '@/shared/api/useConfiguracionPublica';
 import { useCandado } from '@/shared/ui/useCandado';
@@ -89,6 +90,8 @@ export interface TextosRevocar {
 }
 
 export interface DetallePedidoViewModel {
+  /** Con estado 'error': por qué no se cargó el pedido (sin red, servidor...); null si no hay error. */
+  mensajeError: string | null;
   estado: EstadoDetallePedido;
   pedido: Pedido | null;
   /** Lo que se pinta del pedido (textos, acciones y plazos); null sin pedido. */
@@ -176,6 +179,7 @@ export function useDetallePedidoViewModel(pedidoId: string | undefined): Detalle
   const candado = useCandado();
   const { configuracion } = useConfiguracionPublica();
   const [estado, setEstado] = useState<EstadoDetallePedido>('cargando');
+  const [errorCarga, setErrorCarga] = useState<unknown>(null);
   const [pedido, setPedido] = useState<Pedido | null>(null);
   const [hojaCancelarVisible, setHojaCancelarVisible] = useState(false);
   const [cancelando, setCancelando] = useState(false);
@@ -274,6 +278,7 @@ export function useDetallePedidoViewModel(pedidoId: string | undefined): Detalle
           setPedido(null);
           setHojaCancelarVisible(false);
           setHojaRevocarVisible(false);
+          setErrorCarga(error);
           setEstado(noEncontrado ? 'noEncontrado' : 'error');
         });
     },
@@ -649,6 +654,7 @@ export function useDetallePedidoViewModel(pedidoId: string | undefined): Detalle
   const texto = (clave: Parameters<typeof obtenerTexto>[0], contexto = {}) => obtenerTexto(clave, contexto, configuracion);
 
   return {
+    mensajeError: estado === 'error' ? mensajeParaClienta(errorCarga) : null,
     estado,
     pedido,
     detalle,

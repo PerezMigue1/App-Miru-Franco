@@ -183,7 +183,7 @@ describe('Regla 5: la raíz monta los avisos en vivo una sola vez', () => {
 
   it('_layout.tsx llama a useAvisosEnVivo una vez, con la sesión autenticada', () => {
     expect(layout.match(LLAMADA_EN_VIVO)).toHaveLength(1);
-    expect(layout).toContain("useAvisosEnVivo(estado === 'autenticado');");
+    expect(layout).toContain("useAvisosEnVivo(estado === 'autenticado', avisosEnApp);");
   });
 
   it('ningún otro archivo de src monta useAvisosEnVivo', () => {

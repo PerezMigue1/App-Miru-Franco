@@ -1,6 +1,7 @@
-import { MENSAJE_SIN_CONEXION, esErrorDeRed } from '@/features/auth/models/AuthModel';
 import { ApiError, apiDelete, apiGet, apiPost, apiPut } from '@/shared/api/apiClient';
 import { esObjeto, listaDe, primeraImagen, texto, type Crudo } from '@/features/inicio/models/inicioService';
+import { alCerrarSesion } from '@/shared/api/eventosSesion';
+import { mensajeSinContexto } from '@/shared/api/mensajesError';
 import { generacionActual } from '@/shared/api/tokenStorage';
 
 import { aCentavos, obtenerProducto } from './productoModel';
@@ -45,8 +46,6 @@ export interface ResultadoAgregar {
   cantidadEnCarrito: number;
   topado: boolean;
 }
-
-export const MENSAJE_SESION_TERMINADA = 'Tu sesión terminó. Inicia sesión de nuevo.';
 
 // ── Normalizadores ─────────────────────────────────────────────────────────────────────────
 
@@ -253,10 +252,17 @@ export function tomarAvisosCarrito(): ArticuloRetirado[] {
   return avisos;
 }
 
-/** Solo para pruebas: olvida la última lista vista y los avisos pendientes. */
+/**
+ * Olvida la última lista vista y los avisos pendientes. La usan las pruebas y el cierre de sesión:
+ * los nombres de los artículos de la clienta que salió no se quedan en memoria.
+ */
 export function reiniciarMemoriaCarrito(): void {
   memoria = { generacion: generacionActual(), vistos: new Map(), porAvisar: [] };
 }
+
+alCerrarSesion(() => {
+  reiniciarMemoriaCarrito();
+});
 
 // ── Totales ────────────────────────────────────────────────────────────────────────────────
 
@@ -277,15 +283,12 @@ export function itemConProblema(item: ItemCarrito): boolean {
 
 // ── Errores ────────────────────────────────────────────────────────────────────────────────
 
-/** Sin red o sesión terminada (401): lo común a toda la tienda. null si no es ninguno. */
+/**
+ * Lo común a toda la tienda: lo que no depende de la pantalla (sin red, tiempo agotado, sesión
+ * terminada, límite de solicitudes o un code conocido; mensajeSinContexto). null si no es nada de eso.
+ */
 export function mensajeComunTienda(error: unknown): string | null {
-  if (esErrorDeRed(error) || (error instanceof ApiError && error.status === 0)) {
-    return MENSAJE_SIN_CONEXION;
-  }
-  if (error instanceof ApiError && error.status === 401) {
-    return MENSAJE_SESION_TERMINADA;
-  }
-  return null;
+  return mensajeSinContexto(error);
 }
 
 /** PUT del carrito sin existencias (403 "Stock insuficiente") o POST de pedido sin stock (400). */

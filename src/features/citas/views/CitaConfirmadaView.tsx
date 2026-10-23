@@ -117,7 +117,7 @@ export default function CitaConfirmadaView() {
             {vm.estado === 'error' ? (
               <EmptyState
                 titulo="No pudimos cargar tu cita"
-                mensaje="Tu reserva no se pierde. Revisa tu conexión e intenta de nuevo."
+                mensaje={vm.mensajeError ?? ''}
                 accion={{ titulo: 'Reintentar', onPress: vm.recargar }}
               />
             ) : (

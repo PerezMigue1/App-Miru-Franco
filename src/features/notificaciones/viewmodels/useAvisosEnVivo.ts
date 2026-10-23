@@ -25,14 +25,21 @@ function enPrimerPlano(estadoApp: AppStateStatus | null | undefined): boolean {
  * Mantiene la conexión en vivo de avisos mientras haya sesión y la app esté en primer plano: al
  * encender abre el flujo y pide la lista una vez; al pasar a segundo plano (o 'inactive') la
  * detiene; al volver reconecta y pide la lista otra vez. Sin sesión detiene y vacía los avisos.
- * Al desmontar detiene y quita el oyente de AppState. Nunca deja dos conexiones.
+ * Con `enVivo` en false (la clienta apagó "Avisos en la app" en Perfil, o aún no se sabe) no abre el
+ * flujo ni la consulta de respaldo ni pide la lista, pero conserva la bandeja: la pide la pantalla
+ * de Notificaciones al abrirla. Al desmontar detiene y quita el oyente de AppState. Nunca deja dos
+ * conexiones.
  */
-export function useAvisosEnVivo(conSesion: boolean): void {
+export function useAvisosEnVivo(conSesion: boolean, enVivo = true): void {
   useEffect(() => {
     const vivo = conexionUnica();
     if (!conSesion) {
       vivo.detener();
       limpiarAvisos();
+      return undefined;
+    }
+    if (!enVivo) {
+      // La limpieza del efecto anterior ya la detuvo (si estaba abierta).
       return undefined;
     }
     let encendida = false;
@@ -64,5 +71,5 @@ export function useAvisosEnVivo(conSesion: boolean): void {
       suscripcion.remove();
       apagar();
     };
-  }, [conSesion]);
+  }, [conSesion, enVivo]);
 }

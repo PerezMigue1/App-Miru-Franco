@@ -15,6 +15,7 @@ import { AparienciaProvider } from '@/shared/ui/apariencia';
 
 import { cerrarRouter, iniciarRouter } from '../../helpers/router';
 import { leerSecureStore } from '../../helpers/secureStore';
+import { TEXTO_SERVIDOR } from '../../helpers/textosError';
 
 /**
  * GP-04, pantalla de Inicio con el servidor simulado: InicioView real dentro de un router en memoria
@@ -276,7 +277,7 @@ describe('Pantalla de Inicio con el servidor simulado (GP-04)', () => {
 
       expect(await screen.findByText(TITULO_ERROR)).toBeOnTheScreen();
       expect(
-        screen.getByText('Revisa tu conexión a internet e inténtalo de nuevo.'),
+        screen.getByText(TEXTO_SERVIDOR),
       ).toBeOnTheScreen();
       const reintentar = screen.getByRole('button', { name: 'Reintentar' });
       expect(reintentar).toBeOnTheScreen();

@@ -1,21 +1,20 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 
+import { esSinRespuesta, mensajeParaClienta } from '@/shared/api/mensajesError';
+import { obtenerTexto } from '@/shared/api/textosSitio';
+import { useTextos } from '@/shared/api/useTextos';
 import { useCandado } from '@/shared/ui/useCandado';
 
 import {
-  MENSAJE_DEMASIADOS_INTENTOS,
-  MENSAJE_SIN_CONEXION,
-  esErrorDeRed,
   estadoHttp,
   normalizarCorreo,
   problemaDeCorreo,
 } from '../models/AuthModel';
 import { solicitarEnlaceRecuperacion } from '../models/authService';
 
-/** Mismo mensaje siempre: no revela si el correo tiene cuenta. */
-const MENSAJE_NEUTRO =
-  'Si el correo está registrado, recibirás un enlace para restablecer tu contraseña';
+/** Mismo mensaje siempre (del catálogo): no revela si el correo tiene cuenta. */
+const mensajeNeutro = () => obtenerTexto('auth.recuperar.neutro');
 
 export interface RecuperarViewModel {
   correo: string;
@@ -26,6 +25,11 @@ export interface RecuperarViewModel {
   cargando: boolean;
   enviar: () => void;
   volver: () => void;
+  /**
+   * Nota fija para las cuentas de Google (no tienen contraseña ni reciben este correo). Siempre se
+   * muestra: nunca depende de la respuesta del servidor, que no dice si el correo tiene cuenta.
+   */
+  notaGoogle: string;
 }
 
 export function useRecuperarViewModel(): RecuperarViewModel {
@@ -52,15 +56,13 @@ export function useRecuperarViewModel(): RecuperarViewModel {
     setCargando(true);
     try {
       await solicitarEnlaceRecuperacion(normalizarCorreo(correo));
-      setMensaje(MENSAJE_NEUTRO);
+      setMensaje(mensajeNeutro());
     } catch (fallo) {
-      if (esErrorDeRed(fallo)) {
-        setError(MENSAJE_SIN_CONEXION);
-      } else if (estadoHttp(fallo) === 429) {
-        setError(MENSAJE_DEMASIADOS_INTENTOS);
+      if (esSinRespuesta(fallo) || estadoHttp(fallo) === 429) {
+        setError(mensajeParaClienta(fallo));
       } else {
         // Cualquier otra respuesta del servidor muestra el mismo mensaje neutro.
-        setMensaje(MENSAJE_NEUTRO);
+        setMensaje(mensajeNeutro());
       }
     } finally {
       setCargando(false);
@@ -84,5 +86,7 @@ export function useRecuperarViewModel(): RecuperarViewModel {
     }
   };
 
-  return { correo, setCorreo, errorCorreo, error, mensaje, cargando, enviar, volver };
+  const notaGoogle = useTextos()('auth.recuperar.notaGoogle');
+
+  return { correo, setCorreo, errorCorreo, error, mensaje, cargando, enviar, volver, notaGoogle };
 }

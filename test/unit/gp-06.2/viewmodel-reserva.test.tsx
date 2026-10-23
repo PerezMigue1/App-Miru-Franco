@@ -3,7 +3,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 import { AppState, type AppStateStatus } from 'react-native';
 
-import { MENSAJE_SIN_CONEXION } from '@/features/auth/models/AuthModel';
+import { MENSAJE_SIN_CONEXION } from '@/shared/api/mensajesError';
 import { fechaLegible as fechaLegibleDelModelo, REDIRECCION_ANTICIPO } from '@/features/citas/models/citaModel';
 import { RESPALDO_TEXTOS } from '@/shared/api/textosSitio';
 import { useAnticipoViewModel, type AnticipoViewModel } from '@/features/citas/viewmodels/useAnticipoViewModel';

@@ -1,6 +1,7 @@
 import { ApiError, ErrorDeRed } from '@/shared/api/apiClient';
 import { aceptacionDeDocumento, registrarConsentimientos } from '@/shared/api/consentimientos';
 import { obtenerDocumentoVigente, type DocumentoLegalVigente } from '@/shared/api/documentosLegales';
+import { tipoDeError } from '@/shared/api/mensajesError';
 
 /**
  * Consentimientos de la reserva (consentimientosCita.ts y consentimientoAnticipo.ts de la web): antes
@@ -92,8 +93,9 @@ export async function registrarConsentimientosReserva({
 /** La sesión terminó a mitad de la reserva (401 en cualquier paso). */
 export const MENSAJE_SESION_RESERVA = 'Tu sesión terminó. Inicia sesión de nuevo para confirmar tu cita.';
 
-export const MENSAJE_SIN_VERSION_POLITICA =
-  'No pudimos confirmar la versión vigente de la Política de anticipos y cancelación, así que no continuamos. Revisa tu conexión a internet e intenta de nuevo.';
+/** No se pudo confirmar la versión de la política; le sigue el detalle según la falla. */
+const PREFIJO_SIN_VERSION =
+  'No pudimos confirmar la versión vigente de la Política de anticipos y cancelación, así que no continuamos.';
 
 const PREFIJO_ANTICIPOS =
   'No pudimos guardar tu aceptación de la Política de anticipos y cancelación, así que no continuamos.';
@@ -124,7 +126,8 @@ export function esVersionNoPublicada(error: unknown): boolean {
  */
 export function mensajeConsentimiento(error: ErrorConsentimiento): string {
   if (error.paso === 'version') {
-    return MENSAJE_SIN_VERSION_POLITICA;
+    // "Revisa tu conexión" solo sin red; un 5xx o un 404 no son culpa de la conexión de la clienta.
+    return `${PREFIJO_SIN_VERSION} ${tipoDeError(error.causa) === 'sinConexion' ? DETALLE_SIN_RED : DETALLE_GENERICO}`;
   }
   if (esSesionTerminada(error.causa)) {
     return MENSAJE_SESION_RESERVA;
