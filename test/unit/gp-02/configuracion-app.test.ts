@@ -68,6 +68,7 @@ describe('app.json', () => {
       'expo-splash-screen',
       'expo-secure-store',
       'expo-image-picker',
+      'expo-build-properties',
     ]);
   });
 
@@ -87,8 +88,8 @@ describe('app.json', () => {
 describe('eas.json', () => {
   const { build } = leerJson<EasJson>('eas.json');
 
-  it('solo define los perfiles development y preview', () => {
-    expect(Object.keys(build).sort()).toEqual(['development', 'preview']);
+  it('solo define los perfiles development, preview y production', () => {
+    expect(Object.keys(build).sort()).toEqual(['development', 'preview', 'production']);
   });
 
   it('development es un development build interno en APK', () => {
@@ -107,6 +108,6 @@ describe('eas.json', () => {
 
   it('preview define las variables públicas de la API y la web', () => {
     const claves = Object.keys(build.preview.env ?? {}).sort();
-    expect(claves).toEqual(['EXPO_PUBLIC_API_URL', 'EXPO_PUBLIC_WEB_URL']);
+    expect(claves).toEqual(['EXPO_PUBLIC_API_URL', 'EXPO_PUBLIC_WEB_URL', 'OFUSCAR_JS']);
   });
 });

@@ -147,6 +147,37 @@ La app no usa notificaciones push. Los avisos (recordatorios de citas, estado de
 - Códigos estables en los 409 de revocar y de cancelar, y en los 400 y 409 de las devoluciones: hoy la app distingue el motivo por el texto del mensaje.
 - Que los pagos y las devoluciones que ve la clienta no expongan `payload`, `referenciaExterna` ni `errorMensaje` (la app los descarta, pero no deberían salir del servidor).
 
+## Compilación y publicación (GP-08)
+
+Perfiles de `eas.json`:
+
+- `development`: development build (dev client) en APK de distribución interna.
+- `preview`: APK de distribución interna contra producción, con `OFUSCAR_JS=1` para que sea igual al de producción.
+- `production`: AAB para Google Play, con `autoIncrement` y `appVersionSource` `remote`.
+
+Workflow `.github/workflows/compilacion-android.yml` ("Compilación Android"):
+
+- Compila con EAS y el perfil `production` al hacer push o fusionar a `main` o `release`; también se corre a mano (`workflow_dispatch`) eligiendo `production` o `preview`.
+- Los cambios solo de documentación (archivos `.md` y `LICENSE`) no compilan, y hay una sola compilación por push porque el plan gratuito de EAS tiene límite mensual.
+- Necesita el secreto del repositorio `EXPO_TOKEN`: se crea en expo.dev y se guarda en Settings > Secrets and variables > Actions.
+
+Protección del binario:
+
+- Ofuscación del JavaScript por módulo dentro de Metro con javascript-obfuscator 4.2.1: solo si `OFUSCAR_JS=1`, `metro.config.js` cambia el transformer por `metro-transformador-ofuscacion.js`, que envuelve el worker de transformación de Expo y ofusca solo los módulos de `src` ya minificados y con sus dependencias resueltas, dentro del wrapper `__d` de Metro; después compila Hermes. Sin la variable la configuración es la de Expo, y el bundle de desarrollo, Expo Go y Jest quedan igual. `OFUSCAR_JS=1` está en los perfiles `preview` y `production`.
+- No se usa `react-native-obfuscating-transformer` porque su versión 1.0.0 depende de Babel 6 (`babel-generator` 6, `@types/babel-core` 6) y de javascript-obfuscator 0.13.
+- No se usa `obfuscator-io-metro-plugin` porque ofusca el bundle en un `beforeExit` asíncrono y Expo CLI fuerza `process.exit(0)` a los 4 segundos (`ensureProcessExitsAfterDelay`), así que el bundle quedaba sin ofuscar.
+- R8: `expo-build-properties` activa la minificación con R8 y la reducción de recursos solo en release.
+- Firma: la llave de carga la guarda EAS (credenciales administradas) y la firma final la hace Google Play App Signing.
+
+Análisis del binario (`.github/scripts/analizar-binario.sh`):
+
+- Revisa `targetSdk` 36, `minSdk`, `versionCode` y los permisos finales con aapt2; la alineación de 16 KB (zipalign y segmentos de las `.so` de `arm64-v8a`); secretos y URLs de desarrollo con JADX y en el bundle; la evidencia de ofuscación con 10 identificadores de `src` (5 nombres locales no exportados y 5 textos únicos), y el reporte de MobSF (informativo).
+- Las apariciones de `localhost` que generan librerías conocidas (por ejemplo `http://localhost:8081` de `getDevServer` de React Native) se listan aparte como permitidas; cualquier otra hace fallar el job.
+- Con la ofuscación, los textos de `src` (incluidas `EXPO_PUBLIC_API_URL` y `EXPO_PUBLIC_WEB_URL`) quedan codificados en el bundle, así que esa búsqueda ya no ve una URL de desarrollo escrita en ellos.
+- Lo compensa el paso "Verificar el perfil de compilación", que antes de `eas build` falla si el perfil de `eas.json` no trae las URLs de producción exactas y `OFUSCAR_JS=1`.
+- Falla solo por hallazgos de JADX, un `localhost` no permitido, `targetSdk` distinto de 36, falta de `arm64-v8a`, alineación de 16 KB o, en `preview` y `production`, más de 2 de los 10 identificadores visibles en el bundle.
+- Los reportes quedan como artefactos 14 días; nunca se sube el APK, el AAB ni el keystore desechable.
+
 ## Pruebas
 
 ```bash
