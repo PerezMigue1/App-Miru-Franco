@@ -6,6 +6,11 @@ import { AppState, type AppStateStatus } from 'react-native';
 import { MENSAJE_SIN_CONEXION } from '@/features/auth/models/AuthModel';
 import { MENSAJE_SESION_TERMINADA } from '@/features/tienda/models/carritoModel';
 import { REDIRECCION_PEDIDO, type MetodoPago } from '@/features/tienda/models/pedidoModel';
+import {
+  MAXIMO_CONSULTAS_PAGO,
+  MAXIMO_CONSULTAS_SIN_PAGO,
+  reiniciarVerificacion,
+} from '@/features/tienda/models/verificacionPago';
 import { MENSAJE_SIN_NAVEGADOR } from '@/features/tienda/viewmodels/pagoPedido';
 import { limitePagoPedido } from '@/features/tienda/viewmodels/presentacionTienda';
 import { useCarritoViewModel, type CarritoViewModel } from '@/features/tienda/viewmodels/useCarritoViewModel';
@@ -38,6 +43,7 @@ import {
   usarRelojFijo,
   type CuerpoError,
 } from '../../helpers/citasFicticias';
+import { RUTAS_COMPRA_LEGAL } from '../../helpers/checkoutFicticio';
 import { espiarConsola } from '../../helpers/consola';
 import { abrirSesionSimulada } from '../../helpers/google';
 import { respuesta, type Llamada } from '../../helpers/servidorSimulado';
@@ -180,9 +186,12 @@ type Rutas = Record<string, ManejadorVm>;
 type Turno = () => Salida;
 type Ref<T> = { current: T };
 
-/** Servidor de la tienda (catálogo, pedidos y pago en línea de tiendaFicticia); las rutas de la prueba van encima. */
+/**
+ * Servidor de la tienda (catálogo, pedidos y pago en línea de tiendaFicticia); las rutas de la prueba
+ * van encima. GP-07.5: también los Términos, la Política de reembolsos y el registro de consentimientos.
+ */
 function servidor(rutas: Rutas = {}): Llamada[] {
-  return servidorVm({ ...rutasCatalogoTienda(), ...rutasPedidos(), ...rutas });
+  return servidorVm({ ...RUTAS_COMPRA_LEGAL, ...rutasCatalogoTienda(), ...rutasPedidos(), ...rutas });
 }
 
 const veces = (llamadas: Llamada[], ruta: string) => llamadasDeRuta(llamadas, ruta).length;
@@ -270,6 +279,9 @@ beforeEach(() => {
   });
   fijarEstadoApp('active');
   atras = espiarAtras();
+  // GP-07.5: el registro de la verificación del pago es de módulo; cada prueba empieza sin pedidos
+  // conocidos ni vigilancia de AppState (la de la prueba anterior quedó en otro espía).
+  reiniciarVerificacion();
 });
 
 afterEach(() => {
@@ -984,7 +996,7 @@ async function abrirCheckout(rutas: Rutas = {}, items: ItemCarritoCrudo[] = CARR
   return { ...hook, llamadas, carrito };
 }
 
-/** Checkout listo en el paso 3 con el método indicado. */
+/** Checkout listo en el paso 3 con el método indicado (GP-07.5: con las dos casillas marcadas). */
 async function enPaso3(rutas: Rutas = {}, metodo: MetodoPago = 'pago_en_salon') {
   const abierto = await abrirCheckout(rutas);
   await esperarEstado(abierto.result, 'listo');
@@ -993,6 +1005,10 @@ async function enPaso3(rutas: Rutas = {}, metodo: MetodoPago = 'pago_en_salon') 
     abierto.result.current.continuar();
   });
   await hacer(() => abierto.result.current.continuar());
+  await hacer(() => {
+    abierto.result.current.cambiarCasilla('terminosVenta', true);
+    abierto.result.current.cambiarCasilla('reembolsos', true);
+  });
   return abierto;
 }
 
@@ -1351,7 +1367,12 @@ describe('useDetallePedidoViewModel: carga y pago en línea', () => {
     ['cancelado', pagoComo('cancelado'), false, 'cancelado'],
     ['sin respuesta', sinRed, false, 'pendiente_pago'],
   ])('pago %s: pagoEnProceso %s y el estado del pedido que manda el servidor', async (_caso, pago, enProceso, estado) => {
-    const { result } = await abrirDetallePedido(String(ID_PEDIDO), { [rutaEstadoPagoPedido()]: turnos(pago) });
+    // GP-07.5: con otro estado del pedido, el detalle lo vuelve a leer una vez (registro de la
+    // verificación): la segunda lectura trae el estado que ya aplicó el servidor.
+    const { result } = await abrirDetallePedido(String(ID_PEDIDO), {
+      [rutaEstadoPagoPedido()]: turnos(pago),
+      [rutaPedido()]: turnos(pedidoComo(pedidoCrudo()), pedidoComo(pedidoCrudo({ estado }))),
+    });
     await vaciar();
     expect(result.current.pagoEnProceso).toBe(enProceso);
     expect(result.current.pedido?.estado).toBe(estado);
@@ -1533,9 +1554,12 @@ const RUTA_ESTADO = rutaEstadoPagoPedido();
 const MENSAJE_NO_REVISO = 'No pudimos revisar tu pago. Si ya pagaste, no pagues de nuevo: toca Revisar mi pago.';
 /** Lo que tarda el servidor simulado en responder el estado del pago en las pruebas de consultas repetidas. */
 const DEMORA_MS = 100;
-/** Consultas seguidas con un pago pendiente (cada 3 s durante 45 s) y con un pago que aún no aparece (9 s). */
-const CONSULTAS_PENDIENTE = 15;
-const CONSULTAS_SIN_PAGO = 3;
+/**
+ * Consultas seguidas con un pago pendiente y con un pago que aún no aparece tras volver.
+ * GP-07.5: el registro las limita por número (con espera creciente), ya no por tiempo.
+ */
+const CONSULTAS_PENDIENTE = MAXIMO_CONSULTAS_PAGO;
+const CONSULTAS_SIN_PAGO = MAXIMO_CONSULTAS_SIN_PAGO;
 
 interface OpcionesConfirmacion {
   id?: string;
@@ -1640,8 +1664,9 @@ describe('usePedidoConfirmadoViewModel: pagar con Mercado Pago', () => {
     expect(consultasDe(llamadas)).toBe(2);
     expect(result.current).toMatchObject({ abriendo: false, consultando: false, puedePagar: false, limite: null });
     expect(result.current.pedido?.estado).toBe('pagado');
-    // La espera del regreso por AppState se soltó: solo queda el oyente de la pantalla.
-    expect(oyentesApp).toHaveLength(1);
+    // La espera del regreso por AppState se soltó. GP-07.5: la pantalla ya no escucha AppState; el
+    // registro de la verificación solo lo escucha mientras tiene un pago pendiente (aquí, ninguno).
+    expect(oyentesApp).toHaveLength(0);
 
     // Volver a pintar o recargar no abre otro pago: solo consulta.
     await rerender({});
@@ -1756,7 +1781,8 @@ describe('usePedidoConfirmadoViewModel: pagar con Mercado Pago', () => {
     await vaciar();
     expect(result.current).toMatchObject({ abriendo: false, consultando: false });
     expect(consultasDe(llamadas)).toBe(1);
-    expect(oyentesApp).toHaveLength(1);
+    // GP-07.5: sin pago pendiente nadie escucha AppState (la pantalla ya no lo hace).
+    expect(oyentesApp).toHaveLength(0);
   });
 });
 
@@ -1792,12 +1818,13 @@ describe('usePedidoConfirmadoViewModel: regreso, segundo plano y navegación', (
     await hacer(() => result.current.revisarDeNuevo());
     await avanzar(DEMORA_MS, 3);
     expect(result.current.consultando).toBe(true);
-    // Revisar otra vez con la siguiente consulta ya programada empieza de nuevo sin duplicarla.
+    // GP-07.5: revisar otra vez con la siguiente consulta ya programada comparte la verificación en
+    // curso (no consulta de más) y la siguiente llega tras la espera creciente del registro.
     await hacer(() => result.current.revisarDeNuevo());
     await avanzar(DEMORA_MS, 3);
+    expect(consultasDe(llamadas)).toBe(2);
+    await avanzar(1_000, 2);
     expect(consultasDe(llamadas)).toBe(3);
-    await avanzar(1_000, 3);
-    expect(consultasDe(llamadas)).toBe(4);
   });
 
   it.each<[string, string, () => Response]>([

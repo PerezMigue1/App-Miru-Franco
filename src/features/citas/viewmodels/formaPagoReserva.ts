@@ -1,5 +1,5 @@
 import { precioParaMostrar } from '@/features/inicio/models/FluidoModel';
-import type { ConfiguracionPublica } from '@/shared/api/configuracionPublica';
+import type { ConfiguracionPublica, DatosTransferencia } from '@/shared/api/configuracionPublica';
 import { obtenerTexto } from '@/shared/api/textosSitio';
 
 import {
@@ -54,6 +54,8 @@ export interface FormaPagoConAnticipo {
   avisos: string[];
   /** Métodos de pago del salón activos, o null si no hay. */
   metodos: string | null;
+  /** Datos para transferir: solo con la opción de pagar en el salón y la transferencia activa. */
+  transferencia: DatosTransferencia | null;
 }
 
 /** Sin anticipo: cuánto se paga en el salón y con qué métodos. */
@@ -62,6 +64,8 @@ export interface FormaPagoSinAnticipo {
   /** "Pagas $350 en el salón el día de tu cita.". */
   sinAnticipo: string;
   metodos: string | null;
+  /** Datos para transferir en el salón, o null si la transferencia está apagada o incompleta. */
+  transferencia: DatosTransferencia | null;
 }
 
 export type FormaPagoReserva = FormaPagoConAnticipo | FormaPagoSinAnticipo;
@@ -73,16 +77,30 @@ function montoParaMostrar(monto: number): string {
 }
 
 /**
+ * Banco, titular y CLABE para pagar por transferencia en el salón: solo si el salón acepta
+ * transferencia (metodosSalon) y la configuración trae los datos completos; si no, null y no se
+ * muestra ninguna cuenta. Lo usan la reserva y el detalle de la cita.
+ */
+export function transferenciaEnSalon(config: ConfiguracionPublica): DatosTransferencia | null {
+  const { metodosSalon, transferencia } = config.reglas.pagos;
+  return metodosSalon.includes('transferencia') ? transferencia : null;
+}
+
+/**
  * La sección "Forma de pago" de la reserva. `anticipo` es el que hoy se pide (anticipoVigente), o null.
+ * `opcion` es la forma de pagar el anticipo que vale (opcionVigente): con anticipo, los datos de
+ * transferencia solo se muestran si se paga en el salón, como la web.
  */
 export function formaPagoReserva(
   servicio: Pick<Servicio, 'precio'>,
   anticipo: string | null,
   config: ConfiguracionPublica,
+  opcion: OpcionAnticipo | null = null,
 ): FormaPagoReserva {
   const metodos = textoMetodosSalon(config);
+  const transferencia = transferenciaEnSalon(config);
   if (!anticipo) {
-    return { conAnticipo: false, sinAnticipo: textoSinAnticipo(servicio.precio, config), metodos };
+    return { conAnticipo: false, sinAnticipo: textoSinAnticipo(servicio.precio, config), metodos, transferencia };
   }
   const saldo = saldoEnSalon(servicio.precio, anticipo);
   const aviso = avisoCancelar(undefined, config);
@@ -102,6 +120,7 @@ export function formaPagoReserva(
     })),
     avisos: aviso ? [consecuenciaNoAsistir(undefined, config), aviso] : [consecuenciaNoAsistir(undefined, config)],
     metodos,
+    transferencia: opcion === 'salon' ? transferencia : null,
   };
 }
 

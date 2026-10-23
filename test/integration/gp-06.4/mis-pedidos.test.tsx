@@ -5,6 +5,10 @@ import '../../helpers/mocksPantallas';
 
 import { screen, waitFor } from 'expo-router/testing-library';
 
+import { metodosEntreParentesis } from '@/features/tienda/models/compraLegal';
+import { obtenerConfiguracion } from '@/shared/api/configuracionPublica';
+import { obtenerTexto } from '@/shared/api/textosSitio';
+
 import { conError, sinRedEnRuta } from '../../helpers/citasFicticias';
 import { navegadorRegresa } from '../../helpers/google';
 import { LIMITE_MS } from '../../helpers/pantallas';
@@ -169,7 +173,8 @@ describe('Mis pedidos con las pantallas reales (GP-06.4)', () => {
       'sin pedidos lo dice y "Ver la tienda" abre la pestaña Productos',
       async () => {
         const { app } = await abrirTienda('/mis-pedidos', { pedidos: [] });
-        expect(await screen.findByRole('header', { name: 'Aún no tienes pedidos' })).toBeOnTheScreen();
+        // GP-07.5: el título del estado vacío sale del catálogo (pedidos.lista.vacia del backend).
+        expect(await screen.findByRole('header', { name: obtenerTexto('pedidos.lista.vacia') })).toBeOnTheScreen();
         conTextos('Cuando compres en la tienda, tus pedidos aparecerán aquí.');
         await tocarYEsperar(app, 'Ver la tienda', '/tienda');
         revisarConsola();
@@ -203,7 +208,8 @@ describe('Mis pedidos con las pantallas reales (GP-06.4)', () => {
         conEtiquetas(`Pedido hecho el ${fechaEnTelefono(pedido(705).creadoEn)}`, ...ARTICULOS);
         conEtiquetas('Forma de pago: Pago al recoger en el salón');
         expect(screen.getByRole('header', { name: 'Qué sigue' })).toBeOnTheScreen();
-        conTextos('Tu pedido está listo. Pasa por él al salón y págalo en el mostrador.');
+        // GP-07.5: el qué sigue sale del catálogo (pedidos.estado.listoPagar) con los métodos del salón activos.
+        conTextos(obtenerTexto('pedidos.estado.listoPagar', { metodosSalon: metodosEntreParentesis(obtenerConfiguracion()) }));
         expect(screen.getByRole('header', { name: 'Recoger en el salón' })).toBeOnTheScreen();
         sinBotones('Cancelar pedido', 'Completar el pago');
 

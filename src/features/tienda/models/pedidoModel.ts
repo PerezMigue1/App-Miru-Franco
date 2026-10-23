@@ -1,7 +1,9 @@
 import { ApiError, apiGet, apiPost, apiPut } from '@/shared/api/apiClient';
-import type { EtiquetaEstado } from '@/features/citas/models/citaModel';
+import type { EtiquetaEstado, TonoBadge } from '@/features/citas/models/citaModel';
 import { fechaLegible, horaLegible } from '@/features/citas/models/citaModel';
 import { esObjeto, listaDe, primeraImagen, texto, urlHttps, type Crudo } from '@/features/inicio/models/inicioService';
+import { obtenerConfiguracion, type ConfiguracionPublica } from '@/shared/api/configuracionPublica';
+import { obtenerTexto, type ClaveTexto } from '@/shared/api/textosSitio';
 
 import { esSinExistencias, mensajeComunTienda } from './carritoModel';
 import { aCentavos } from './productoModel';
@@ -42,8 +44,23 @@ export interface ItemPedido {
 }
 
 /**
+ * Reglas con que se creó el pedido (instantaneaReglasPedido del backend, columna `reglas`). Cada
+ * campo es un entero de 0 en adelante o null si no vino o no es válido; todo null (o la columna
+ * vacía de los pedidos viejos) se resuelve con las reglas vigentes de la configuración pública.
+ */
+export interface ReglasPedido {
+  plazoPagoLineaHoras: number | null;
+  diasPrepararApartado: number | null;
+  diaRecordatorioRecoger: number | null;
+  diasCancelarNoRecogido: number | null;
+  diasResguardoPagado: number | null;
+  diasCambioProducto: number | null;
+  diasHabilesRevocacion: number | null;
+}
+
+/**
  * Pedido de la clienta (GET /api/pedidos/:id?propios=true → { success, data }). Los importes llegan
- * como texto; no hay campo de plazo: el de pago en línea es creadoEn + 24 h (limitePagoPedido).
+ * como texto. El plazo del pago en línea es creadoEn + reglas.plazoPagoLineaHoras (vencimientoPagoMs).
  */
 export interface Pedido {
   id: number;
@@ -59,6 +76,14 @@ export interface Pedido {
   items: ItemPedido[];
   /** Suma de las cantidades de sus artículos. */
   piezas: number;
+  /** Reglas guardadas al crearlo; null en pedidos viejos (sin la columna). */
+  reglas: ReglasPedido | null;
+  /** Solo en el detalle: hasta cuándo puede revocar su compra (ISO) o null. */
+  revocableHasta: string | null;
+  /** Solo en el detalle: el backend dice que hoy puede revocar. */
+  puedeRevocar: boolean;
+  /** Solo en el detalle: lo que se reintegraría al revocar, en centavos; null si no vino. */
+  montoRevocableCentavos: number | null;
 }
 
 /** Línea del pedido nuevo (POST /api/pedidos): sale del carrito. */
@@ -96,31 +121,46 @@ export const REDIRECCION_PEDIDO = 'appmirufranco://pedido';
  */
 const INIT_POINT_MERCADO_PAGO = /^https:\/\/(www|sandbox)\.mercadopago\.com\.mx\//;
 
-/** Margen para el reloj del teléfono al buscar un pedido recién creado tras un error de red. */
-const MARGEN_PEDIDO_RECIENTE_MS = 5 * 60 * 1000;
-
-/** Un pedido en línea sin pagar se cancela a las 24 h de crearse (VIGENCIA_PEDIDO_EN_LINEA_MS). */
-export const VIGENCIA_PAGO_EN_LINEA_MS = 24 * 60 * 60 * 1000;
-
 /**
- * Datos del salón para recoger: el backend no los expone a la clienta. Son los mismos de la web
- * (utils/contactoSalon.ts y components/tienda/DatosRecogerEnSalon.tsx).
+ * Margen para el reloj del teléfono al buscar un pedido recién creado tras un error de red: un
+ * minuto. Uno más viejo no es el que se acaba de mandar (GP-07.5: antes eran 5 minutos).
  */
-export const SALON_RECOGER = {
-  nombre: 'Mirú Franco Beauty Salón',
-  direccion: 'Huejutla de Reyes, Hidalgo',
-  telefono: '+52 771 268 1432',
-  telefonoMarcable: 'tel:+527712681432',
-  horario: ['Lunes a viernes de 9:30 a 19:30 h.', 'Sábados de 9:30 a 19:00 h.', 'Domingos cerrado.'],
-  aviso:
-    'Suele estar listo en 24 a 48 horas hábiles. Te avisamos en la app y por correo cuando puedas pasar por él.',
-} as const;
+const MARGEN_PEDIDO_RECIENTE_MS = 60 * 1000;
+
+const HORA_MS = 60 * 60 * 1000;
 
 // ── Normalizadores ─────────────────────────────────────────────────────────────────────────
 
 function enteroPositivo(valor: unknown): number {
   const numero = Number(texto(valor));
   return Number.isInteger(numero) && numero > 0 ? numero : 0;
+}
+
+/** Entero de 0 en adelante tal como lo guarda el JSON de reglas; si no, null. */
+function enteroDeRegla(valor: unknown): number | null {
+  return typeof valor === 'number' && Number.isInteger(valor) && valor >= 0 ? valor : null;
+}
+
+const CAMPOS_REGLAS: readonly (keyof ReglasPedido)[] = [
+  'plazoPagoLineaHoras',
+  'diasPrepararApartado',
+  'diaRecordatorioRecoger',
+  'diasCancelarNoRecogido',
+  'diasResguardoPagado',
+  'diasCambioProducto',
+  'diasHabilesRevocacion',
+];
+
+/** Reglas guardadas en el pedido: cada campo entero válido o null; null si la columna no es un objeto. */
+export function normalizarReglasPedido(crudo: unknown): ReglasPedido | null {
+  if (!esObjeto(crudo)) {
+    return null;
+  }
+  const reglas = {} as ReglasPedido;
+  for (const campo of CAMPOS_REGLAS) {
+    reglas[campo] = enteroDeRegla(crudo[campo]);
+  }
+  return reglas;
 }
 
 function normalizarItem(crudo: Crudo): ItemPedido | null {
@@ -167,10 +207,16 @@ function normalizarPedido(crudo: Crudo): Pedido | null {
     pagadoEn: texto(crudo.pagadoEn) || null,
     items,
     piezas: items.reduce((suma, item) => suma + item.cantidad, 0),
+    reglas: normalizarReglasPedido(crudo.reglas),
+    revocableHasta: texto(crudo.revocableHasta) || null,
+    puedeRevocar: crudo.puedeRevocar === true,
+    montoRevocableCentavos:
+      crudo.montoRevocable === undefined || crudo.montoRevocable === null ? null : aCentavos(crudo.montoRevocable),
   };
 }
 
-function pedidoDe(respuesta: unknown): Pedido {
+/** El pedido de { data }; lanza si no viene uno válido. */
+export function pedidoDe(respuesta: unknown): Pedido {
   const crudo = esObjeto(respuesta) && esObjeto(respuesta.data) ? respuesta.data : undefined;
   const pedido = crudo ? normalizarPedido(crudo) : null;
   if (!pedido) {
@@ -179,8 +225,18 @@ function pedidoDe(respuesta: unknown): Pedido {
   return pedido;
 }
 
-function idParaRuta(id: string | number): string {
+/** true si la respuesta trae { data } con un pedido. */
+export function traePedido(respuesta: unknown): boolean {
+  return esObjeto(respuesta) && esObjeto(respuesta.data);
+}
+
+export function idParaRuta(id: string | number): string {
   return encodeURIComponent(String(id).trim());
+}
+
+/** El id del pedido como entero positivo; 0 si no es válido. */
+export function idPedidoValido(id: string | number): number {
+  return enteroPositivo(id);
 }
 
 // ── Llamadas a la API (todas con sesión) ───────────────────────────────────────────────────
@@ -206,7 +262,8 @@ export function crearPedido(lineas: LineaPedido[], metodoPago: MetodoPago): Prom
 
 /**
  * Pedidos de la clienta, del más reciente al más viejo: GET /api/pedidos?propios=true. Responde
- * { success, count, page, limit, totalPages, data[] } con los artículos de cada pedido.
+ * { success, count, page, limit, totalPages, data[] } con los artículos de cada pedido. No trae el
+ * estado del pago en línea.
  */
 export function listarMisPedidos(): Promise<Pedido[]> {
   return apiGet<unknown>('/api/pedidos?propios=true&limit=100&sort=creadoEn:desc').then((respuesta) =>
@@ -225,33 +282,47 @@ function mismasLineas(pedido: Pedido, lineas: LineaPedido[]): boolean {
 }
 
 /**
+ * Qué se encontró al buscar el pedido recién creado: uno solo (se sigue con él), ninguno (no se
+ * creó: se puede reintentar), varios iguales o sin poder consultar (no se sabe cuál es: la clienta
+ * revisa Mis pedidos antes de intentar de nuevo, para nunca duplicar un pedido).
+ */
+export type BusquedaPedidoReciente =
+  | { estado: 'unico'; pedido: Pedido }
+  | { estado: 'ninguno' }
+  | { estado: 'ambiguo' }
+  | { estado: 'sinVerificar' };
+
+/**
  * Tras un error de red al crear el pedido, el servidor pudo haberlo creado y perder la respuesta
- * (el backend no tiene clave de idempotencia). Busca un pedido pendiente de pago, con el mismo
- * método y exactamente las mismas líneas, creado desde `desdeMs` (con margen para el reloj del
- * teléfono). Nunca lanza: null si no hay o no se pudo consultar.
+ * (el backend no tiene clave de idempotencia). Busca pedidos pendientes de pago, con el mismo
+ * método y exactamente las mismas líneas, creados desde `desdeMs` (con un minuto de margen para el
+ * reloj del teléfono). Solo un candidato cuenta como el recién creado. Nunca lanza.
  */
 export async function buscarPedidoRecienCreado(
   lineas: LineaPedido[],
   metodoPago: MetodoPago,
   desdeMs: number,
-): Promise<Pedido | null> {
+): Promise<BusquedaPedidoReciente> {
+  let pedidos: Pedido[];
   try {
-    const pedidos = await listarMisPedidos();
-    return (
-      pedidos.find((pedido) => {
-        const creado = new Date(pedido.creadoEn).getTime();
-        return (
-          pedido.estado === 'pendiente_pago' &&
-          pedido.metodoPago === metodoPago &&
-          !Number.isNaN(creado) &&
-          creado >= desdeMs - MARGEN_PEDIDO_RECIENTE_MS &&
-          mismasLineas(pedido, lineas)
-        );
-      }) ?? null
-    );
+    pedidos = await listarMisPedidos();
   } catch {
-    return null;
+    return { estado: 'sinVerificar' };
   }
+  const candidatos = pedidos.filter((pedido) => {
+    const creado = new Date(pedido.creadoEn).getTime();
+    return (
+      pedido.estado === 'pendiente_pago' &&
+      pedido.metodoPago === metodoPago &&
+      !Number.isNaN(creado) &&
+      creado >= desdeMs - MARGEN_PEDIDO_RECIENTE_MS &&
+      mismasLineas(pedido, lineas)
+    );
+  });
+  if (candidatos.length === 1) {
+    return { estado: 'unico', pedido: candidatos[0] };
+  }
+  return candidatos.length === 0 ? { estado: 'ninguno' } : { estado: 'ambiguo' };
 }
 
 /** Un pedido de la clienta: GET /api/pedidos/:id?propios=true. Uno ajeno llega como 404. */
@@ -293,12 +364,12 @@ function reembolsoDe(respuesta: unknown): ReembolsoCancelacion | null {
  * Cancela el pedido: PUT /api/pedidos/:id?propios=true { estado: 'cancelado' } (sin motivo: el
  * backend no lo acepta). Solo en pendiente_pago o pagado; las existencias regresan a la tienda.
  * Responde { success, data, reembolso? } con el pedido ya cancelado; `reembolso` ({ estado, monto }
- * en pesos) solo viene si estaba pagado. Errores: mensajeCancelarPedido.
+ * en pesos) solo viene si estaba pagado. Errores: motivoErrorCancelar y mensajeCancelarPedido.
  */
 export function cancelarPedido(id: string | number): Promise<ResultadoCancelarPedido> {
   return apiPut<unknown>(`/api/pedidos/${idParaRuta(id)}?propios=true`, { estado: 'cancelado' }).then(
     async (respuesta) =>
-      esObjeto(respuesta) && esObjeto(respuesta.data)
+      traePedido(respuesta)
         ? { pedido: pedidoDe(respuesta), reembolso: reembolsoDe(respuesta) }
         : { pedido: await obtenerPedido(id), reembolso: null },
   );
@@ -307,11 +378,16 @@ export function cancelarPedido(id: string | number): Promise<ResultadoCancelarPe
 /**
  * URL de Mercado Pago para pagar el pedido: POST /api/pagos-en-linea/mercadopago/preferencia?origen=app
  * { pedidoId }. Responde { initPoint } sin envoltura; con origen=app, Mercado Pago regresa a
- * REDIRECCION_PEDIDO. Los errores se clasifican con motivoConflictoPedido.
+ * REDIRECCION_PEDIDO. Un id inválido rechaza con ApiError 404 sin llamar al servidor (como
+ * obtenerPedido). Los errores se clasifican con motivoConflictoPedido.
  */
 export function crearPreferenciaPedido(pedidoId: string | number): Promise<string> {
+  const id = enteroPositivo(pedidoId);
+  if (id === 0) {
+    return Promise.reject(new ApiError(404, 'Pedido no encontrado'));
+  }
   return apiPost<unknown>('/api/pagos-en-linea/mercadopago/preferencia?origen=app', {
-    pedidoId: enteroPositivo(pedidoId),
+    pedidoId: id,
   }).then((respuesta) => {
     const url = esObjeto(respuesta) ? urlHttps(respuesta.initPoint) : undefined;
     // Defensa en profundidad: nunca se abre en la sesión del navegador una página que no sea Mercado Pago.
@@ -354,6 +430,9 @@ export function obtenerEstadoPagoPedido(pedidoId: string | number): Promise<Resu
 /** Estados en los que la clienta puede cancelar: mientras el salón no empieza a prepararlo. */
 const ESTADOS_CANCELABLES: readonly string[] = ['pendiente_pago', 'pagado'];
 
+/** Estados con el producto ya en manos de la clienta: revocar pide entregarlo en el salón. */
+const ESTADOS_RECOGIDOS: readonly string[] = ['entregado', 'enviado'];
+
 export function esPagoEnLinea(pedido: Pick<Pedido, 'metodoPago'>): boolean {
   return pedido.metodoPago === 'mercado_pago';
 }
@@ -367,172 +446,218 @@ export function puedeCancelar(pedido: Pick<Pedido, 'estado'>): boolean {
   return ESTADOS_CANCELABLES.includes(pedido.estado);
 }
 
-/** Momento (ms) en que vence el pago en línea: creadoEn + 24 h. null si no hay fecha válida. */
-export function vencimientoPagoMs(pedido: Pick<Pedido, 'creadoEn'>): number | null {
+/** La clienta ya tiene el producto (entregado o el heredado enviado). */
+export function yaRecogido(pedido: Pick<Pedido, 'estado'>): boolean {
+  return ESTADOS_RECOGIDOS.includes(pedido.estado);
+}
+
+type ConReglas = { reglas?: ReglasPedido | null };
+
+/** Horas para pagar en línea: las guardadas en el pedido o, sin ellas, las vigentes. */
+export function plazoPagoHoras(pedido: ConReglas, config: ConfiguracionPublica = obtenerConfiguracion()): number {
+  return pedido.reglas?.plazoPagoLineaHoras ?? config.reglas.tienda.plazoPagoLineaHoras;
+}
+
+/** Días hábiles para revocar: los guardados en el pedido o, sin ellos, los vigentes. */
+export function diasRevocacion(pedido: ConReglas, config: ConfiguracionPublica = obtenerConfiguracion()): number {
+  return pedido.reglas?.diasHabilesRevocacion ?? config.reglas.revocacion.diasHabiles;
+}
+
+/**
+ * Momento (ms) en que vence el pago en línea: creadoEn + las horas del plazo (plazoPagoHoras). null
+ * si no hay fecha válida.
+ */
+export function vencimientoPagoMs(
+  pedido: Pick<Pedido, 'creadoEn'> & ConReglas,
+  config: ConfiguracionPublica = obtenerConfiguracion(),
+): number | null {
   const creado = new Date(pedido.creadoEn).getTime();
-  return Number.isNaN(creado) ? null : creado + VIGENCIA_PAGO_EN_LINEA_MS;
+  return Number.isNaN(creado) ? null : creado + plazoPagoHoras(pedido, config) * HORA_MS;
+}
+
+/** Fecha y hora locales: 'sábado 18 de octubre, 6:30 p. m.' ('' si no es válida). */
+export function fechaYHora(valor: string | Date): string {
+  const fecha = fechaLegible(valor);
+  const hora = horaLegible(valor);
+  return fecha && hora ? `${fecha}, ${hora}` : fecha;
 }
 
 /**
  * Plazo del pago en línea con fecha y hora locales: 'sábado 18 de octubre, 6:30 p. m.'. null si
  * el pedido no es en línea pendiente de pago o no hay fecha válida.
  */
-export function limitePagoPedido(pedido: Pick<Pedido, 'creadoEn' | 'estado' | 'metodoPago'>): string | null {
+export function limitePagoPedido(
+  pedido: Pick<Pedido, 'creadoEn' | 'estado' | 'metodoPago'> & ConReglas,
+  config: ConfiguracionPublica = obtenerConfiguracion(),
+): string | null {
   if (!esPagoEnLinea(pedido) || pedido.estado !== 'pendiente_pago') {
     return null;
   }
-  const vence = vencimientoPagoMs(pedido);
-  if (vence === null) {
-    return null;
-  }
-  const fecha = new Date(vence);
-  return `${fechaLegible(fecha)}, ${horaLegible(fecha)}`;
+  const vence = vencimientoPagoMs(pedido, config);
+  return vence === null ? null : fechaYHora(new Date(vence));
 }
 
-/** Pedido en línea pendiente de pago y todavía dentro de sus 24 horas: se puede (re)intentar pagar. */
+/** Pedido en línea pendiente de pago y todavía dentro de su plazo: se puede (re)intentar pagar. */
 export function pidePagoEnLinea(
-  pedido: Pick<Pedido, 'creadoEn' | 'estado' | 'metodoPago'>,
+  pedido: Pick<Pedido, 'creadoEn' | 'estado' | 'metodoPago'> & ConReglas,
   ahora: number = Date.now(),
+  config: ConfiguracionPublica = obtenerConfiguracion(),
 ): boolean {
-  const vence = vencimientoPagoMs(pedido);
+  const vence = vencimientoPagoMs(pedido, config);
   return esPagoEnLinea(pedido) && pedido.estado === 'pendiente_pago' && vence !== null && vence > ahora;
 }
 
-const ETIQUETAS_PEDIDO: Record<string, EtiquetaEstado> = {
-  borrador: { texto: 'Borrador', tono: 'aviso' },
-  pendiente_pago: { texto: 'Pendiente de pago', tono: 'aviso' },
-  pagado: { texto: 'Pagado', tono: 'exito' },
-  preparando: { texto: 'En preparación', tono: 'neutro' },
-  listo_recoger: { texto: 'Listo para recoger', tono: 'exito' },
-  enviado: { texto: 'Enviado', tono: 'neutro' },
-  entregado: { texto: 'Entregado en el salón', tono: 'neutro' },
-  cancelado: { texto: 'Cancelado', tono: 'neutro' },
+// ── Textos del pedido (catálogo de textos del sitio) ───────────────────────────────────────
+
+interface DefinicionEtiqueta {
+  clave: ClaveTexto;
+  tono: TonoBadge;
+}
+
+const ETIQUETAS_PEDIDO: Record<string, DefinicionEtiqueta> = {
+  borrador: { clave: 'tienda.pedido.etiqueta.borrador', tono: 'aviso' },
+  pendiente_pago: { clave: 'tienda.pedido.etiqueta.pendientePago', tono: 'aviso' },
+  pagado: { clave: 'tienda.pedido.etiqueta.pagado', tono: 'exito' },
+  preparando: { clave: 'tienda.pedido.etiqueta.preparando', tono: 'neutro' },
+  listo_recoger: { clave: 'tienda.pedido.etiqueta.listoRecoger', tono: 'exito' },
+  enviado: { clave: 'tienda.pedido.etiqueta.enviado', tono: 'neutro' },
+  entregado: { clave: 'tienda.pedido.etiqueta.entregado', tono: 'neutro' },
+  cancelado: { clave: 'tienda.pedido.etiqueta.cancelado', tono: 'neutro' },
 };
 
-const ETIQUETA_APARTADO: EtiquetaEstado = { texto: 'Apartado, pagas al recoger', tono: 'aviso' };
-const ETIQUETA_PAGO_EN_PROCESO: EtiquetaEstado = { texto: 'Pago en proceso', tono: 'aviso' };
-const ETIQUETA_DESCONOCIDA: EtiquetaEstado = { texto: 'Sin estado', tono: 'neutro' };
+const ETIQUETA_APARTADO: DefinicionEtiqueta = { clave: 'tienda.pedido.etiqueta.apartado', tono: 'aviso' };
+const ETIQUETA_PAGO_EN_PROCESO: DefinicionEtiqueta = { clave: 'tienda.pedido.etiqueta.pagoEnProceso', tono: 'aviso' };
+const ETIQUETA_DESCONOCIDA: DefinicionEtiqueta = { clave: 'tienda.pedido.etiqueta.sinEstado', tono: 'neutro' };
+
+const propia = <T>(registro: Record<string, T>, clave: string): T | undefined =>
+  Object.prototype.hasOwnProperty.call(registro, clave) ? registro[clave] : undefined;
 
 /**
- * Insignia del estado (textos de la web); el apartado pendiente dice que se paga al recoger. Con
+ * Insignia del estado (textos del catálogo); el apartado pendiente dice que se paga al recoger. Con
  * `pagoEnProceso` (Mercado Pago procesa o revisa el pago), el pedido en línea pendiente dice
  * "Pago en proceso" en lugar de "Pendiente de pago".
  */
 export function etiquetaEstadoPedido(
   pedido: Pick<Pedido, 'estado' | 'metodoPago'>,
   pagoEnProceso = false,
+  config: ConfiguracionPublica = obtenerConfiguracion(),
 ): EtiquetaEstado {
+  let definicion = propia(ETIQUETAS_PEDIDO, pedido.estado) ?? ETIQUETA_DESCONOCIDA;
   if (pedido.estado === 'pendiente_pago' && esPagoEnSalon(pedido)) {
-    return ETIQUETA_APARTADO;
+    definicion = ETIQUETA_APARTADO;
+  } else if (pagoEnProceso && pedido.estado === 'pendiente_pago' && esPagoEnLinea(pedido)) {
+    definicion = ETIQUETA_PAGO_EN_PROCESO;
   }
-  if (pagoEnProceso && pedido.estado === 'pendiente_pago' && esPagoEnLinea(pedido)) {
-    return ETIQUETA_PAGO_EN_PROCESO;
-  }
-  return Object.prototype.hasOwnProperty.call(ETIQUETAS_PEDIDO, pedido.estado)
-    ? ETIQUETAS_PEDIDO[pedido.estado]
-    : ETIQUETA_DESCONOCIDA;
+  return { texto: obtenerTexto(definicion.clave, {}, config), tono: definicion.tono };
 }
 
-const METODOS_PAGO: Record<string, string> = {
-  mercado_pago: 'En línea con Mercado Pago',
-  pago_en_salon: 'Pago al recoger en el salón',
-  efectivo: 'Efectivo',
-  transferencia: 'Transferencia',
-  tarjeta_terminal: 'Tarjeta en terminal',
+const METODOS_PAGO: Record<string, ClaveTexto> = {
+  mercado_pago: 'tienda.pedido.metodo.mercadoPago',
+  pago_en_salon: 'tienda.pedido.metodo.pagoEnSalon',
+  efectivo: 'tienda.pedido.metodo.efectivo',
+  transferencia: 'tienda.pedido.metodo.transferencia',
+  tarjeta_terminal: 'tienda.pedido.metodo.tarjetaTerminal',
 };
 
-/** Forma de pago legible (textos de la web); vacío: 'Sin especificar'. */
-export function etiquetaMetodoPago(metodoPago: string): string {
+const METODOS_CORTOS: Record<string, ClaveTexto> = {
+  mercado_pago: 'tienda.pedido.metodoCorto.mercadoPago',
+  pago_en_salon: 'tienda.pedido.metodoCorto.pagoEnSalon',
+};
+
+/** Forma de pago legible (catálogo); vacío: 'Sin especificar'; uno desconocido, sin guiones bajos. */
+export function etiquetaMetodoPago(metodoPago: string, config: ConfiguracionPublica = obtenerConfiguracion()): string {
   if (!metodoPago) {
-    return 'Sin especificar';
+    return obtenerTexto('tienda.pedido.metodo.sinEspecificar', {}, config);
   }
-  return Object.prototype.hasOwnProperty.call(METODOS_PAGO, metodoPago)
-    ? METODOS_PAGO[metodoPago]
-    : metodoPago.replaceAll('_', ' ');
+  const clave = propia(METODOS_PAGO, metodoPago);
+  return clave ? obtenerTexto(clave, {}, config) : metodoPago.replaceAll('_', ' ');
 }
 
 /** Forma de pago corta para la lista de pedidos; los métodos viejos de la web usan etiquetaMetodoPago. */
-export function formaPagoCorta(metodoPago: string): string {
-  if (metodoPago === 'mercado_pago') {
-    return 'Pago en línea';
+export function formaPagoCorta(metodoPago: string, config: ConfiguracionPublica = obtenerConfiguracion()): string {
+  const clave = propia(METODOS_CORTOS, metodoPago);
+  return clave ? obtenerTexto(clave, {}, config) : etiquetaMetodoPago(metodoPago, config);
+}
+
+export interface OpcionesQueSigue {
+  /** Mercado Pago procesa o revisa el pago en línea: no se pide completar el pago. */
+  pagoEnProceso?: boolean;
+  config?: ConfiguracionPublica;
+  /** {metodosSalon} de pedidos.estado.listoPagar (lo arma compraLegal con los métodos activos). */
+  metodosSalon?: string;
+}
+
+/** Qué sigue de un pedido pendiente de pago (apartado, en línea o de otro método). */
+function queSiguePendiente(
+  pedido: Pick<Pedido, 'estado' | 'metodoPago' | 'creadoEn'> & ConReglas,
+  ahora: number,
+  pagoEnProceso: boolean,
+  config: ConfiguracionPublica,
+): string {
+  if (esPagoEnSalon(pedido)) {
+    return obtenerTexto('pedidos.estado.apartado', {}, config);
   }
-  if (metodoPago === 'pago_en_salon') {
-    return 'Pago en el salón';
+  if (!esPagoEnLinea(pedido)) {
+    return obtenerTexto('pedidos.estado.confirmandoPago', {}, config);
   }
-  return etiquetaMetodoPago(metodoPago);
+  if (pagoEnProceso) {
+    return obtenerTexto('tienda.pedido.estado.pagoEnProceso', {}, config);
+  }
+  const plazoPago = plazoPagoHoras(pedido, config);
+  // Vencido pero aún sin cancelar (el backend lo cancela en su siguiente revisión).
+  const vence = vencimientoPagoMs(pedido, config);
+  if (vence !== null && vence <= ahora) {
+    return obtenerTexto('tienda.pedido.estado.plazoTerminado', { plazoPago }, config);
+  }
+  return obtenerTexto('pedidos.estado.faltaPago', { plazoPago }, config);
 }
 
 /**
- * Qué sigue para la clienta según el estado (textos de la web, mis-pedidos/[id]). null en
- * cancelado, enviado o un estado desconocido.
+ * Qué sigue para la clienta según el estado (pedidos.estado.* del catálogo, como textoRecoger de la
+ * web), con el plazo de pago guardado en el pedido. Con el pago en línea en proceso no pide
+ * completarlo. null en cancelado, enviado o un estado desconocido.
  */
 export function textoQueSigue(
-  pedido: Pick<Pedido, 'estado' | 'metodoPago' | 'creadoEn'>,
+  pedido: Pick<Pedido, 'estado' | 'metodoPago' | 'creadoEn'> & ConReglas,
   ahora: number = Date.now(),
+  opciones: OpcionesQueSigue = {},
 ): string | null {
+  const { pagoEnProceso = false, config = obtenerConfiguracion(), metodosSalon = '' } = opciones;
   switch (pedido.estado) {
     case 'pendiente_pago':
-      if (esPagoEnSalon(pedido)) {
-        return 'Tu pedido está apartado. Lo preparamos y te avisamos cuando puedas pasar a pagarlo y recogerlo.';
-      }
-      if (esPagoEnLinea(pedido)) {
-        // Vencido pero aún sin cancelar (el backend lo cancela en su siguiente revisión).
-        const vence = vencimientoPagoMs(pedido);
-        if (vence !== null && vence <= ahora) {
-          return 'El plazo de 24 horas para pagar terminó. Este pedido se cancelará y los productos vuelven a la tienda.';
-        }
-        return 'Falta completar tu pago en Mercado Pago. Tienes 24 horas desde que hiciste el pedido.';
-      }
-      return 'Estamos confirmando tu pago. Después lo preparamos y te avisamos.';
+      return queSiguePendiente(pedido, ahora, pagoEnProceso, config);
     case 'pagado':
-      return 'Pago recibido. Lo preparamos y te avisamos cuando esté listo para recoger.';
+      return obtenerTexto('pedidos.estado.pagado', {}, config);
     case 'preparando':
-      return 'Estamos preparando tu pedido. Te avisamos en la app y por correo cuando esté listo.';
+      return obtenerTexto('pedidos.estado.preparando', {}, config);
     case 'listo_recoger':
       return esPagoEnSalon(pedido)
-        ? 'Tu pedido está listo. Pasa por él al salón y págalo en el mostrador.'
-        : 'Tu pedido está listo. Pasa por él al salón.';
+        ? obtenerTexto('pedidos.estado.listoPagar', { metodosSalon }, config)
+        : obtenerTexto('pedidos.estado.listo', {}, config);
     case 'entregado':
-      return 'Recogiste tu pedido en el salón.';
+      return obtenerTexto('pedidos.estado.entregado', {}, config);
     default:
       return null;
   }
-}
-
-/** Qué sigue con el pago en línea en proceso: ya pagó o está pagando, no se le pide pagar otra vez. */
-export const TEXTO_PAGO_EN_PROCESO =
-  'Tu pago se está procesando en Mercado Pago. No pagues de nuevo: te avisamos en la app y por correo cuando se acredite.';
-
-/**
- * Qué sigue del detalle del pedido: textoQueSigue, salvo con el pago en línea en proceso en
- * Mercado Pago (pendiente o en revisión), que no pide completar el pago.
- */
-export function textoQueSigueConPago(
-  pedido: Pick<Pedido, 'estado' | 'metodoPago' | 'creadoEn'>,
-  pagoEnProceso: boolean,
-  ahora: number = Date.now(),
-): string | null {
-  return pagoEnProceso && pedido.estado === 'pendiente_pago' && esPagoEnLinea(pedido)
-    ? TEXTO_PAGO_EN_PROCESO
-    : textoQueSigue(pedido, ahora);
 }
 
 /**
  * Texto de la confirmación para cancelar. Un pedido pagado en línea se reembolsa completo con
  * Mercado Pago al cancelarlo (el backend lo pide en la misma cancelación).
  */
-export function textoCancelarPedido(pedido: Pick<Pedido, 'estado' | 'metodoPago'>): string {
-  const base = 'Se cancela tu pedido y los productos vuelven a la tienda. Esta acción no se puede deshacer.';
+export function textoCancelarPedido(
+  pedido: Pick<Pedido, 'estado' | 'metodoPago'>,
+  config: ConfiguracionPublica = obtenerConfiguracion(),
+): string {
+  const base = obtenerTexto('tienda.pedido.cancelar.texto', {}, config);
   return pedido.estado === 'pagado' && esPagoEnLinea(pedido)
-    ? `${base} Te devolvemos el pago completo al mismo medio con que pagaste en Mercado Pago.`
+    ? `${base} ${obtenerTexto('tienda.pedido.cancelar.reembolso', {}, config)}`
     : base;
 }
 
 /** Fecha y hora locales del pedido: 'sábado 11 de octubre, 6:30 p. m.' ('' si no es válida). */
 export function fechaPedido(pedido: Pick<Pedido, 'creadoEn'>): string {
-  const fecha = fechaLegible(pedido.creadoEn);
-  const hora = horaLegible(pedido.creadoEn);
-  return fecha && hora ? `${fecha}, ${hora}` : fecha;
+  return fechaYHora(pedido.creadoEn);
 }
 
 // ── Errores ────────────────────────────────────────────────────────────────────────────────
@@ -577,21 +702,26 @@ function motivoCrearPedido(error: unknown): MotivoCrearPedido | null {
   return null;
 }
 
-const MENSAJES_CREAR_PEDIDO: Record<MotivoCrearPedido, string> = {
-  sinExistencias: 'Uno de tus productos ya no tiene piezas suficientes. Revisa tu carrito.',
-  retirado: 'Uno de tus productos ya no está en la tienda. Revisa tu carrito.',
-  enLineaApagado: 'El pago en línea no está disponible por ahora. Elige pagar al recoger en el salón.',
-  enSalonApagado: 'El pago al recoger no está disponible por ahora. Elige pagar en línea.',
+const MENSAJES_CREAR_PEDIDO: Record<MotivoCrearPedido, ClaveTexto> = {
+  sinExistencias: 'tienda.pedido.crear.sinExistencias',
+  retirado: 'tienda.pedido.crear.retirado',
+  enLineaApagado: 'tienda.pedido.crear.enLineaApagado',
+  enSalonApagado: 'tienda.pedido.crear.enSalonApagado',
 };
 
 /** Mensaje para la clienta al fallar crearPedido. Nunca el texto técnico del servidor. */
-export function mensajeCrearPedido(error: unknown): string {
+export function mensajeCrearPedido(error: unknown, config: ConfiguracionPublica = obtenerConfiguracion()): string {
   const comun = mensajeComunTienda(error);
   if (comun) {
     return comun;
   }
   const motivo = motivoCrearPedido(error);
-  return motivo ? MENSAJES_CREAR_PEDIDO[motivo] : 'No pudimos crear tu pedido. Intenta de nuevo en un momento.';
+  return obtenerTexto(motivo ? MENSAJES_CREAR_PEDIDO[motivo] : 'tienda.pedido.crear.generico', {}, config);
+}
+
+/** No se sabe si el pedido se creó: revisar Mis pedidos antes de intentar de nuevo. */
+export function mensajeRevisarMisPedidos(config: ConfiguracionPublica = obtenerConfiguracion()): string {
+  return obtenerTexto('tienda.pedido.crear.revisarMisPedidos', {}, config);
 }
 
 /**
@@ -634,48 +764,74 @@ export function motivoConflictoPedido(error: unknown): MotivoConflictoPedido | n
   return null;
 }
 
-const MENSAJES_CONFLICTO: Record<MotivoConflictoPedido, string> = {
-  noPendiente: 'Este pedido ya no está pendiente de pago.',
-  vencido: 'El plazo de 24 horas para pagar terminó y el pedido se canceló. Puedes volver a hacer tu compra.',
-  total: `El total de tu pedido no coincide con sus productos. Llámanos al salón para revisarlo: ${SALON_RECOGER.telefono}.`,
-  enSalon: 'Este pedido se paga al recogerlo en el salón.',
-  noDisponible: 'El pago en línea no está disponible por ahora. Intenta más tarde.',
+const MENSAJES_CONFLICTO: Record<MotivoConflictoPedido, ClaveTexto> = {
+  noPendiente: 'tienda.pedido.pago.noPendiente',
+  vencido: 'tienda.pedido.pago.vencido',
+  total: 'tienda.pedido.pago.total',
+  enSalon: 'tienda.pedido.pago.enSalon',
+  noDisponible: 'tienda.pedido.pago.noDisponible',
 };
 
-/** Mensaje para la clienta al fallar crearPreferenciaPedido. */
-export function mensajePreferenciaPedido(error: unknown): string {
+/**
+ * Mensaje para la clienta al fallar crearPreferenciaPedido. El plazo vencido usa las horas guardadas
+ * en el pedido (si se pasa) y el total que no coincide, el teléfono de la configuración.
+ */
+export function mensajePreferenciaPedido(
+  error: unknown,
+  pedido: ConReglas = {},
+  config: ConfiguracionPublica = obtenerConfiguracion(),
+): string {
   const comun = mensajeComunTienda(error);
   if (comun) {
     return comun;
   }
   const motivo = motivoConflictoPedido(error);
   if (motivo) {
-    return MENSAJES_CONFLICTO[motivo];
+    return obtenerTexto(
+      MENSAJES_CONFLICTO[motivo],
+      { plazoPago: plazoPagoHoras(pedido, config), telefono: config.salon.telefono || null },
+      config,
+    );
   }
-  if (esPedidoNoEncontrado(error)) {
-    return 'No encontramos este pedido.';
-  }
-  return 'No pudimos abrir el pago. Intenta de nuevo.';
+  return obtenerTexto(esPedidoNoEncontrado(error) ? 'tienda.pedido.noEncontrado' : 'tienda.pedido.pago.generico', {}, config);
 }
 
+/**
+ * Por qué no se pudo cancelar: 403 ya se prepara, 404 no existe, 409 con una devolución en proceso
+ * ("Este pedido tiene una devolución en proceso: para cancelarlo comunícate con el salón.") o 409
+ * porque cambió mientras se cancelaba. Se distingue por el texto del servidor, que nunca se muestra.
+ */
+export type MotivoErrorCancelar = 'preparando' | 'noEncontrado' | 'devolucionEnProceso' | 'cambio';
+
+export function motivoErrorCancelar(error: unknown): MotivoErrorCancelar | null {
+  if (!(error instanceof ApiError)) {
+    return null;
+  }
+  switch (error.status) {
+    case 403:
+      return 'preparando';
+    case 404:
+      return 'noEncontrado';
+    case 409:
+      return error.message.toLowerCase().includes('devoluci') ? 'devolucionEnProceso' : 'cambio';
+    default:
+      return null;
+  }
+}
+
+const MENSAJES_CANCELAR: Record<MotivoErrorCancelar, ClaveTexto> = {
+  preparando: 'tienda.pedido.cancelar.preparando',
+  noEncontrado: 'tienda.pedido.noEncontrado',
+  devolucionEnProceso: 'tienda.pedido.cancelar.devolucionEnProceso',
+  cambio: 'tienda.pedido.cancelar.cambio',
+};
+
 /** Mensaje para la clienta al fallar cancelarPedido. */
-export function mensajeCancelarPedido(error: unknown): string {
+export function mensajeCancelarPedido(error: unknown, config: ConfiguracionPublica = obtenerConfiguracion()): string {
   const comun = mensajeComunTienda(error);
   if (comun) {
     return comun;
   }
-  if (error instanceof ApiError) {
-    if (error.status === 404) {
-      return 'No encontramos este pedido.';
-    }
-    // 403 "Solo el personal del salón cambia el estado del pedido. Puedes cancelarlo mientras no esté en preparación."
-    if (error.status === 403) {
-      return 'Este pedido ya se está preparando y no se puede cancelar.';
-    }
-    // 409 "El pedido cambió mientras lo editabas. Recarga para ver su estado."
-    if (error.status === 409) {
-      return 'Tu pedido cambió. Lo actualizamos para que veas su estado.';
-    }
-  }
-  return 'No pudimos cancelar tu pedido. Intenta de nuevo en un momento.';
+  const motivo = motivoErrorCancelar(error);
+  return obtenerTexto(motivo ? MENSAJES_CANCELAR[motivo] : 'tienda.pedido.cancelar.generico', {}, config);
 }

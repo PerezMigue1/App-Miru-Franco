@@ -1,4 +1,4 @@
-import { CreditCard, Store } from 'lucide-react-native';
+import { CircleAlert, CreditCard, Store } from 'lucide-react-native';
 import { useEffect, useRef, type RefObject } from 'react';
 import { AccessibilityInfo, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EncabezadoVolver } from '@/features/auth/components/EncabezadoVolver';
 import { IndicadorPasos } from '@/features/citas/components/IndicadorPasos';
 import { Button } from '@/shared/ui/Button';
+import { DatosTransferencia } from '@/shared/ui/DatosTransferencia';
 import { EmptyState } from '@/shared/ui/EmptyState';
 import { useEntradaContenido } from '@/shared/ui/movimiento';
 import { Skeleton } from '@/shared/ui/Skeleton';
@@ -15,6 +16,7 @@ import {
   espacio,
   esqueleto,
   fuente,
+  icono,
   pantalla,
   radio,
   sombra,
@@ -24,10 +26,12 @@ import {
 import { useMovimientoReducido } from '@/shared/ui/useMovimientoReducido';
 import { useTheme } from '@/shared/ui/useTheme';
 
+import { CasillasCompra } from '../components/CasillasCompra';
 import { DatosRecogerSalon } from '../components/DatosRecogerSalon';
+import { InformacionCompra } from '../components/InformacionCompra';
 import { OpcionPago } from '../components/OpcionPago';
 import { DatoCompra, ResumenCompra } from '../components/ResumenCompra';
-import { SALON_RECOGER, etiquetaMetodoPago, formatoPrecio } from '../viewmodels/presentacionTienda';
+import { etiquetaMetodoPago } from '../viewmodels/presentacionTienda';
 import {
   PASOS_CHECKOUT,
   useCheckoutViewModel,
@@ -125,7 +129,7 @@ function ContenidoListo({
       >
         <IndicadorPasos ref={refIndicador} pasos={PASOS_CHECKOUT} actual={vm.paso} />
         <Animated.View key={vm.paso} entering={entrada} style={styles.paso}>
-          {vm.paso === 1 ? <PasoRecoger /> : null}
+          {vm.paso === 1 ? <PasoRecoger vm={vm} /> : null}
           {vm.paso === 2 ? <PasoFormaPago vm={vm} /> : null}
           {vm.paso === 3 ? <PasoConfirmar vm={vm} /> : null}
         </Animated.View>
@@ -136,11 +140,11 @@ function ContenidoListo({
   );
 }
 
-/** Pie fijo: error de envío, revisar carrito y el botón para avanzar o confirmar. */
+/** Pie fijo: error de envío, casillas por marcar, revisar carrito y el botón para avanzar o confirmar. */
 function PieCheckout({ vm, bottom }: { vm: CheckoutViewModel; bottom: number }) {
   const { colores } = useTheme();
   const enLinea = vm.metodo === 'mercado_pago';
-  const tituloFinal = enLinea ? 'Ir a pagar con Mercado Pago' : 'Apartar mi pedido';
+  const mensaje = vm.paso === 3 ? (vm.errorEnvio ?? vm.avisoCasillas) : null;
 
   return (
     <View
@@ -151,24 +155,30 @@ function PieCheckout({ vm, bottom }: { vm: CheckoutViewModel; bottom: number }) 
     >
       {/* Región en vivo siempre montada: el error se anuncia una vez al aparecer. */}
       <View collapsable={false} accessibilityLiveRegion="polite">
-        {vm.paso === 3 && vm.errorEnvio ? (
-          <Text style={[styles.error, { color: colores.peligro }]}>{vm.errorEnvio}</Text>
-        ) : null}
+        {mensaje ? <Text style={[styles.error, { color: colores.peligro }]}>{mensaje}</Text> : null}
       </View>
       {vm.paso === 3 && vm.revisarCarrito ? (
         <Button titulo="Revisar mi carrito" variante="secundario" onPress={vm.irAlCarrito} />
       ) : null}
-      {vm.paso === 3 ? (
+      {/* No se sabe si el pedido se creó: en lugar de confirmar otra vez, revisar Mis pedidos. */}
+      {vm.paso === 3 && vm.revisarMisPedidos ? (
+        <Button titulo={vm.textoVerMisPedidos} onPress={vm.verMisPedidos} />
+      ) : null}
+      {vm.paso === 3 && !vm.revisarMisPedidos ? (
         <Button
-          titulo={tituloFinal}
+          titulo={vm.botonFinal || 'Confirmar pedido'}
           onPress={vm.confirmar}
           cargando={vm.enviando}
+          deshabilitado={vm.metodo === null}
           accessibilityHint={
-            enLinea ? 'Crea tu pedido y abre Mercado Pago en el navegador' : 'Crea tu pedido'
+            enLinea
+              ? 'Guarda tu aceptación, crea tu pedido y abre Mercado Pago en el navegador'
+              : 'Guarda tu aceptación y crea tu pedido'
           }
         />
-      ) : (
-        <Button titulo="Continuar" onPress={vm.continuar} />
+      ) : null}
+      {vm.paso === 3 ? null : (
+        <Button titulo="Continuar" onPress={vm.continuar} deshabilitado={!vm.puedeContinuar} />
       )}
     </View>
   );
@@ -187,14 +197,11 @@ function Subtitulo({ titulo, texto }: { titulo: string; texto: string }) {
 }
 
 /** Paso 1: se recoge en el salón. Sin dirección de envío ni costo de envío. */
-function PasoRecoger() {
+function PasoRecoger({ vm }: { vm: CheckoutViewModel }) {
   const { colores } = useTheme();
   return (
     <>
-      <Subtitulo
-        titulo="Recoges tu pedido en el salón"
-        texto="Lo preparamos y te lo apartamos en el mostrador."
-      />
+      <Subtitulo titulo={vm.textos.recogerTitulo} texto={vm.textos.recogerTexto} />
       <View
         style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombraTarjeta }]}
       >
@@ -204,44 +211,80 @@ function PasoRecoger() {
   );
 }
 
-/** Paso 2: pagar en línea o al recoger. */
+/** Paso 2: solo las formas de pago activas para la tienda; sin ninguna, que llame al salón. */
 function PasoFormaPago({ vm }: { vm: CheckoutViewModel }) {
-  const { colores } = useTheme();
-  const total = formatoPrecio(vm.total);
-  const nota =
-    vm.metodo === 'mercado_pago'
-      ? `Al confirmar te llevamos a Mercado Pago para pagar ${total}. Tu tarjeta la escribes allá: la app no la ve ni la guarda. Tienes 24 horas para completar el pago.`
-      : `Tu pedido queda apartado. Pagas ${total} en el mostrador cuando pases por él.`;
+  if (vm.sinMetodos) {
+    return (
+      <EmptyState
+        titulo={vm.sinMetodos.titulo}
+        mensaje={vm.sinMetodos.texto}
+        accion={{ titulo: 'Llamar al salón', onPress: vm.llamarSalon }}
+      />
+    );
+  }
   return (
     <>
-      <Subtitulo
-        titulo="¿Cómo quieres pagar?"
-        texto="En los dos casos recoges tu pedido en el salón."
-      />
+      <Subtitulo titulo="¿Cómo quieres pagar?" texto={vm.notaOpciones} />
       <View accessibilityRole="radiogroup" style={styles.opciones}>
-        <OpcionPago
-          titulo="Pagar en línea con Mercado Pago"
-          descripcion="Con tarjeta en la página segura de Mercado Pago."
-          Icono={CreditCard}
-          elegida={vm.metodo === 'mercado_pago'}
-          onPress={() => vm.elegirMetodo('mercado_pago')}
-        />
-        <OpcionPago
-          titulo="Pagar al recoger en el salón"
-          descripcion="Te apartamos el pedido y lo pagas en el mostrador cuando pases por él."
-          Icono={Store}
-          elegida={vm.metodo === 'pago_en_salon'}
-          onPress={() => vm.elegirMetodo('pago_en_salon')}
-        />
+        {vm.opciones.map((opcion) => (
+          <OpcionPago
+            key={opcion.metodo}
+            titulo={opcion.titulo}
+            descripcion={opcion.descripcion}
+            Icono={opcion.metodo === 'mercado_pago' ? CreditCard : Store}
+            elegida={vm.metodo === opcion.metodo}
+            onPress={() => vm.elegirMetodo(opcion.metodo)}
+          />
+        ))}
       </View>
-      <View collapsable={false} accessibilityLiveRegion="polite">
-        <Text style={[styles.parrafo, styles.cifra, { color: colores.texto }]}>{nota}</Text>
-      </View>
+      <DetalleMetodo vm={vm} />
     </>
   );
 }
 
-/** Paso 3: artículos, forma de pago, dónde se recoge y total. */
+/** Aviso de la forma de pago con el total, sus plazos y, al recoger, los datos de transferencia. */
+function DetalleMetodo({ vm }: { vm: CheckoutViewModel }) {
+  const { colores } = useTheme();
+  return (
+    <>
+      <View collapsable={false} accessibilityLiveRegion="polite" style={styles.detalle}>
+        {vm.avisoMetodoCambiado ? (
+          <View style={styles.filaAviso}>
+            <CircleAlert color={colores.aviso} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
+            <Text style={[styles.cuerpo, styles.flexible, { color: colores.texto }]}>{vm.avisoMetodoCambiado}</Text>
+          </View>
+        ) : null}
+        <View style={[styles.panel, { backgroundColor: colores.superficieSecundaria }]}>
+          <Text style={[styles.parrafo, styles.cifra, { color: colores.texto }]}>{vm.aviso}</Text>
+        </View>
+      </View>
+      <Plazos vm={vm} />
+      {vm.transferencia ? <DatosTransferencia datos={vm.transferencia} /> : null}
+    </>
+  );
+}
+
+/** Lista de plazos de la forma de pago elegida (de las reglas de la tienda). */
+function Plazos({ vm }: { vm: CheckoutViewModel }) {
+  const { colores } = useTheme();
+  if (vm.plazos.length === 0) {
+    return null;
+  }
+  return (
+    <View style={styles.plazos}>
+      <Text accessibilityRole="header" style={[styles.etiquetaSeccion, { color: colores.texto }]}>
+        {vm.textos.plazosTitulo}
+      </Text>
+      {vm.plazos.map((plazo) => (
+        <Text key={plazo} style={[styles.cuerpo, styles.cifra, { color: colores.textoSuave }]}>
+          {plazo}
+        </Text>
+      ))}
+    </View>
+  );
+}
+
+/** Paso 3: artículos y total con IVA, forma de pago, plazos, información de la compra y casillas. */
 function PasoConfirmar({ vm }: { vm: CheckoutViewModel }) {
   const { colores } = useTheme();
   return (
@@ -260,17 +303,21 @@ function PasoConfirmar({ vm }: { vm: CheckoutViewModel }) {
         }))}
         totalCentavos={vm.total}
       >
+        <Text style={[styles.nota, { color: colores.textoSuave }]}>{vm.textos.leyendaPrecios}</Text>
         <View style={[styles.datos, { borderTopColor: colores.hairline }]}>
-          <DatoCompra etiqueta="Forma de pago" valor={etiquetaMetodoPago(vm.metodo)} />
-          <DatoCompra
-            etiqueta="Recoges en"
-            valor={`${SALON_RECOGER.nombre}, ${SALON_RECOGER.direccion}`}
-          />
+          {vm.metodo ? <DatoCompra etiqueta="Forma de pago" valor={etiquetaMetodoPago(vm.metodo)} /> : null}
+          <DatoCompra etiqueta="Recoges en" valor={vm.recogesEn} />
         </View>
       </ResumenCompra>
-      <Text style={[styles.nota, { color: colores.textoSuave }]}>
-        Total estimado: el total final se confirma al crear tu pedido.
-      </Text>
+      <Plazos vm={vm} />
+      <InformacionCompra />
+      <CasillasCompra
+        titulo={vm.textos.casillasTitulo}
+        casillas={vm.casillas}
+        onCambiar={vm.cambiarCasilla}
+        onAbrir={vm.abrirDocumento}
+        deshabilitadas={vm.enviando}
+      />
     </>
   );
 }
@@ -312,6 +359,30 @@ const styles = StyleSheet.create({
   },
   cifra: {
     fontVariant: ['tabular-nums'],
+  },
+  flexible: {
+    flex: 1,
+  },
+  detalle: {
+    gap: espacio.m,
+  },
+  filaAviso: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: espacio.s,
+  },
+  // Aviso de la forma de pago sobre la superficie secundaria (fondos suaves de la web), sin borde.
+  panel: {
+    padding: espacio.l,
+    borderRadius: radio.campo,
+  },
+  plazos: {
+    gap: espacio.xs,
+  },
+  etiquetaSeccion: {
+    fontFamily: fuente.textoFuerte,
+    fontSize: tipo.cuerpo.tamano,
+    lineHeight: tipo.cuerpo.linea,
   },
   nota: {
     fontFamily: fuente.texto,

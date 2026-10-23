@@ -45,12 +45,19 @@ describe('normalizarConfiguracion: respuesta completa', () => {
     expect(normalizarConfiguracion(respuestaCompleta())).toEqual(CONFIGURACION_COMPLETA);
   });
 
-  it('no deja pasar responsable, correo de privacidad, transferencia, redes, campos ajenos del contenido ni variables', () => {
+  // GP-07.5: la transferencia (banco, titular y CLABE) y la revocación ya entran; los datos de
+  // transferencia solo en memoria (las pruebas del archivo revisan que no se guarden).
+  it('no deja pasar responsable, correo de privacidad, redes, campos ajenos del contenido ni variables', () => {
     const configuracion = normalizarConfiguracion(respuestaCompleta());
 
     expect(Object.keys(configuracion).sort()).toEqual(['anticiposActivos', 'contenido', 'horario', 'reglas', 'salon', 'textos']);
-    expect(Object.keys(configuracion.reglas).sort()).toEqual(['citas', 'diasInhabiles', 'pagos', 'tienda']);
-    expect(Object.keys(configuracion.reglas.pagos).sort()).toEqual(['mercadoPagoAnticipos', 'mercadoPagoTienda', 'metodosSalon']);
+    expect(Object.keys(configuracion.reglas).sort()).toEqual(['citas', 'diasInhabiles', 'pagos', 'revocacion', 'tienda']);
+    expect(Object.keys(configuracion.reglas.pagos).sort()).toEqual([
+      'mercadoPagoAnticipos',
+      'mercadoPagoTienda',
+      'metodosSalon',
+      'transferencia',
+    ]);
     expect(configuracion.salon).not.toHaveProperty('responsable');
     expect(configuracion.salon).not.toHaveProperty('correoPrivacidad');
     const texto = JSON.stringify(configuracion);

@@ -1,26 +1,34 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, BackHandler } from 'react-native';
+import { BackHandler } from 'react-native';
 
-import { duracion } from '@/shared/ui/tokens';
+import { useTextos, type FuncionTexto } from '@/shared/api/useTextos';
 import { useCandado } from '@/shared/ui/useCandado';
 
 import { mensajeComunTienda } from '../models/carritoModel';
 import {
   crearPreferenciaPedido,
   esPagoEnLinea,
+  esPagoEnSalon,
   esPedidoNoEncontrado,
   limitePagoPedido,
   mensajePreferenciaPedido,
   motivoConflictoPedido,
-  obtenerEstadoPagoPedido,
   obtenerPedido,
   pidePagoEnLinea,
   type EstadoPagoPedido,
   type Pedido,
-  type ResultadoEstadoPago,
 } from '../models/pedidoModel';
-import { MENSAJE_SIN_NAVEGADOR, abrirPagoEnNavegador } from './pagoPedido';
+import { formatoPrecio } from '../models/productoModel';
+import { abrirPagoEnNavegador } from './pagoPedido';
+import {
+  estadoPagoConocido,
+  mantenerVerificacion,
+  suscribirVerificacion,
+  verificacionEnCurso,
+  verificarPago,
+  type EstadoPagoConocido,
+} from './useVerificacionPago';
 
 // La vista no importa de models/: recibe este tipo del viewmodel.
 export type { Pedido } from '../models/pedidoModel';
@@ -30,7 +38,7 @@ export type EstadoCargaPedido = 'cargando' | 'listo' | 'error' | 'noEncontrado';
 /**
  * Lo que la pantalla cuenta del pedido:
  * - apartado: se paga al recogerlo en el salón.
- * - consultando: primera consulta del pago en línea, todavía sin respuesta.
+ * - consultando: "Verificando tu pago", todavía sin respuesta (o recién vuelve de Mercado Pago).
  * - porPagar: pago en línea sin intento todavía (o sin poder consultarlo).
  * - aprobado, revision, pendiente: lo que dice Mercado Pago.
  * - noCompletado: rechazado, o sin pago cuando ya no se está consultando.
@@ -46,15 +54,45 @@ export type VistaPedido =
   | 'noCompletado'
   | 'cancelado';
 
+/** Textos de la pantalla, ya llenados desde el catálogo (Admin > Textos del sitio). */
+export interface TextosConfirmacion {
+  titulo: string;
+  mensaje: string;
+  /** Apartado por pagar en el salón: cuánto paga en el mostrador; si no, null. */
+  pagoEnMostrador: string | null;
+  /** 'Paga antes del ...' mientras se puede pagar en línea; si no, null. */
+  plazo: string | null;
+  verificando: string;
+  abriendo: string;
+  formaPago: string;
+  dondeRecoges: string;
+  cargando: string;
+  errorCargaTitulo: string;
+  errorCargaTexto: string;
+  noEncontradoTitulo: string;
+  noEncontradoTexto: string;
+  botonReintentarCarga: string;
+  /** El botón primario de pago: 'Pagar con Mercado Pago' o 'Reintentar pago'. */
+  botonPagar: string;
+  botonPagarDeNuevo: string;
+  botonRevisarMiPago: string;
+  botonRevisarDeNuevo: string;
+  botonMisPedidos: string;
+  botonSeguirComprando: string;
+  pistaPagar: string;
+  pistaPagarDeNuevo: string;
+}
+
 export interface PedidoConfirmadoViewModel {
   estado: EstadoCargaPedido;
   pedido: Pedido | null;
   vista: VistaPedido;
+  textos: TextosConfirmacion;
   /** Mercado Pago rechazó el pago (en noCompletado): cambia el motivo del texto. */
   rechazado: boolean;
   /** Mercado Pago procesa o revisa el pago (vista pendiente o revision): no se pide pagar otra vez. */
   pagoEnProceso: boolean;
-  /** Hay consultas del pago en curso (se actualiza sola). */
+  /** Hay una verificación del pago en curso (se actualiza sola). */
   consultando: boolean;
   /** Se pide la preferencia o el navegador está abierto. */
   abriendo: boolean;
@@ -63,7 +101,7 @@ export interface PedidoConfirmadoViewModel {
   /** Se puede ofrecer el botón para pagar en línea. */
   puedePagar: boolean;
   /**
-   * Volvió de Mercado Pago y las consultas terminaron sin ver el pago: puede tardar en reflejarse,
+   * Volvió de Mercado Pago y la verificación terminó sin ver el pago: puede tardar en reflejarse,
    * así que lo primero es revisar de nuevo y pagar otra vez queda en segundo plano (evita doble cobro).
    */
   pagoPorConfirmar: boolean;
@@ -73,32 +111,28 @@ export interface PedidoConfirmadoViewModel {
   errorConsulta: string | null;
   recargar: () => void;
   pagar: () => void;
-  /** Vuelve a consultar el estado del pago (y sigue mientras siga pendiente). */
+  /** Vuelve a verificar el pago (con reintentos mientras siga pendiente). */
   revisarDeNuevo: () => void;
   verMisPedidos: () => void;
   seguirComprando: () => void;
 }
 
-const MENSAJE_NO_REVISO =
-  'No pudimos revisar tu pago. Si ya pagaste, no pagues de nuevo: toca Revisar mi pago.';
-
 /** Estados del pedido que ya implican el pago en línea aprobado. */
 const ESTADOS_PAGADOS: readonly string[] = ['pagado', 'preparando', 'listo_recoger', 'entregado'];
 
-interface OpcionesConsulta {
-  /** Vuelve a consultar cada duracion.consultaPago mientras siga pendiente. */
-  repetir: boolean;
-  /** La clienta acaba de volver de Mercado Pago: 'sin_pago' también se vuelve a consultar. */
+/** Con estos estados del pago previo se puede abrir otro pago: no hay uno en proceso ni aprobado. */
+const PERMITEN_PAGAR: readonly (EstadoPagoPedido | null)[] = ['sin_pago', 'rechazado'];
+
+interface EntradaVista {
+  pedido: Pedido | null;
+  estadoPago: EstadoPagoPedido | null;
+  /** Hay una verificación a la vista (la revisión previa a abrir el pago no se muestra). */
+  consultando: boolean;
   trasRegreso: boolean;
 }
 
-/** Qué cuenta la pantalla según el pedido, el último estado del pago y las consultas en curso. */
-function calcularVista(
-  pedido: Pedido | null,
-  estadoPago: EstadoPagoPedido | null,
-  consultando: boolean,
-  trasRegreso: boolean,
-): VistaPedido {
+/** Qué cuenta la pantalla según el pedido, el último estado del pago y la verificación en curso. */
+function calcularVista({ pedido, estadoPago, consultando, trasRegreso }: EntradaVista): VistaPedido {
   if (!pedido) {
     return 'apartado';
   }
@@ -108,7 +142,7 @@ function calcularVista(
   if (!esPagoEnLinea(pedido)) {
     return 'apartado';
   }
-  // Sin respuesta del pago todavía, la consulta en curso manda sobre el estado del pedido.
+  // Sin respuesta del pago todavía, la verificación en curso manda sobre el estado del pedido.
   if (estadoPago === null && consultando) {
     return 'consultando';
   }
@@ -118,26 +152,128 @@ function calcularVista(
   if (estadoPago === null) {
     return 'porPagar';
   }
-  if (estadoPago === 'revision') {
-    return 'revision';
+  if (estadoPago === 'revision' || estadoPago === 'pendiente') {
+    return estadoPago;
   }
-  if (estadoPago === 'pendiente') {
-    return 'pendiente';
-  }
-  if (estadoPago === 'sin_pago' && consultando && trasRegreso) {
+  if (estadoPago === 'sin_pago' && trasRegreso && consultando) {
     // Recién vuelve de Mercado Pago: puede tardar en reflejarse. Texto neutro, no "procesando".
     return 'consultando';
   }
   return 'noCompletado';
 }
 
+interface EntradaTextos {
+  vista: VistaPedido;
+  pedido: Pedido | null;
+  rechazado: boolean;
+  pagoPorConfirmar: boolean;
+  limite: string | null;
+}
+
+/** Título y mensaje del estado del pedido y de su pago. */
+function textosEstado(texto: FuncionTexto, entrada: EntradaTextos): { titulo: string; mensaje: string } {
+  const { vista, pedido, rechazado, pagoPorConfirmar, limite } = entrada;
+  const plazo = limite ? ` ${texto('tienda.pago.apartadoHasta', { limite })}` : '';
+  switch (vista) {
+    case 'aprobado':
+      return { titulo: texto('tienda.pago.aprobadoTitulo'), mensaje: texto('tienda.pagoRecibidoTexto') };
+    case 'revision':
+      return { titulo: texto('tienda.pago.revisionTitulo'), mensaje: texto('tienda.pago.revisionTexto') };
+    case 'pendiente':
+      return { titulo: texto('tienda.pago.enProcesoTitulo'), mensaje: texto('tienda.pagoEnProcesoTexto') };
+    case 'consultando':
+      return { titulo: texto('tienda.pago.verificandoTitulo'), mensaje: texto('tienda.pago.verificandoTexto') };
+    case 'noCompletado':
+      if (pagoPorConfirmar) {
+        return {
+          titulo: texto('tienda.pago.porConfirmarTitulo'),
+          mensaje: `${texto('tienda.pago.porConfirmarTexto')}${plazo}`,
+        };
+      }
+      return {
+        titulo: texto('tienda.pago.noCompletadoTitulo'),
+        mensaje: `${texto(rechazado ? 'tienda.pago.rechazadoTexto' : 'tienda.pago.sinPagoTexto')}${plazo}`,
+      };
+    case 'porPagar':
+      return { titulo: texto('tienda.pago.porPagarTitulo'), mensaje: texto('tienda.pago.porPagarTexto') };
+    case 'cancelado':
+      return { titulo: texto('tienda.pago.canceladoTitulo'), mensaje: texto('tienda.pago.canceladoTexto') };
+    default:
+      return {
+        titulo: texto('tienda.confirmacionTitulo'),
+        mensaje: texto(pedido && esPagoEnSalon(pedido) ? 'tienda.confirmacionApartado' : 'tienda.confirmacionRegistrado'),
+      };
+  }
+}
+
+function armarTextos(texto: FuncionTexto, entrada: EntradaTextos): TextosConfirmacion {
+  const { pedido, limite, vista } = entrada;
+  const apartadoPendiente = pedido !== null && esPagoEnSalon(pedido) && pedido.estado === 'pendiente_pago';
+  return {
+    ...textosEstado(texto, entrada),
+    pagoEnMostrador: apartadoPendiente
+      ? texto('tienda.pago.pagasEnMostrador', { precio: formatoPrecio(pedido.totalCentavos) })
+      : null,
+    plazo: limite ? texto('tienda.pago.plazo', { limite }) : null,
+    verificando: texto('tienda.pago.verificandoTitulo'),
+    abriendo: texto('tienda.pago.abriendo'),
+    formaPago: texto('tienda.pago.formaPago'),
+    dondeRecoges: texto('tienda.pago.dondeRecoges'),
+    cargando: texto('tienda.pago.cargando'),
+    errorCargaTitulo: texto('tienda.pago.errorCargaTitulo'),
+    errorCargaTexto: texto('tienda.pago.errorCargaTexto'),
+    noEncontradoTitulo: texto('tienda.pago.noEncontradoTitulo'),
+    noEncontradoTexto: texto('tienda.pago.noEncontradoTexto'),
+    botonReintentarCarga: texto('tienda.pago.botonReintentarCarga'),
+    botonPagar: texto(vista === 'porPagar' ? 'tienda.pago.botonPagar' : 'tienda.pago.botonReintentar'),
+    botonPagarDeNuevo: texto('tienda.pago.botonPagarDeNuevo'),
+    botonRevisarMiPago: texto('tienda.pago.botonRevisarMiPago'),
+    botonRevisarDeNuevo: texto('tienda.pago.botonRevisarDeNuevo'),
+    botonMisPedidos: texto('tienda.pago.botonMisPedidos'),
+    botonSeguirComprando: texto('tienda.pago.botonSeguirComprando'),
+    pistaPagar: texto('tienda.pago.pistaPagar'),
+    pistaPagarDeNuevo: texto('tienda.pago.pistaPagarDeNuevo'),
+  };
+}
+
+/** La revisión previa a abrir el pago que dejó pagar: con cuántas respuestas quedó y qué se veía antes. */
+interface PrevioSinEfecto {
+  respuestas: number;
+  estado: EstadoPagoPedido | null;
+}
+
 /**
- * Confirmación de un pedido (GP-06.4). El estado siempre sale del servidor (pedido y estado del
- * pago), nunca de los parámetros de la ruta:
+ * El estado del pago que se muestra: solo lo que el servidor respondió después de cargar la
+ * pantalla, salvo la revisión previa al pago que dejó pagar, que no cambia lo que se veía.
+ */
+function estadoVisible(
+  conocido: EstadoPagoConocido | null,
+  respuestasPrevias: number,
+  previo: PrevioSinEfecto | null,
+): EstadoPagoPedido | null {
+  if (!conocido || conocido.respuestas <= respuestasPrevias) {
+    return null;
+  }
+  return previo !== null && conocido.respuestas === previo.respuestas ? previo.estado : conocido.estado;
+}
+
+/** El id numérico de la ruta, o null si no es un id válido. */
+function idDeRuta(idLimpio: string): number | null {
+  const id = Number(idLimpio);
+  return idLimpio !== '' && Number.isInteger(id) && id > 0 ? id : null;
+}
+
+/**
+ * Confirmación de un pedido (GP-06.4, GP-07.5). El estado siempre sale del servidor (pedido y
+ * verificación del pago en el registro de useVerificacionPago), nunca de los parámetros de la ruta:
  * - `pagarAlAbrir` (?pagar=1, desde el checkout): abre Mercado Pago una sola vez al cargar.
- * - `revisarAlAbrir` (?retorno=mp, regreso en arranque en frío): consulta el pago al cargar.
+ * - `revisarAlAbrir` (?retorno=mp, regreso en arranque en frío): verifica el pago al cargar.
  * - Sin parámetros, un pedido en línea pendiente consulta su pago una vez.
  * - `desdeDetalle` (?origen=pedido, "Completar el pago" del detalle): atrás regresa al detalle.
+ *
+ * Nunca abre un segundo pago: antes de pedir otra preferencia revisa el estado y, si está
+ * pendiente, en revisión o aprobado, no abre Mercado Pago; mientras el navegador está abierto o
+ * una verificación va en curso, pagar no hace nada.
  */
 export function usePedidoConfirmadoViewModel(
   pedidoId: string | undefined,
@@ -147,148 +283,70 @@ export function usePedidoConfirmadoViewModel(
 ): PedidoConfirmadoViewModel {
   const router = useRouter();
   const candado = useCandado();
+  const texto = useTextos();
 
   const [estado, setEstado] = useState<EstadoCargaPedido>('cargando');
   const [pedido, setPedido] = useState<Pedido | null>(null);
-  const [estadoPago, setEstadoPago] = useState<EstadoPagoPedido | null>(null);
-  const [consultando, setConsultando] = useState(false);
+  // Lo que el registro sabe del pago de este pedido y cuántas respuestas ya tenía al cargar: solo
+  // cuenta lo que el servidor respondió después (la pantalla siempre verifica por su cuenta).
+  const [conocido, setConocido] = useState<EstadoPagoConocido | null>(null);
+  const [respuestasPrevias, setRespuestasPrevias] = useState(0);
+  // La revisión previa a abrir el pago que dejó pagar (sin pago o rechazado) no cambia lo que se ve:
+  // se sigue mostrando el estado de antes mientras esa sea la última respuesta.
+  const [previoSinEfecto, setPrevioSinEfecto] = useState<PrevioSinEfecto | null>(null);
+  const estadoMostrado = useRef<EstadoPagoPedido | null>(null);
+  // Volvió de Mercado Pago en esta pantalla: un pago que no aparece se trata como por confirmar.
   const [trasRegreso, setTrasRegreso] = useState(false);
   const [abriendo, setAbriendo] = useState(false);
   const [errorPago, setErrorPago] = useState<string | null>(null);
-  const [errorConsulta, setErrorConsulta] = useState<string | null>(null);
   // El plazo terminó: ya no se ofrece pagar.
   const [pagoCerrado, setPagoCerrado] = useState(false);
 
   const idLimpio = pedidoId?.trim() ?? '';
+  const idRuta = idDeRuta(idLimpio);
 
   const montada = useRef(true);
   const solicitud = useRef(0);
   // Suelta la espera del regreso del navegador si la pantalla se desmonta.
   const soltarEspera = useRef<(() => void) | null>(null);
-  // Consultas del pago: sesión activa (null: ninguna), su inicio, su temporizador y la que va en vuelo.
-  const contadorSesiones = useRef(0);
-  const sesionActiva = useRef<number | null>(null);
-  const inicioSesion = useRef(0);
-  const opcionesSesion = useRef<OpcionesConsulta>({ repetir: false, trasRegreso: false });
-  const temporizador = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const enVuelo = useRef(false);
   // Qué hacer al terminar la próxima carga: la acción automática de la ruta (una sola vez por
   // pantalla) o una consulta del pago.
   const automaticoUsado = useRef(false);
   const accionTrasCarga = useRef<'auto' | 'consultar' | null>('auto');
+  // El pedido a la vista, para que el mensaje del plazo vencido use las horas guardadas en él.
+  const pedidoVisto = useRef<Pedido | null>(null);
+  useEffect(() => {
+    pedidoVisto.current = pedido;
+  });
 
-  const detenerConsultas = useCallback(() => {
-    sesionActiva.current = null;
-    if (temporizador.current) {
-      clearTimeout(temporizador.current);
-      temporizador.current = null;
+  // Observer: cada cambio del registro para este pedido. Mientras está montada, la pantalla sigue
+  // ese pago: al desmontarse, si ninguna otra lo sigue, su verificación se detiene.
+  useEffect(() => {
+    if (idRuta === null) {
+      return undefined;
     }
-    if (montada.current) {
-      setConsultando(false);
-    }
-  }, []);
-
-  const aplicarResultado = useCallback((resultado: ResultadoEstadoPago) => {
-    setEstadoPago(resultado.estado);
-    if (resultado.pedidoEstado) {
-      setPedido((actual) =>
-        actual && actual.estado !== resultado.pedidoEstado
-          ? { ...actual, estado: resultado.pedidoEstado }
-          : actual,
-      );
-    }
-  }, []);
-
-  /**
-   * Una consulta del pago. Si al volver sigue habiendo una sesión activa (la misma u otra que se
-   * abrió mientras iba en vuelo), decide si se vuelve a consultar dentro del límite de tiempo.
-   */
-  const consultarUnaVez = useCallback(
-    async (id: number) => {
-      if (enVuelo.current) {
+    const soltar = mantenerVerificacion(idRuta);
+    const dejarDeEscuchar = suscribirVerificacion((evento) => {
+      if (evento.pedidoId !== idRuta || !montada.current) {
         return;
       }
-      enVuelo.current = true;
-      let resultado: ResultadoEstadoPago | null = null;
-      let fallo: unknown = null;
-      try {
-        resultado = await obtenerEstadoPagoPedido(id);
-      } catch (error) {
-        fallo = error;
-      } finally {
-        enVuelo.current = false;
+      setConocido(evento.conocido);
+      if (!evento.conocido) {
+        // Se borró (cierre de sesión): lo que llegue después empieza de cero.
+        setRespuestasPrevias(0);
       }
-      if (!montada.current) {
-        return;
-      }
-      // El resultado es real aunque las consultas se hayan detenido mientras iba en vuelo.
-      if (resultado) {
-        aplicarResultado(resultado);
-        setErrorConsulta(null);
-      }
-      const sesion = sesionActiva.current;
-      if (sesion === null) {
-        return;
-      }
-      if (!resultado) {
-        setErrorConsulta(mensajeComunTienda(fallo) ?? MENSAJE_NO_REVISO);
-        detenerConsultas();
-        return;
-      }
-      const { repetir, trasRegreso: regreso } = opcionesSesion.current;
-      const sigue =
-        resultado.estado === 'pendiente' || (regreso && resultado.estado === 'sin_pago');
-      const transcurrido = Date.now() - inicioSesion.current;
-      // Un pago que todavía no aparece tras volver se consulta poco: la clienta pudo cerrar sin pagar.
-      const limite =
-        resultado.estado === 'sin_pago' ? duracion.limiteConsultaSinPago : duracion.limiteConsultaPago;
-      if (repetir && sigue && transcurrido + duracion.consultaPago <= limite) {
-        temporizador.current = setTimeout(() => {
-          temporizador.current = null;
-          if (sesionActiva.current === sesion) {
-            void consultarUnaVez(id);
-          }
-        }, duracion.consultaPago);
-        return;
-      }
-      detenerConsultas();
-    },
-    [aplicarResultado, detenerConsultas],
-  );
-
-  /** Empieza una sesión de consultas; nunca lanza una consulta encima de otra en vuelo. */
-  const iniciarConsultas = useCallback(
-    (id: number, opciones: OpcionesConsulta) => {
-      if (temporizador.current) {
-        clearTimeout(temporizador.current);
-        temporizador.current = null;
-      }
-      contadorSesiones.current += 1;
-      sesionActiva.current = contadorSesiones.current;
-      inicioSesion.current = Date.now();
-      opcionesSesion.current = opciones;
-      setConsultando(true);
-      setTrasRegreso(opciones.trasRegreso);
-      setErrorConsulta(null);
-      if (opciones.trasRegreso) {
-        // Lo anterior (por ejemplo, un rechazo) ya no vale: se espera la primera respuesta.
-        setEstadoPago(null);
-      }
-      // Si una consulta va en vuelo, su respuesta continúa esta sesión.
-      if (!enVuelo.current) {
-        void consultarUnaVez(id);
-      }
-    },
-    [consultarUnaVez],
-  );
+    });
+    return () => {
+      dejarDeEscuchar();
+      soltar();
+    };
+  }, [idRuta]);
 
   const recargar = useCallback(() => {
     solicitud.current += 1;
     const actual = solicitud.current;
-    detenerConsultas();
     accionTrasCarga.current = automaticoUsado.current ? 'consultar' : 'auto';
     setErrorPago(null);
-    setErrorConsulta(null);
     setEstado('cargando');
     obtenerPedido(idLimpio)
       .then((respuesta) => {
@@ -296,7 +354,9 @@ export function usePedidoConfirmadoViewModel(
           return;
         }
         setPedido(respuesta);
-        setEstadoPago(null);
+        setConocido(null);
+        setPrevioSinEfecto(null);
+        setRespuestasPrevias(idRuta === null ? 0 : (estadoPagoConocido(idRuta)?.respuestas ?? 0));
         setEstado('listo');
       })
       .catch((error: unknown) => {
@@ -307,7 +367,7 @@ export function usePedidoConfirmadoViewModel(
         setPedido(null);
         setEstado(esPedidoNoEncontrado(error) ? 'noEncontrado' : 'error');
       });
-  }, [idLimpio, detenerConsultas]);
+  }, [idLimpio, idRuta]);
 
   useEffect(() => {
     montada.current = true;
@@ -315,47 +375,31 @@ export function usePedidoConfirmadoViewModel(
     return () => {
       montada.current = false;
       solicitud.current += 1;
-      sesionActiva.current = null;
-      if (temporizador.current) {
-        clearTimeout(temporizador.current);
-        temporizador.current = null;
-      }
       soltarEspera.current?.();
     };
   }, [recargar]);
 
   /**
    * Antes de pedir otra preferencia se pregunta al servidor: con un pago en proceso, en revisión
-   * o aprobado no se abre Mercado Pago (evita un doble cobro, también con ?pagar=1).
-   * Devuelve true si se puede seguir con el pago.
+   * o aprobado no se abre Mercado Pago (evita un doble cobro, también con ?pagar=1). Si no se pudo
+   * revisar o se detuvo, tampoco. Devuelve true si se puede seguir con el pago.
    */
-  const revisarPagoPrevio = useCallback(
-    async (id: number): Promise<boolean> => {
-      try {
-        const previo = await obtenerEstadoPagoPedido(id);
-        if (!montada.current) {
-          return false;
-        }
-        if (previo.estado !== 'sin_pago' && previo.estado !== 'rechazado') {
-          setAbriendo(false);
-          aplicarResultado(previo);
-          if (previo.estado === 'pendiente') {
-            iniciarConsultas(id, { repetir: true, trasRegreso: false });
-          }
-          return false;
-        }
-      } catch (error) {
-        if (!montada.current) {
-          return false;
-        }
-        setAbriendo(false);
-        setErrorConsulta(mensajeComunTienda(error) ?? MENSAJE_NO_REVISO);
-        return false;
-      }
+  const revisarPagoPrevio = useCallback(async (id: number): Promise<boolean> => {
+    const previo = await verificarPago(id, { motivo: 'previoAlPago' });
+    if (!montada.current) {
+      return false;
+    }
+    const respondio = !previo.detenida && previo.error === null;
+    if (respondio && PERMITEN_PAGAR.includes(previo.estado)) {
+      setPrevioSinEfecto({ respuestas: estadoPagoConocido(id)?.respuestas ?? 0, estado: estadoMostrado.current });
       return true;
-    },
-    [aplicarResultado, iniciarConsultas],
-  );
+    }
+    setAbriendo(false);
+    if (respondio && previo.estado === 'pendiente') {
+      void verificarPago(id, { motivo: 'revisar' });
+    }
+    return false;
+  }, []);
 
   /** Pide la preferencia de Mercado Pago; si falla, deja el aviso y devuelve null. */
   const pedirPreferencia = useCallback(
@@ -376,7 +420,7 @@ export function usePedidoConfirmadoViewModel(
         if (motivo === 'vencido') {
           setPagoCerrado(true);
         }
-        setErrorPago(mensajePreferenciaPedido(error));
+        setErrorPago(mensajePreferenciaPedido(error, pedidoVisto.current ?? {}));
         return null;
       }
     },
@@ -385,20 +429,17 @@ export function usePedidoConfirmadoViewModel(
 
   const pagarPedido = useCallback(
     async (id: number) => {
-      detenerConsultas();
+      // Una verificación en curso puede encontrar el pago: no se abre otro encima.
+      if (verificacionEnCurso(id)) {
+        return;
+      }
       setErrorPago(null);
-      setErrorConsulta(null);
       setAbriendo(true);
-      const sigue = await revisarPagoPrevio(id);
-      if (!sigue) {
+      if (!(await revisarPagoPrevio(id))) {
         return;
       }
       const initPoint = await pedirPreferencia(id);
-      if (initPoint === null) {
-        return;
-      }
-      if (!montada.current) {
-        setAbriendo(false);
+      if (initPoint === null || !montada.current) {
         return;
       }
       const resultado = await abrirPagoEnNavegador(initPoint, (soltar) => {
@@ -409,12 +450,16 @@ export function usePedidoConfirmadoViewModel(
       }
       setAbriendo(false);
       if (resultado === 'sinNavegador') {
-        setErrorPago(MENSAJE_SIN_NAVEGADOR);
+        setErrorPago(texto('tienda.pago.sinNavegador'));
         return;
       }
-      iniciarConsultas(id, { repetir: true, trasRegreso: true });
+      if (resultado === 'regreso') {
+        setPrevioSinEfecto(null);
+        setTrasRegreso(true);
+        void verificarPago(id, { motivo: 'regreso' });
+      }
     },
-    [detenerConsultas, revisarPagoPrevio, pedirPreferencia],
+    [revisarPagoPrevio, pedirPreferencia, texto],
   );
 
   // Al terminar cada carga: la acción automática de la ruta (una vez) o la consulta del pago.
@@ -427,39 +472,27 @@ export function usePedidoConfirmadoViewModel(
     if (!accion || !esPagoEnLinea(pedido)) {
       return;
     }
-    if (accion === 'auto') {
-      automaticoUsado.current = true;
-      if (pagarAlAbrir && pidePagoEnLinea(pedido)) {
-        const id = pedido.id;
-        candado(() => pagarPedido(id));
-        return;
-      }
-      if (revisarAlAbrir) {
-        iniciarConsultas(pedido.id, { repetir: true, trasRegreso: true });
-        return;
-      }
-      if (pedido.estado === 'pendiente_pago') {
-        iniciarConsultas(pedido.id, { repetir: false, trasRegreso: false });
-      }
+    const id = pedido.id;
+    if (accion === 'consultar') {
+      // Al recargar (o al volver a montarse la pantalla) tras volver de Mercado Pago, un pago que
+      // todavía no aparece se sigue consultando como regreso.
+      void verificarPago(id, { motivo: trasRegreso ? 'regreso' : 'apertura' });
       return;
     }
-    iniciarConsultas(pedido.id, { repetir: false, trasRegreso: false });
-  }, [estado, pedido, pagarAlAbrir, revisarAlAbrir, candado, pagarPedido, iniciarConsultas]);
+    automaticoUsado.current = true;
+    if (pagarAlAbrir && pidePagoEnLinea(pedido)) {
+      candado(() => pagarPedido(id));
+    } else if (revisarAlAbrir) {
+      setTrasRegreso(true);
+      void verificarPago(id, { motivo: 'regreso' });
+    } else if (pedido.estado === 'pendiente_pago') {
+      void verificarPago(id, { motivo: 'apertura' });
+    }
+  }, [estado, pedido, pagarAlAbrir, revisarAlAbrir, trasRegreso, candado, pagarPedido]);
 
-  // Las consultas se detienen al perder el foco y al pasar la app a segundo plano.
-  useFocusEffect(
-    useCallback(() => {
-      const suscripcion = AppState.addEventListener('change', (estadoApp) => {
-        if (estadoApp !== 'active' && sesionActiva.current !== null) {
-          detenerConsultas();
-        }
-      });
-      return () => {
-        suscripcion.remove();
-        detenerConsultas();
-      };
-    }, [detenerConsultas]),
-  );
+  // La pantalla no detiene la verificación al perder el foco ni al recargar: el registro es de toda
+  // la app (otra pantalla, o la misma montada dos veces por la navegación, puede compartirla), sus
+  // consultas tienen tope y se detienen solas al pasar la app a segundo plano.
 
   const verMisPedidos = useCallback(() => {
     // Saca de la pila la compra (o el detalle), deja las pestañas en la Tienda y abre Mis pedidos
@@ -500,35 +533,53 @@ export function usePedidoConfirmadoViewModel(
     if (!pedido || abriendo) {
       return;
     }
-    iniciarConsultas(pedido.id, { repetir: true, trasRegreso: false });
-  }, [pedido, abriendo, iniciarConsultas]);
+    void verificarPago(pedido.id, { motivo: 'revisar' });
+  }, [pedido, abriendo]);
+
+  // El estado del pedido que vino con una respuesta nueva del pago (por ejemplo, ya pagado).
+  const estadoPedidoNuevo = conocido && conocido.respuestas > respuestasPrevias ? conocido.pedidoEstado : '';
+  useEffect(() => {
+    if (estadoPedidoNuevo) {
+      setPedido((actual) =>
+        actual && actual.estado !== estadoPedidoNuevo ? { ...actual, estado: estadoPedidoNuevo } : actual,
+      );
+    }
+  }, [estadoPedidoNuevo]);
 
   // ── Lo que se muestra ──────────────────────────────────────────────────────────────────
-  const calculada = calcularVista(pedido, estadoPago, consultando, trasRegreso);
+  const estadoPago = estadoVisible(conocido, respuestasPrevias, previoSinEfecto);
+  useEffect(() => {
+    estadoMostrado.current = estadoPago;
+  }, [estadoPago]);
+  const consultando = conocido?.verificando ?? false;
+  // Mientras se abre el pago, su revisión previa no cambia lo que se ve.
+  const consultaVisible = consultando && !abriendo;
+  const calculada = calcularVista({ pedido, estadoPago, consultando: consultaVisible, trasRegreso });
   // Con el plazo vencido ya no se invita a pagar: la pantalla dice que el pago no se completó.
   const vista = pagoCerrado && calculada === 'porPagar' ? 'noCompletado' : calculada;
 
-  const sePuedePagar = pedido != null && pidePagoEnLinea(pedido) && !pagoCerrado;
+  const fallo = conocido?.error ?? null;
+  const errorConsulta = fallo === null ? null : (mensajeComunTienda(fallo) ?? texto('tienda.pago.noSePudoRevisar'));
+  const sePuedePagar = pedido !== null && pidePagoEnLinea(pedido) && !pagoCerrado;
   const puedePagar =
-    sePuedePagar &&
-    !consultando &&
-    errorConsulta === null &&
-    (vista === 'porPagar' || vista === 'noCompletado');
-  const pagoPorConfirmar =
-    vista === 'noCompletado' && estadoPago === 'sin_pago' && trasRegreso && !consultando;
+    sePuedePagar && !consultaVisible && errorConsulta === null && (vista === 'porPagar' || vista === 'noCompletado');
+  const pagoPorConfirmar = vista === 'noCompletado' && estadoPago === 'sin_pago' && trasRegreso && !consultaVisible;
   const pagoEnProceso = vista === 'pendiente' || vista === 'revision';
   // Con el pago en proceso no se pide pagar antes de un plazo: ya pagó o está pagando.
   const muestraPlazo = sePuedePagar && !pagoEnProceso && vista !== 'aprobado' && vista !== 'cancelado';
+  const limite = muestraPlazo && pedido ? limitePagoPedido(pedido) : null;
+  const rechazado = estadoPago === 'rechazado';
 
   return {
     estado,
     pedido,
     vista,
-    rechazado: estadoPago === 'rechazado',
+    textos: armarTextos(texto, { vista, pedido, rechazado, pagoPorConfirmar, limite }),
+    rechazado,
     pagoEnProceso,
-    consultando,
+    consultando: consultaVisible,
     abriendo,
-    limite: muestraPlazo && pedido ? limitePagoPedido(pedido) : null,
+    limite,
     puedePagar,
     pagoPorConfirmar,
     errorPago,

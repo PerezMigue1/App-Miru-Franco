@@ -1,17 +1,58 @@
 import { useFocusEffect, useRouter, type Href } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
 import { useAuth } from '@/features/auth/viewmodels/useAuth';
+import { obtenerTexto, type ClaveTexto } from '@/shared/api/textosSitio';
+import { useConfiguracionPublica } from '@/shared/api/useConfiguracionPublica';
 
 import { mensajeComunTienda } from '../models/carritoModel';
-import { listarMisPedidos, type Pedido } from '../models/pedidoModel';
+import { esPagoEnLinea, listarMisPedidos, type Pedido } from '../models/pedidoModel';
+import { pagoEnProcesoDe } from './detallePedido';
+import { estadoPagoConocido, suscribirVerificacion } from './useVerificacionPago';
 
 // La vista no importa de models/: recibe este tipo del viewmodel.
 export type { Pedido } from '../models/pedidoModel';
 
 export type EstadoMisPedidos = 'cargando' | 'listo' | 'error';
 
+/** Textos de Mis pedidos, del catálogo. */
+export interface TextosMisPedidos {
+  titulo: string;
+  subtitulo: string;
+  vaciaTitulo: string;
+  vaciaTexto: string;
+  verTienda: string;
+  cargando: string;
+  errorTitulo: string;
+  reintentar: string;
+  sesionTitulo: string;
+  sesionBeneficio: string;
+}
+
+const CLAVES_TEXTOS: Record<keyof TextosMisPedidos, ClaveTexto> = {
+  titulo: 'tienda.pedido.lista.titulo',
+  subtitulo: 'tienda.pedido.lista.subtitulo',
+  vaciaTitulo: 'pedidos.lista.vacia',
+  vaciaTexto: 'tienda.pedido.lista.vaciaTexto',
+  verTienda: 'tienda.pedido.lista.verTienda',
+  cargando: 'tienda.pedido.lista.cargando',
+  errorTitulo: 'tienda.pedido.lista.errorTitulo',
+  reintentar: 'tienda.pedido.lista.reintentar',
+  sesionTitulo: 'tienda.pedido.lista.sesionTitulo',
+  sesionBeneficio: 'tienda.pedido.lista.sesionBeneficio',
+};
+
 export interface MisPedidosViewModel {
+  /** La clienta tiene sesión (sin ella se muestra la invitación). */
+  conSesion: boolean;
+  textos: TextosMisPedidos;
+  /**
+   * Pedidos en línea pendientes con el pago en proceso según el registro de la verificación (sin
+   * peticiones por pedido): su tarjeta dice "Pago en proceso" y no "Pendiente de pago".
+   */
+  pagosEnProceso: ReadonlySet<number>;
+  /** Atrás: la pantalla anterior o, sin ella, Perfil. */
+  regresar: () => void;
   /** 'cargando' solo en la primera carga (o al reintentar sin datos): con datos, recarga en silencio. */
   estado: EstadoMisPedidos;
   /** Del más reciente al más viejo. */
@@ -33,8 +74,17 @@ export interface MisPedidosViewModel {
 
 type ModoCarga = 'completo' | 'silencioso' | 'refresco';
 
-const MENSAJE_GENERICO = 'Algo salió mal al traer tus pedidos. Intenta de nuevo en un momento.';
-const MENSAJE_REFRESCO = 'No pudimos actualizar tus pedidos. Desliza hacia abajo para intentar de nuevo.';
+/**
+ * Ids de los pedidos en línea pendientes de pago con el pago en proceso, como texto ("701,705") para
+ * que useSyncExternalStore compare una instantánea estable.
+ */
+function idsConPagoEnProceso(pedidos: readonly Pedido[]): string {
+  return pedidos
+    .filter((pedido) => pedido.estado === 'pendiente_pago' && esPagoEnLinea(pedido))
+    .filter((pedido) => pagoEnProcesoDe(estadoPagoConocido(pedido.id)))
+    .map((pedido) => pedido.id)
+    .join(',');
+}
 
 /**
  * Mis pedidos (GP-06.4): compras de la clienta en sesión. Carga al enfocar la pantalla (la primera
@@ -43,6 +93,7 @@ const MENSAJE_REFRESCO = 'No pudimos actualizar tus pedidos. Desliza hacia abajo
 export function useMisPedidosViewModel(): MisPedidosViewModel {
   const router = useRouter();
   const { estado: sesion } = useAuth();
+  const { configuracion } = useConfiguracionPublica();
   const [estado, setEstado] = useState<EstadoMisPedidos>('cargando');
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [mensajeError, setMensajeError] = useState<string | null>(null);
@@ -83,11 +134,11 @@ export function useMisPedidosViewModel(): MisPedidosViewModel {
         if (hayDatos.current) {
           // Con la lista ya mostrada, una recarga silenciosa que falla no la quita.
           if (modo === 'refresco') {
-            setAvisoRefresco(mensajeComunTienda(error) ?? MENSAJE_REFRESCO);
+            setAvisoRefresco(mensajeComunTienda(error) ?? obtenerTexto('tienda.pedido.lista.refresco'));
           }
           return;
         }
-        setMensajeError(mensajeComunTienda(error) ?? MENSAJE_GENERICO);
+        setMensajeError(mensajeComunTienda(error) ?? obtenerTexto('tienda.pedido.lista.error'));
         setEstado('error');
       })
       .finally(() => {
@@ -149,7 +200,35 @@ export function useMisPedidosViewModel(): MisPedidosViewModel {
     router.dismissTo('/tienda' as Href);
   }, [router]);
 
+  const regresar = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/perfil' as Href);
+    }
+  }, [router]);
+
+  // Observer del registro de la verificación: solo lo que ya se sabe, sin consultar cada pedido.
+  const leerEnProceso = useCallback(() => idsConPagoEnProceso(pedidos), [pedidos]);
+  const enProceso = useSyncExternalStore(suscribirVerificacion, leerEnProceso, leerEnProceso);
+  const pagosEnProceso = useMemo(
+    () => new Set(enProceso ? enProceso.split(',').map(Number) : []),
+    [enProceso],
+  );
+
+  const textos = useMemo(() => {
+    const lista = {} as TextosMisPedidos;
+    for (const [campo, clave] of Object.entries(CLAVES_TEXTOS) as [keyof TextosMisPedidos, ClaveTexto][]) {
+      lista[campo] = obtenerTexto(clave, {}, configuracion);
+    }
+    return lista;
+  }, [configuracion]);
+
   return {
+    conSesion: sesion === 'autenticado',
+    textos,
+    pagosEnProceso,
+    regresar,
     estado,
     pedidos,
     mensajeError,

@@ -29,7 +29,7 @@ import {
   textoCancelarPedido,
   textoQueSigue,
   vencimientoPagoMs,
-  VIGENCIA_PAGO_EN_LINEA_MS,
+  type BusquedaPedidoReciente,
   type ItemPedido,
   type LineaPedido,
   type MetodoPago,
@@ -102,8 +102,9 @@ import {
  * (insignias, plazo de pago, qué sigue) y los mensajes de sus errores armados por apiClient. Solo
  * fetch es simulado (http://api.test) y el reloj está fijo en AHORA; apiClient es el real.
  *
- * Alcance: el plazo del pago en línea es fijo en la app (VIGENCIA_PAGO_EN_LINEA_MS) y se prueba
- * contra esa constante; los plazos de los apartados los aplica el backend y la app no los muestra.
+ * Alcance: el plazo del pago en línea sale de las reglas guardadas en el pedido (REGLAS_PEDIDO) o,
+ * sin ellas, de las vigentes (GP-07.5: antes era una constante de la app); los plazos de los
+ * apartados los aplica el backend.
  */
 
 usarRelojFijo();
@@ -168,8 +169,11 @@ async function articuloCon(campos: Record<string, unknown>): Promise<ItemPedido[
 const PRODUCTO = ARTICULOS_PEDIDO[0].producto;
 const PRESENTACION = ARTICULOS_PEDIDO[0].presentacion;
 
+// GP-07.5: el plazo ya no es una constante de la app; es el guardado en el pedido (REGLAS_PEDIDO).
+const VIGENCIA_MS = REGLAS_PEDIDO.plazoPagoLineaHoras * HORA_MS;
+
 /** Momento en que vence el pago en línea del pedido creado en AHORA. */
-const VENCE_MS = AHORA.getTime() + VIGENCIA_PAGO_EN_LINEA_MS;
+const VENCE_MS = AHORA.getTime() + VIGENCIA_MS;
 
 const crear = () => crearPedido(LINEAS_PEDIDO, METODO_EN_LINEA);
 const cancelar = () => cancelarPedido(ID_PEDIDO);
@@ -368,33 +372,40 @@ describe('buscarPedidoRecienCreado (tras un error de red al crear)', () => {
   const desde = AHORA.getTime();
   const [primero, segundo] = ARTICULOS_PEDIDO;
 
-  it.each<[string, PedidoCrudo[], number | null]>([
-    ['el mismo pedido', [pedidoCrudo()], ID_PEDIDO],
-    ['las mismas líneas en otro orden', [pedidoCrudo({ items: [segundo, primero] })], ID_PEDIDO],
-    ['creado justo 5 minutos antes del intento (margen del reloj)', [pedidoCrudo({ creadoEn: isoMasMinutos(AHORA_ISO, -5) })], ID_PEDIDO],
-    ['creado un instante antes del margen', [pedidoCrudo({ creadoEn: new Date(desde - 5 * 60_000 - 1).toISOString() })], null],
-    ['el primero que coincide, en el orden del servidor', [pedidoApartado(), pedidoCrudo({ id: 709 }), pedidoCrudo()], 709],
-    ['con otro método de pago', [pedidoApartado()], null],
-    ['que ya no está pendiente de pago', [pedidoPagado()], null],
-    ['con otra cantidad', [pedidoCrudo({ items: [{ ...primero, cantidad: 3 }, segundo] })], null],
-    ['con una línea de más', [pedidoCrudo({ items: [primero, segundo, { ...segundo, id: 9, presentacionId: 3051 }] })], null],
-    ['con una línea de menos', [pedidoCrudo({ items: [primero] })], null],
-    ['con una fecha que no se puede leer', [pedidoCrudo({ creadoEn: 'hace rato' })], null],
-    ['sin pedidos', [], null],
+  /** El resultado sin el pedido completo: el estado y, con uno solo, su id. */
+  const resumen = (busqueda: BusquedaPedidoReciente) =>
+    busqueda.estado === 'unico' ? { estado: busqueda.estado, id: busqueda.pedido.id } : { estado: busqueda.estado };
+
+  // GP-07.5: el margen del reloj bajó de 5 minutos a 1 y dos candidatos ya no se resuelven tomando el
+  // primero: son "ambiguo" (el checkout pide revisar Mis pedidos en lugar de reintentar a ciegas).
+  it.each<[string, PedidoCrudo[], ReturnType<typeof resumen>]>([
+    ['el mismo pedido', [pedidoCrudo()], { estado: 'unico', id: ID_PEDIDO }],
+    ['las mismas líneas en otro orden', [pedidoCrudo({ items: [segundo, primero] })], { estado: 'unico', id: ID_PEDIDO }],
+    ['creado justo 1 minuto antes del intento (margen del reloj)', [pedidoCrudo({ creadoEn: isoMasMinutos(AHORA_ISO, -1) })], { estado: 'unico', id: ID_PEDIDO }],
+    ['creado un instante antes del margen', [pedidoCrudo({ creadoEn: new Date(desde - 60_000 - 1).toISOString() })], { estado: 'ninguno' }],
+    ['dos que coinciden', [pedidoApartado(), pedidoCrudo({ id: 709 }), pedidoCrudo()], { estado: 'ambiguo' }],
+    ['con otro método de pago', [pedidoApartado()], { estado: 'ninguno' }],
+    ['que ya no está pendiente de pago', [pedidoPagado()], { estado: 'ninguno' }],
+    ['con otra cantidad', [pedidoCrudo({ items: [{ ...primero, cantidad: 3 }, segundo] })], { estado: 'ninguno' }],
+    ['con una línea de más', [pedidoCrudo({ items: [primero, segundo, { ...segundo, id: 9, presentacionId: 3051 }] })], { estado: 'ninguno' }],
+    ['con una línea de menos', [pedidoCrudo({ items: [primero] })], { estado: 'ninguno' }],
+    ['con una fecha que no se puede leer', [pedidoCrudo({ creadoEn: 'hace rato' })], { estado: 'ninguno' }],
+    ['sin pedidos', [], { estado: 'ninguno' }],
   ])('%s', async (_caso, lista, esperado) => {
     const llamadas = simularServidor({ [RUTA_MIS_PEDIDOS]: () => respuesta(cuerpoMisPedidos(lista)) });
-    const pedido = await buscarPedidoRecienCreado(LINEAS_PEDIDO, METODO_EN_LINEA, desde);
-    expect(pedido?.id ?? null).toBe(esperado);
+    const busqueda = await buscarPedidoRecienCreado(LINEAS_PEDIDO, METODO_EN_LINEA, desde);
+    expect(resumen(busqueda)).toEqual(esperado);
     expect(llamadasDeRuta(llamadas, RUTA_MIS_PEDIDOS)).toHaveLength(1);
   });
 
+  // GP-07.5: sin poder consultar ya no da null (que dejaba reintentar y duplicar): da "sinVerificar".
   it.each<[string, Manejador]>([
     ['sin red', sinRedEnRuta],
     ['con un 500', conError(ERRORES.interno)],
     ['con un 401', conError(ERRORES.noAutorizado)],
-  ])('nunca lanza: %s da null', async (_caso, manejador) => {
+  ])('nunca lanza: %s da sinVerificar', async (_caso, manejador) => {
     simularServidor({ [RUTA_MIS_PEDIDOS]: manejador });
-    await expect(buscarPedidoRecienCreado(LINEAS_PEDIDO, METODO_EN_LINEA, desde)).resolves.toBeNull();
+    await expect(buscarPedidoRecienCreado(LINEAS_PEDIDO, METODO_EN_LINEA, desde)).resolves.toEqual({ estado: 'sinVerificar' });
   });
 });
 
@@ -750,11 +761,12 @@ describe('etiquetaEstadoPedido', () => {
   });
 });
 
-describe('plazo del pago en línea (VIGENCIA_PAGO_EN_LINEA_MS, fijo en la app)', () => {
+describe('plazo del pago en línea (reglas guardadas en el pedido)', () => {
   const enLinea = (cambios: Partial<Pedido> = {}) => pedidoNormalizado(cambios);
 
-  it('la vigencia de la app es la del backend por omisión (plazoPagoLineaHoras del pedido)', () => {
-    expect(VIGENCIA_PAGO_EN_LINEA_MS).toBe(REGLAS_PEDIDO.plazoPagoLineaHoras * HORA_MS);
+  // GP-07.5: el plazo sale de las reglas del pedido y, sin ellas, de la configuración vigente.
+  it('sin reglas guardadas usa el plazo vigente de la configuración', () => {
+    expect(vencimientoPagoMs({ creadoEn: AHORA_ISO, reglas: null })).toBe(AHORA.getTime() + VIGENCIA_MS);
   });
 
   it.each<[string, string, number | null]>([
@@ -767,7 +779,7 @@ describe('plazo del pago en línea (VIGENCIA_PAGO_EN_LINEA_MS, fijo en la app)',
 
   it('limitePagoPedido arma fecha y hora locales del vencimiento', () => {
     const creadoEn = enHoraLocal(HOY, '18:30');
-    const vence = new Date(creadoEn.getTime() + VIGENCIA_PAGO_EN_LINEA_MS);
+    const vence = new Date(creadoEn.getTime() + VIGENCIA_MS);
     const limite = limitePagoPedido(enLinea({ creadoEn: creadoEn.toISOString() }));
     expect(limite).toBe(`${fechaLegible(vence)}, ${horaLegible(vence)}`);
     expect(limite).toMatch(/^[a-zéá]+ \d{1,2} de [a-z]+, \d{1,2}:\d{2} [ap]\. m\.$/);

@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EncabezadoVolver } from '@/features/auth/components/EncabezadoVolver';
 import { Button } from '@/shared/ui/Button';
+import { DatosTransferencia } from '@/shared/ui/DatosTransferencia';
 import { EmptyState } from '@/shared/ui/EmptyState';
 import { Skeleton } from '@/shared/ui/Skeleton';
 import {
@@ -158,7 +159,12 @@ function Contenido({
         ) : null}
       </ResumenCita>
 
-      <FormaPago formaPago={presentacion.formaPago} enlace={presentacion.enlacePolitica} onVerPolitica={vm.abrirPolitica} />
+      <FormaPago
+        formaPago={presentacion.formaPago}
+        transferencia={presentacion.transferencia}
+        enlace={presentacion.enlacePolitica}
+        onVerPolitica={vm.abrirPolitica}
+      />
 
       {conPago ? <PagoAnticipo vm={vm} cita={cita} presentacion={presentacion} /> : null}
 
@@ -204,13 +210,18 @@ function Contenido({
   );
 }
 
-/** Forma de pago con la regla guardada en la cita: anticipo, saldo, plazo, consecuencias y métodos. */
+/**
+ * Forma de pago con la regla guardada en la cita: anticipo, saldo, plazo, consecuencias, métodos y,
+ * debajo de los métodos, los datos de transferencia (si el viewmodel los manda).
+ */
 function FormaPago({
   formaPago,
+  transferencia,
   enlace,
   onVerPolitica,
 }: {
   formaPago: FormaPagoCita;
+  transferencia: PresentacionDetalle['transferencia'];
   enlace: string;
   onVerPolitica: () => void;
 }) {
@@ -221,9 +232,9 @@ function FormaPago({
     formaPago.saldo,
     ...formaPago.avisos,
     formaPago.metodos,
-    formaPago.avisoReagendar,
   ].filter((texto): texto is string => Boolean(texto));
-  if (!formaPago.anticipo && parrafos.length === 0) {
+  // Sin métodos del salón tampoco hay transferencia: no cuenta para mostrar la tarjeta.
+  if (!formaPago.anticipo && parrafos.length === 0 && !formaPago.avisoReagendar) {
     return null;
   }
   return (
@@ -238,6 +249,10 @@ function FormaPago({
           {texto}
         </Text>
       ))}
+      <DatosTransferencia datos={transferencia} />
+      {formaPago.avisoReagendar ? (
+        <Text style={[styles.cuerpo, { color: colores.texto }]}>{formaPago.avisoReagendar}</Text>
+      ) : null}
       {formaPago.conPolitica ? <EnlacePolitica texto={enlace} onPress={onVerPolitica} /> : null}
     </Tarjeta>
   );

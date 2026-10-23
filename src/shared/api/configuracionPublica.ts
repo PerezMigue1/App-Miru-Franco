@@ -69,12 +69,34 @@ export interface ReglasTiendaPublicas {
   diasResguardoPagado: number;
   diasCancelarNoRecogido: number;
   diasCambioProducto: number;
+  /** Días para preparar un apartado; si no se prepara en ese tiempo, se cancela. */
+  diasPrepararApartado: number;
+  /** Día (desde que quedó listo) en que se recuerda a la clienta que pase por su pedido. */
+  diaRecordatorioRecoger: number;
+}
+
+/** Revocación de compra (art. 56 LFPC): días hábiles, nunca menos de 5. */
+export interface ReglasRevocacionPublicas {
+  diasHabiles: number;
+}
+
+/** Datos para pagar por transferencia en el salón. Solo llegan si la transferencia está activa y completa. */
+export interface DatosTransferencia {
+  banco: string;
+  titular: string;
+  /** 18 dígitos, sin espacios. */
+  clabe: string;
 }
 
 export interface PagosPublicos {
   mercadoPagoTienda: boolean;
   mercadoPagoAnticipos: boolean;
   metodosSalon: MetodoPagoSalon[];
+  /**
+   * null si la transferencia está apagada, incompleta o la configuración no viene de la red: nunca
+   * se guarda en el archivo ni en el respaldo, para no mostrar sin conexión una cuenta que ya cambió.
+   */
+  transferencia: DatosTransferencia | null;
 }
 
 /** Textos de la portada (Admin > Configuración del sitio > Inicio). Las imágenes son URL https:// o ''. */
@@ -114,7 +136,10 @@ export interface ContenidoPublico {
   contacto: ContenidoContacto;
 }
 
-/** Solo lo que la app usa: sin responsable, correo de privacidad, datos de transferencia ni redes. */
+/**
+ * Solo lo que la app usa: sin responsable, correo de privacidad ni redes. Los datos de transferencia
+ * solo viven en memoria (ver PagosPublicos.transferencia).
+ */
 export interface ConfiguracionPublica {
   salon: SalonPublico;
   horario: { dias: DiaHorario[] };
@@ -123,6 +148,7 @@ export interface ConfiguracionPublica {
   reglas: {
     citas: ReglasCitasPublicas;
     tienda: ReglasTiendaPublicas;
+    revocacion: ReglasRevocacionPublicas;
     pagos: PagosPublicos;
     diasInhabiles: DiaInhabil[];
   };
@@ -164,6 +190,7 @@ const METODOS: readonly MetodoPagoSalon[] = ['efectivo', 'tarjeta', 'transferenc
 const HORA = /^([01]\d|2[0-3]):[0-5]\d$/;
 const FECHA = /^\d{4}-\d{2}-\d{2}$/;
 const URL_HTTPS = /^https:\/\/\S+$/;
+const CLABE = /^\d{18}$/;
 /** Lo más que acepta el backend en "Lo que nos distingue" (validarSeccion, contenido_sobre_nosotros). */
 export const MAXIMO_VALORES = 6;
 
@@ -186,13 +213,13 @@ const abierto = (dia: DiaSemana, abre: string, cierra: string): DiaHorario => ({
 /**
  * Valores que la app tenía fijos antes de leer la configuración, para que sin red ni archivo nada
  * cambie de comportamiento. Salón: nombre, dirección, ciudad, teléfono, WhatsApp y correo de contacto
- * tal como los publica GET /api/configuracion-publica (datos públicos; el enlace del mapa viene vacío).
- * Horario: SALON_RECOGER de tienda/models/pedidoModel. Citas:
+ * tal como los publica GET /api/configuracion-publica (datos públicos); el mapa busca las coordenadas
+ * del salón en Google Maps. Horario: el que publica el sitio web. Citas:
  * textos de citas/views/ReservarCitaView y límites de citas/models/citaModel (2 horas en línea, 15
  * minutos antes en el salón, llegar 20 minutos antes, horarios cada 30). La política de anticipos
  * (10 días hábiles de excepción y 5 para cancelar con reembolso), qué pasa si no llega (pierde el
  * anticipo y 6 meses con pago solo en línea), tienda, pagos y lo demás: valores por omisión del
- * backend (REGLAS_POR_OMISION de reglas-negocio.ts). Los datos de transferencia no se guardan.
+ * backend (REGLAS_POR_OMISION de reglas-negocio.ts). Sin datos de transferencia: solo llegan de la red.
  * Contenido: los que publica hoy el sitio web
  * (CONFIGURACION_POR_OMISION.contenido de miru-franco-web).
  */
@@ -203,7 +230,7 @@ export const RESPALDO_CONFIGURACION: ConfiguracionPublica = congelar({
     ciudad: 'Huejutla de Reyes, Hidalgo',
     telefono: '+52 771 268 1432',
     whatsapp: '+52 771 186 7645',
-    mapaUrl: '',
+    mapaUrl: 'https://www.google.com/maps/search/?api=1&query=21.144534,-98.4205943',
     correoContacto: 'contacto@mirufranco.com',
   },
   horario: {
@@ -267,8 +294,11 @@ export const RESPALDO_CONFIGURACION: ConfiguracionPublica = congelar({
       diasResguardoPagado: 15,
       diasCancelarNoRecogido: 7,
       diasCambioProducto: 7,
+      diasPrepararApartado: 3,
+      diaRecordatorioRecoger: 3,
     },
-    pagos: { mercadoPagoTienda: true, mercadoPagoAnticipos: true, metodosSalon: [...METODOS] },
+    revocacion: { diasHabiles: 5 },
+    pagos: { mercadoPagoTienda: true, mercadoPagoAnticipos: true, metodosSalon: [...METODOS], transferencia: null },
     diasInhabiles: [],
   },
   textos: {},
@@ -346,6 +376,25 @@ function metodosSalon(crudo: unknown): MetodoPagoSalon[] {
   return Array.isArray(crudo)
     ? METODOS.filter((metodo) => crudo.includes(metodo))
     : [...RESPALDO_CONFIGURACION.reglas.pagos.metodosSalon];
+}
+
+/**
+ * Banco, titular y CLABE de texto no vacío y CLABE de 18 dígitos (sin espacios); si falta algo o la
+ * CLABE no es válida, null: nunca se muestra una cuenta a medias.
+ */
+function transferencia(crudo: unknown): DatosTransferencia | null {
+  const t = objeto(crudo);
+  const banco = typeof t.banco === 'string' ? t.banco.trim() : '';
+  const titular = typeof t.titular === 'string' ? t.titular.trim() : '';
+  const clabe = typeof t.clabe === 'string' ? t.clabe.replace(/\s+/g, '') : '';
+  return banco && titular && CLABE.test(clabe) ? { banco, titular, clabe } : null;
+}
+
+/** Días hábiles para revocar: entero de al menos 5 (mínimo de ley); si no, el respaldo. */
+function revocacion(crudo: unknown): ReglasRevocacionPublicas {
+  const dias = objeto(crudo).diasHabiles;
+  const respaldo = RESPALDO_CONFIGURACION.reglas.revocacion;
+  return { diasHabiles: esEnteroNoNegativo(dias) && dias >= respaldo.diasHabiles ? dias : respaldo.diasHabiles };
 }
 
 function textos(crudo: unknown): Record<string, string> {
@@ -442,10 +491,12 @@ export function normalizarConfiguracion(cuerpo: unknown): ConfiguracionPublica {
     reglas: {
       citas: reglasCitas(reglas.citas),
       tienda: porCampos(reglas.tienda, respaldo.tienda),
+      revocacion: revocacion(reglas.revocacion),
       pagos: {
         mercadoPagoTienda: campo(pagos.mercadoPagoTienda, respaldo.pagos.mercadoPagoTienda),
         mercadoPagoAnticipos: campo(pagos.mercadoPagoAnticipos, respaldo.pagos.mercadoPagoAnticipos),
         metodosSalon: metodosSalon(pagos.metodosSalon),
+        transferencia: transferencia(pagos.transferencia),
       },
       diasInhabiles: diasInhabiles(reglas.diasInhabiles),
     },
@@ -477,7 +528,8 @@ async function leerArchivo(): Promise<EstadoConfiguracion | null> {
       return null;
     }
     return {
-      configuracion: normalizarConfiguracion(datos.configuracion),
+      // Un archivo de antes de esta versión pudo traer transferencia: tampoco se usa.
+      configuracion: congelar(sinTransferencia(normalizarConfiguracion(datos.configuracion))),
       origen: 'archivo',
       leidoEn: esEnteroNoNegativo(datos.leidoEn) ? datos.leidoEn : null,
     };
@@ -486,14 +538,23 @@ async function leerArchivo(): Promise<EstadoConfiguracion | null> {
   }
 }
 
-/** Guarda la configuración normalizada y la fecha de la lectura. Si falla, la app sigue igual. */
+/** La configuración sin los datos de transferencia: así se guarda en el archivo. */
+function sinTransferencia(configuracion: ConfiguracionPublica): ConfiguracionPublica {
+  const { reglas } = configuracion;
+  return { ...configuracion, reglas: { ...reglas, pagos: { ...reglas.pagos, transferencia: null } } };
+}
+
+/**
+ * Guarda la configuración normalizada (sin datos de transferencia) y la fecha de la lectura. Si
+ * falla, la app sigue igual.
+ */
 function escribirArchivo({ configuracion, leidoEn }: EstadoConfiguracion): void {
   try {
     const destino = archivo();
     if (!destino.exists) {
       destino.create();
     }
-    destino.write(JSON.stringify({ version: VERSION_ARCHIVO, leidoEn, configuracion }));
+    destino.write(JSON.stringify({ version: VERSION_ARCHIVO, leidoEn, configuracion: sinTransferencia(configuracion) }));
   } catch {
     // Sin disco: la próxima apertura usará el respaldo.
   }

@@ -16,7 +16,17 @@ export const RUTA_CONFIGURACION = '/api/configuracion-publica';
 /** Nombre del archivo en Paths.document. */
 export const ARCHIVO_CONFIGURACION = 'configuracion-publica.json';
 
-/** Respuesta completa: trae también lo que la app no debe guardar (responsable, transferencia...). */
+/**
+ * CLABE ficticia evidente (18 ceros), armada en código para que ninguna cadena de 18 dígitos quede
+ * escrita en el repo. La respuesta la trae con espacios; la app la guarda sin ellos.
+ */
+export const CLABE_FICTICIA = '0'.repeat(18);
+export const CLABE_FICTICIA_CON_ESPACIOS = `${'0'.repeat(6)} ${'0'.repeat(6)} ${'0'.repeat(6)}`;
+
+/** Datos de transferencia ficticios: entran a la memoria, pero nunca al archivo guardado. */
+export const DATOS_TRANSFERENCIA = ['Banco Ficticio', 'Titular Ficticia'];
+
+/** Respuesta completa: trae también lo que la app no debe guardar (responsable, redes...). */
 export function respuestaCompleta(): Record<string, unknown> {
   return {
     salon: {
@@ -85,13 +95,14 @@ export function respuestaCompleta(): Record<string, unknown> {
       },
       tienda: {
         plazoPagoLineaHoras: 12,
+        diasPrepararApartado: 4,
         diaRecordatorioRecoger: 3,
         diasCancelarNoRecogido: 10,
         diasResguardoPagado: 20,
         tiempoPreparacionTexto: 'Listo en un día hábil',
         diasCambioProducto: 5,
       },
-      revocacion: { diasHabiles: 5 },
+      revocacion: { diasHabiles: 6 },
       garantia: { dias: 30 },
       facturacion: { activa: false },
       arco: { diasHabilesRespuesta: 20, diasHabilesEfectividad: 15, diasAvisoVencePronto: 3 },
@@ -99,7 +110,7 @@ export function respuestaCompleta(): Record<string, unknown> {
         mercadoPagoTienda: false,
         mercadoPagoAnticipos: true,
         metodosSalon: ['efectivo', 'transferencia'],
-        transferencia: { banco: 'Banco Ficticio', titular: 'Titular Ficticia', clabe: 'clabe-ficticia' },
+        transferencia: { banco: '  Banco Ficticio  ', titular: 'Titular Ficticia', clabe: CLABE_FICTICIA_CON_ESPACIOS },
       },
       diasInhabiles: [{ fecha: '2026-12-25', motivo: 'Navidad' }],
       variables: { plazoAnticipoHoras: '3' },
@@ -172,8 +183,16 @@ export const CONFIGURACION_COMPLETA: ConfiguracionPublica = {
       diasResguardoPagado: 20,
       diasCancelarNoRecogido: 10,
       diasCambioProducto: 5,
+      diasPrepararApartado: 4,
+      diaRecordatorioRecoger: 3,
     },
-    pagos: { mercadoPagoTienda: false, mercadoPagoAnticipos: true, metodosSalon: ['efectivo', 'transferencia'] },
+    revocacion: { diasHabiles: 6 },
+    pagos: {
+      mercadoPagoTienda: false,
+      mercadoPagoAnticipos: true,
+      metodosSalon: ['efectivo', 'transferencia'],
+      transferencia: { banco: 'Banco Ficticio', titular: 'Titular Ficticia', clabe: CLABE_FICTICIA },
+    },
     diasInhabiles: [{ fecha: '2026-12-25', motivo: 'Navidad' }],
   },
   textos: { 'citas.aviso': 'Aviso ficticio de citas', 'tienda.aviso': 'Aviso ficticio de tienda' },
@@ -183,16 +202,22 @@ export const CONFIGURACION_COMPLETA: ConfiguracionPublica = {
 export const DATOS_EXCLUIDOS = [
   'Responsable Ficticia',
   'privacidad@salon.test',
-  'Banco Ficticio',
-  'Titular Ficticia',
-  'clabe-ficticia',
   'https://facebook.com/ficticio',
   'Campo ajeno ficticio',
 ];
 
+/** CONFIGURACION_COMPLETA tal como queda en el archivo: sin datos de transferencia. */
+export const CONFIGURACION_COMPLETA_EN_ARCHIVO: ConfiguracionPublica = {
+  ...CONFIGURACION_COMPLETA,
+  reglas: {
+    ...CONFIGURACION_COMPLETA.reglas,
+    pagos: { ...CONFIGURACION_COMPLETA.reglas.pagos, transferencia: null },
+  },
+};
+
 /** Configuración guardada antes en el archivo: distinta de la completa y del respaldo. */
 export const CONFIGURACION_GUARDADA: ConfiguracionPublica = {
-  ...CONFIGURACION_COMPLETA,
+  ...CONFIGURACION_COMPLETA_EN_ARCHIVO,
   salon: { ...CONFIGURACION_COMPLETA.salon, nombre: 'Salón Guardado en Archivo' },
 };
 

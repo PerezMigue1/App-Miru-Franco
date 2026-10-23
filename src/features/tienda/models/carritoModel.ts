@@ -1,8 +1,9 @@
 import { MENSAJE_SIN_CONEXION, esErrorDeRed } from '@/features/auth/models/AuthModel';
 import { ApiError, apiDelete, apiGet, apiPost, apiPut } from '@/shared/api/apiClient';
 import { esObjeto, listaDe, primeraImagen, texto, type Crudo } from '@/features/inicio/models/inicioService';
+import { generacionActual } from '@/shared/api/tokenStorage';
 
-import { aCentavos } from './productoModel';
+import { aCentavos, obtenerProducto } from './productoModel';
 
 /**
  * Ítem del carrito del servidor. GET /api/carrito trae { id, cantidad, precioReferencia, activo,
@@ -120,8 +121,12 @@ export function actualizarCantidad(itemId: number, cantidad: number): Promise<vo
   }).then(() => undefined);
 }
 
-/** Quita un ítem: DELETE /api/carrito/:id → { success, message }. */
+/**
+ * Quita un ítem: DELETE /api/carrito/:id → { success, message }. Lo quita también de la memoria del
+ * carrito (lo quitó la clienta o la app: que ya no esté después no es un producto retirado).
+ */
 export function quitarDelCarrito(itemId: number): Promise<void> {
+  memoriaDeSesion().vistos.delete(itemId);
   return apiDelete<unknown>(`/api/carrito/${encodeURIComponent(String(itemId))}`).then(() => undefined);
 }
 
@@ -131,6 +136,126 @@ export function quitarDelCarrito(itemId: number): Promise<void> {
  */
 export async function vaciarCarrito(itemIds: number[]): Promise<void> {
   await Promise.allSettled(itemIds.map(quitarDelCarrito));
+}
+
+// ── Artículos que se dejaron de vender (GP-07.5) ───────────────────────────────────────────
+
+/**
+ * Artículo que se quitó del carrito porque ya no se vende: su producto se desactivó (GET
+ * /api/carrito ya no lo lista) o su presentación quedó no disponible. Solo nombre y tamaño.
+ */
+export interface ArticuloRetirado {
+  itemId: number;
+  nombre: string;
+  tamanio: string;
+  motivo: 'producto' | 'presentacion';
+}
+
+export interface CarritoRevisado {
+  /** Lo que sí se puede comprar (sin los retirados). */
+  items: ItemCarrito[];
+  /** Lo que se quitó en esta revisión. */
+  retirados: ArticuloRetirado[];
+}
+
+interface ArticuloVisto {
+  productoId: number;
+  nombre: string;
+  tamanio: string;
+}
+
+interface MemoriaCarrito {
+  generacion: number;
+  /** Última lista vista en esta sesión, por id del ítem. */
+  vistos: Map<number, ArticuloVisto>;
+  /** Retirados que todavía no se le avisan a la clienta en el carrito. */
+  porAvisar: ArticuloRetirado[];
+}
+
+/**
+ * Memoria del carrito (Singleton de módulo por sesión): la última lista vista, para notar lo que el
+ * servidor dejó de listar sin que la clienta lo quitara, y los avisos pendientes. Solo guarda el
+ * nombre y el tamaño de cada artículo; si cambia la sesión (generacionActual), empieza de cero.
+ */
+let memoria: MemoriaCarrito = { generacion: generacionActual(), vistos: new Map(), porAvisar: [] };
+
+function memoriaDeSesion(): MemoriaCarrito {
+  const generacion = generacionActual();
+  if (memoria.generacion !== generacion) {
+    memoria = { generacion, vistos: new Map(), porAvisar: [] };
+  }
+  return memoria;
+}
+
+/**
+ * El producto ya no está en la tienda (GET /api/productos/:id responde 404 si se desactivó): true;
+ * sigue a la venta: false; sin respuesta clara: null (no se afirma nada y se revisa en la siguiente
+ * lectura).
+ */
+async function productoRetirado(productoId: number): Promise<boolean | null> {
+  try {
+    await obtenerProducto(productoId);
+    return false;
+  } catch (error) {
+    return error instanceof ApiError && error.status === 404 ? true : null;
+  }
+}
+
+/**
+ * Lee el carrito y quita lo que se dejó de vender ANTES de pagar. GET /api/carrito omite los
+ * artículos de productos desactivados, así que se compara con la última lista vista en la sesión:
+ * lo que desapareció sin que la clienta lo quitara y cuyo producto ya no está en la tienda se da por
+ * retirado (si sigue a la venta, se quitó en otro lado y no se avisa). Una presentación con
+ * disponible en false también se retira. Cada retirado se borra con DELETE (nunca lanza: si falla,
+ * el aviso igual se da) y queda por avisar (tomarAvisosCarrito). Lanza solo si falla la lectura.
+ */
+export async function obtenerCarritoRevisado(): Promise<CarritoRevisado> {
+  const lista = await obtenerCarrito();
+  const sesion = memoriaDeSesion();
+  const enLista = new Set(lista.map((item) => item.id));
+  const retirados: ArticuloRetirado[] = lista
+    .filter((item) => !item.disponible)
+    .map((item) => ({ itemId: item.id, nombre: item.nombre, tamanio: item.tamanio, motivo: 'presentacion' }));
+  const desaparecidos = [...sesion.vistos].filter(([id]) => !enLista.has(id));
+  const revisiones = await Promise.all(desaparecidos.map(([, visto]) => productoRetirado(visto.productoId)));
+  if (sesion.generacion !== generacionActual()) {
+    // La sesión cambió mientras se revisaba: nada de esto es de la clienta de ahora.
+    return { items: [], retirados: [] };
+  }
+  const porRevisar = new Map<number, ArticuloVisto>();
+  desaparecidos.forEach(([id, visto], indice) => {
+    if (revisiones[indice] === true) {
+      retirados.push({ itemId: id, nombre: visto.nombre, tamanio: visto.tamanio, motivo: 'producto' });
+    } else if (revisiones[indice] === null) {
+      porRevisar.set(id, visto);
+    }
+  });
+  const items = lista.filter((item) => item.disponible);
+  sesion.vistos = new Map([
+    ...porRevisar,
+    ...items.map((item): [number, ArticuloVisto] => [
+      item.id,
+      { productoId: item.productoId, nombre: item.nombre, tamanio: item.tamanio },
+    ]),
+  ]);
+  if (retirados.length > 0) {
+    sesion.porAvisar.push(...retirados);
+    await vaciarCarrito(retirados.map((retirado) => retirado.itemId));
+  }
+  return { items, retirados };
+}
+
+/** Los retirados que faltaba avisar (se entregan una sola vez). */
+export function tomarAvisosCarrito(): ArticuloRetirado[] {
+  const sesion = memoriaDeSesion();
+  const avisos = sesion.porAvisar;
+  sesion.porAvisar = [];
+  return avisos;
+}
+
+/** Solo para pruebas: olvida la última lista vista y los avisos pendientes. */
+export function reiniciarMemoriaCarrito(): void {
+  memoria = { generacion: generacionActual(), vistos: new Map(), porAvisar: [] };
 }
 
 // ── Totales ────────────────────────────────────────────────────────────────────────────────
@@ -172,6 +297,9 @@ export function esSinExistencias(error: unknown): boolean {
   );
 }
 
+/** Los dos 400 de carrito.service por la presentación, en minúsculas (se comparan completos). */
+const MENSAJES_PRESENTACION: readonly string[] = ['presentación no encontrada', 'presentación no disponible'];
+
 /** Mensaje para la clienta al fallar una acción del carrito. Nunca el texto técnico del servidor. */
 export function mensajeErrorCarrito(error: unknown): string {
   const comun = mensajeComunTienda(error);
@@ -187,8 +315,9 @@ export function mensajeErrorCarrito(error: unknown): string {
     if (error.status === 400 && mensaje.includes('producto ya no est')) {
       return 'Este producto ya no está disponible.';
     }
-    // 400 "Presentación no encontrada" o "Presentación no disponible".
-    if (error.status === 400 && mensaje.includes('presentaci')) {
+    // Solo los dos 400 exactos de carrito.service ("Presentación no encontrada" y "Presentación no
+    // disponible"): otro 400 que mencione la presentación no se confunde con este caso.
+    if (error.status === 400 && MENSAJES_PRESENTACION.includes(mensaje.trim())) {
       return 'Esta presentación ya no está disponible.';
     }
     if (error.status === 404) {

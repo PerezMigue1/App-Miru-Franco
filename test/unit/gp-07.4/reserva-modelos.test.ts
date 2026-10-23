@@ -76,6 +76,8 @@ describe('formaPagoReserva', () => {
       conAnticipo: false,
       sinAnticipo: 'Pagas $350 en el salón el día de tu cita.',
       metodos: 'En el salón puedes pagar con efectivo o tarjeta.',
+      // GP-07.5: la sección trae los datos de transferencia; sin ella entre los métodos, null.
+      transferencia: null,
     });
     expect(formaPagoReserva({ precio: null }, null, config())).toMatchObject({
       sinAnticipo: 'Pagas tu servicio en el salón el día de tu cita.',

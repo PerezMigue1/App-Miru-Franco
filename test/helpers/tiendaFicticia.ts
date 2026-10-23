@@ -563,6 +563,17 @@ export const ARTICULOS_PEDIDO_NORMALIZADOS: ItemPedido[] = [
   },
 ];
 
+/** REGLAS_PEDIDO como las entrega el modelo (GP-07.5): solo los enteros, sin los días inhábiles. */
+export const REGLAS_PEDIDO_NORMALIZADAS = {
+  plazoPagoLineaHoras: REGLAS_PEDIDO.plazoPagoLineaHoras,
+  diasPrepararApartado: REGLAS_PEDIDO.diasPrepararApartado,
+  diaRecordatorioRecoger: REGLAS_PEDIDO.diaRecordatorioRecoger,
+  diasCancelarNoRecogido: REGLAS_PEDIDO.diasCancelarNoRecogido,
+  diasResguardoPagado: REGLAS_PEDIDO.diasResguardoPagado,
+  diasCambioProducto: REGLAS_PEDIDO.diasCambioProducto,
+  diasHabilesRevocacion: REGLAS_PEDIDO.diasHabilesRevocacion,
+};
+
 /** pedidoCrudo() tal como lo entrega el modelo (escrito a mano), con los cambios indicados. */
 export function pedidoNormalizado(cambios: Partial<Pedido> = {}): Pedido {
   return {
@@ -575,9 +586,16 @@ export function pedidoNormalizado(cambios: Partial<Pedido> = {}): Pedido {
     pagadoEn: null,
     items: ARTICULOS_PEDIDO_NORMALIZADOS,
     piezas: 3,
+    // GP-07.5: el modelo normaliza las reglas guardadas (sin los días inhábiles) y los datos de la
+    // revocación del detalle, que pedidoCrudo() no trae.
+    reglas: REGLAS_PEDIDO_NORMALIZADAS,
+    revocableHasta: null,
+    puedeRevocar: false,
+    montoRevocableCentavos: null,
     ...cambios,
   };
 }
+
 
 /**
  * El pedido que crearía el backend con el cuerpo de POST /api/pedidos: estado y método del cuerpo,
@@ -730,6 +748,43 @@ export function rutaEstadoPagoPedido(pedidoId: string | number = ID_PEDIDO): str
   return `GET /api/pagos-en-linea/mercadopago/estado/${encodeURIComponent(String(pedidoId))}`;
 }
 
+/** "GET /api/devoluciones/pedido/:pedidoId?propios=true" (GP-07.5). */
+export function rutaDevolucionesPedido(pedidoId: string | number = ID_PEDIDO): string {
+  return `GET /api/devoluciones/pedido/${encodeURIComponent(String(pedidoId))}?propios=true`;
+}
+
+/** "GET /api/pagos/pedido/:pedidoId?propios=true" (GP-07.5). */
+export function rutaPagosPedido(pedidoId: string | number = ID_PEDIDO): string {
+  return `GET /api/pagos/pedido/${encodeURIComponent(String(pedidoId))}?propios=true`;
+}
+
+/** Estados del pedido que ya tienen un pago aprobado (el de Mercado Pago o el del salón). */
+const PEDIDO_CON_PAGO = ['pagado', 'preparando', 'listo_recoger', 'entregado'];
+
+/**
+ * Pagos del pedido como los lista el backend (GP-07.5): uno aprobado por el total si el pedido ya se
+ * pagó; ninguno si no. Sin payload ni referencias.
+ */
+export function pagosDe(pedido: PedidoCrudo): unknown[] {
+  if (!PEDIDO_CON_PAGO.includes(pedido.estado) || !pedido.pagadoEn) {
+    return [];
+  }
+  return [
+    {
+      id: 80_000 + pedido.id,
+      pedidoId: pedido.id,
+      intentoNumero: 1,
+      monto: pedido.total,
+      moneda: 'MXN',
+      metodo: pedido.metodoPago ?? 'efectivo',
+      estado: 'aprobado',
+      pagadoEn: pedido.pagadoEn,
+      reembolsadoEn: null,
+      creadoEn: pedido.pagadoEn,
+    },
+  ];
+}
+
 /**
  * Rutas de pedidos y pago en línea para servidorConRutas: la lista de `pedidos` (por omisión
  * MIS_PEDIDOS_CRUDOS), crear (pedidoDesdeCuerpo con lo que mande la app, id ID_PEDIDO), la
@@ -750,6 +805,9 @@ export function rutasPedidos(pedidos: PedidoCrudo[] = MIS_PEDIDOS_CRUDOS): Recor
     rutas[rutaPedido(pedido.id)] = () => respuesta(cuerpoPedido(pedido));
     rutas[rutaCancelarPedido(pedido.id)] = () => respuesta(cuerpoCancelarPedido(pedido, reembolso));
     rutas[rutaEstadoPagoPedido(pedido.id)] = () => respuesta(estadoPagoDe(pedido));
+    // GP-07.5: el detalle también lee sus devoluciones (ninguna) y sus pagos.
+    rutas[rutaDevolucionesPedido(pedido.id)] = () => respuesta(cuerpoListaTienda([]));
+    rutas[rutaPagosPedido(pedido.id)] = () => respuesta(cuerpoListaTienda(pagosDe(pedido)));
   }
   return rutas;
 }

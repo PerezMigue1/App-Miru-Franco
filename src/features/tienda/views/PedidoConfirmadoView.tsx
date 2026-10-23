@@ -30,7 +30,7 @@ import { useTheme } from '@/shared/ui/useTheme';
 import { BadgePedido } from '../components/BadgePedido';
 import { DatosRecogerSalon } from '../components/DatosRecogerSalon';
 import { DatoCompra, ResumenCompra } from '../components/ResumenCompra';
-import { esPagoEnSalon, etiquetaMetodoPago, fechaPedido, formatoPrecio } from '../viewmodels/presentacionTienda';
+import { esPagoEnSalon, etiquetaMetodoPago, fechaPedido } from '../viewmodels/presentacionTienda';
 import {
   usePedidoConfirmadoViewModel,
   type Pedido,
@@ -40,57 +40,6 @@ import {
 /** Primera letra en mayúscula ("Sábado 18 de octubre"). */
 function conMayuscula(texto: string): string {
   return texto ? texto.charAt(0).toUpperCase() + texto.slice(1) : texto;
-}
-
-/** Título y mensaje del estado del pedido y de su pago (textos de la web). */
-function textosEstado(vm: PedidoConfirmadoViewModel, pedido: Pedido): { titulo: string; mensaje: string } {
-  switch (vm.vista) {
-    case 'aprobado':
-      return {
-        titulo: '¡Pago recibido!',
-        mensaje:
-          'Tu pedido quedó pagado. Te avisamos en la app y por correo cuando esté listo para recoger en el salón.',
-      };
-    case 'revision':
-      return {
-        titulo: 'Recibimos tu pago',
-        mensaje:
-          'Necesitamos revisarlo antes de preparar tu pedido. El salón te contactará; no tienes que pagar otra vez.',
-      };
-    case 'noCompletado': {
-      const motivo = vm.rechazado
-        ? 'Mercado Pago no aprobó el pago y no se hizo ningún cargo.'
-        : 'Todavía no recibimos tu pago.';
-      const plazo = vm.limite ? ` Tu pedido sigue apartado hasta el ${vm.limite}.` : '';
-      const aviso = vm.pagoPorConfirmar
-        ? ' Si ya pagaste, puede tardar unos minutos en verse: no pagues de nuevo, toca Revisar mi pago.'
-        : '';
-      return { titulo: 'Tu pago no se completó', mensaje: `${motivo}${plazo}${aviso}` };
-    }
-    case 'pendiente':
-      return {
-        titulo: 'Tu pago se está procesando',
-        mensaje: vm.consultando
-          ? 'Mercado Pago aún no lo confirma. Esta pantalla se actualiza sola.'
-          : 'Mercado Pago aún no lo confirma. Te avisamos en la app y por correo en cuanto se acredite.',
-      };
-    case 'consultando':
-      return { titulo: 'Consultando el estado de tu pago', mensaje: '' };
-    case 'porPagar':
-      return {
-        titulo: 'Completa tu pago',
-        mensaje: 'Tu pedido está apartado. Págalo en Mercado Pago para que lo preparemos.',
-      };
-    case 'cancelado':
-      return { titulo: 'Pedido cancelado', mensaje: 'Este pedido está cancelado.' };
-    default:
-      return {
-        titulo: '¡Gracias por tu compra!',
-        mensaje: esPagoEnSalon(pedido)
-          ? 'Te apartamos tu pedido. Te avisamos en la app y por correo cuando esté listo para recogerlo y pagarlo en el salón.'
-          : 'Te avisamos en la app y por correo cuando tu pedido esté listo para recoger en el salón.',
-      };
-  }
 }
 
 /** Confirmación del pedido: estado del pago (o del apartado), detalle y qué sigue. */
@@ -104,8 +53,9 @@ export default function PedidoConfirmadoView() {
     origen?: string;
   }>();
   // pagar=1 llega del checkout: abre Mercado Pago una vez. retorno=mp llega del regreso de
-  // Mercado Pago en arranque en frío: consulta el estado del pago. Nada de esto decide el estado.
+  // Mercado Pago en arranque en frío: verifica el pago. Nada de esto decide el estado.
   const vm = usePedidoConfirmadoViewModel(pedidoId, pagar === '1', retorno === 'mp', origen === 'pedido');
+  const { textos } = vm;
 
   const relleno = { paddingTop: top + espacio.x4, paddingBottom: bottom + espacio.xxl };
 
@@ -118,7 +68,7 @@ export default function PedidoConfirmadoView() {
           <View
             accessible
             accessibilityRole="progressbar"
-            accessibilityLabel="Cargando tu pedido"
+            accessibilityLabel={textos.cargando}
             style={styles.esqueleto}
           >
             <Skeleton estilo={styles.iconoEsqueleto} />
@@ -131,22 +81,22 @@ export default function PedidoConfirmadoView() {
         {vm.estado === 'error' ? (
           <>
             <EmptyState
-              titulo="No pudimos cargar tu pedido"
-              mensaje="Tu pedido no se pierde. Revisa tu conexión e intenta de nuevo."
-              accion={{ titulo: 'Reintentar', onPress: vm.recargar }}
+              titulo={textos.errorCargaTitulo}
+              mensaje={textos.errorCargaTexto}
+              accion={{ titulo: textos.botonReintentarCarga, onPress: vm.recargar }}
             />
-            <Button titulo="Ver mis pedidos" variante="contorno" onPress={vm.verMisPedidos} />
+            <Button titulo={textos.botonMisPedidos} variante="contorno" onPress={vm.verMisPedidos} />
           </>
         ) : null}
 
         {vm.estado === 'noEncontrado' ? (
           <>
             <EmptyState
-              titulo="No encontramos este pedido"
-              mensaje="Revisa tus pedidos para ver su estado."
-              accion={{ titulo: 'Ver mis pedidos', onPress: vm.verMisPedidos }}
+              titulo={textos.noEncontradoTitulo}
+              mensaje={textos.noEncontradoTexto}
+              accion={{ titulo: textos.botonMisPedidos, onPress: vm.verMisPedidos }}
             />
-            <Button titulo="Seguir comprando" variante="contorno" onPress={vm.seguirComprando} />
+            <Button titulo={textos.botonSeguirComprando} variante="contorno" onPress={vm.seguirComprando} />
           </>
         ) : null}
       </ScrollView>
@@ -155,12 +105,13 @@ export default function PedidoConfirmadoView() {
 }
 
 function Contenido({ vm, pedido }: { vm: PedidoConfirmadoViewModel; pedido: Pedido }) {
-  const { titulo, mensaje } = textosEstado(vm, pedido);
+  const { textos } = vm;
   // El bloque del estado entra una vez cada que el estado cambia (opacidad y 8px; solo opacidad
   // con movimiento reducido).
   const entrada = useEntradaContenido();
-  const apartadoPendiente = esPagoEnSalon(pedido) && pedido.estado === 'pendiente_pago';
   const mostrarRecoger = esPagoEnSalon(pedido) && vm.vista !== 'cancelado';
+  // La verificación en curso sobre un estado ya conocido (por ejemplo, pago en proceso) se ve aparte.
+  const verificandoAparte = vm.consultando && vm.vista !== 'consultando';
 
   return (
     <>
@@ -170,12 +121,18 @@ function Contenido({ vm, pedido }: { vm: PedidoConfirmadoViewModel; pedido: Pedi
           key={vm.vista}
           vista={vm.vista}
           entrada={entrada}
-          titulo={titulo}
-          mensaje={mensaje}
-          apartadoPendiente={apartadoPendiente}
-          total={formatoPrecio(pedido.totalCentavos)}
+          titulo={textos.titulo}
+          mensaje={textos.mensaje}
+          pagoEnMostrador={textos.pagoEnMostrador}
+          verificando={textos.verificando}
         />
-        <AvisosPago abriendo={vm.abriendo} errorPago={vm.errorPago} errorConsulta={vm.errorConsulta} />
+        {verificandoAparte ? <IndicadorVerificando texto={textos.verificando} /> : null}
+        <AvisosPago
+          abriendo={vm.abriendo}
+          textoAbriendo={textos.abriendo}
+          errorPago={vm.errorPago}
+          errorConsulta={vm.errorConsulta}
+        />
       </View>
 
       <ResumenCompra
@@ -189,10 +146,10 @@ function Contenido({ vm, pedido }: { vm: PedidoConfirmadoViewModel; pedido: Pedi
         totalCentavos={pedido.totalCentavos}
         encabezado={<EncabezadoPedido pedido={pedido} pagoEnProceso={vm.pagoEnProceso} />}
       >
-        <DatosPago pedido={pedido} limite={vm.limite} />
+        <DatosPago pedido={pedido} etiqueta={textos.formaPago} plazo={textos.plazo} />
       </ResumenCompra>
 
-      {mostrarRecoger ? <TarjetaRecoger /> : null}
+      {mostrarRecoger ? <TarjetaRecoger titulo={textos.dondeRecoges} /> : null}
 
       <AccionesPedido vm={vm} />
     </>
@@ -205,15 +162,15 @@ function MomentoEstado({
   entrada,
   titulo,
   mensaje,
-  apartadoPendiente,
-  total,
+  pagoEnMostrador,
+  verificando,
 }: {
   vista: PedidoConfirmadoViewModel['vista'];
   entrada: ReturnType<typeof useEntradaContenido>;
   titulo: string;
   mensaje: string;
-  apartadoPendiente: boolean;
-  total: string;
+  pagoEnMostrador: string | null;
+  verificando: string;
 }) {
   const { colores } = useTheme();
   const conMomento = vista === 'aprobado' || vista === 'apartado';
@@ -230,37 +187,57 @@ function MomentoEstado({
           <Hourglass color={colores.texto} size={confirmacion.icono} strokeWidth={icono.trazo} />
         </View>
       ) : null}
-      {vista === 'consultando' ? <Skeleton estilo={styles.iconoEsqueleto} /> : null}
+      {vista === 'consultando' ? (
+        // Indicador de la verificación: el pulso del skeleton (fijo con movimiento reducido).
+        <View
+          accessible
+          accessibilityRole="progressbar"
+          accessibilityLabel={verificando}
+          accessibilityState={{ busy: true }}
+        >
+          <Skeleton estilo={styles.iconoEsqueleto} />
+        </View>
+      ) : null}
       <Text accessibilityRole="header" style={[styles.titulo, { color: colores.texto }]}>
         {titulo}
       </Text>
-      {vista === 'consultando' ? (
-        <View style={styles.lineasConsulta}>
-          <Skeleton estilo={styles.lineaMensaje} />
-          <Skeleton estilo={styles.lineaCorta} />
-        </View>
-      ) : null}
       {mensaje ? <Text style={[styles.mensaje, { color: colores.textoSuave }]}>{mensaje}</Text> : null}
-      {apartadoPendiente ? (
-        <Text style={[styles.mensaje, styles.cifra, { color: colores.texto }]}>
-          Pagas {total} en el mostrador cuando pases por él.
-        </Text>
+      {pagoEnMostrador ? (
+        <Text style={[styles.mensaje, styles.cifra, { color: colores.texto }]}>{pagoEnMostrador}</Text>
       ) : null}
     </Animated.View>
   );
 }
 
+/** "Verificando tu pago" debajo de un estado ya conocido mientras se vuelve a consultar. */
+function IndicadorVerificando({ texto }: { texto: string }) {
+  const { colores } = useTheme();
+  return (
+    <View
+      accessible
+      accessibilityRole="progressbar"
+      accessibilityLabel={texto}
+      accessibilityState={{ busy: true }}
+      style={styles.verificando}
+    >
+      <View style={styles.iconoLinea}>
+        <Skeleton estilo={styles.puntoVerificando} />
+      </View>
+      <Text style={[styles.textoVerificando, { color: colores.textoSuave }]}>{texto}</Text>
+    </View>
+  );
+}
+
 function AvisosPago({
   abriendo,
+  textoAbriendo,
   errorPago,
   errorConsulta,
-}: Pick<PedidoConfirmadoViewModel, 'abriendo' | 'errorPago' | 'errorConsulta'>) {
+}: Pick<PedidoConfirmadoViewModel, 'abriendo' | 'errorPago' | 'errorConsulta'> & { textoAbriendo: string }) {
   const { colores } = useTheme();
   return (
     <>
-      {abriendo ? (
-        <Text style={[styles.aviso, { color: colores.textoSuave }]}>Abriendo Mercado Pago</Text>
-      ) : null}
+      {abriendo ? <Text style={[styles.aviso, { color: colores.textoSuave }]}>{textoAbriendo}</Text> : null}
       {errorPago ? <FilaAviso texto={errorPago} /> : null}
       {errorConsulta ? <FilaAviso texto={errorConsulta} /> : null}
     </>
@@ -281,33 +258,31 @@ function EncabezadoPedido({ pedido, pagoEnProceso }: { pedido: Pedido; pagoEnPro
   );
 }
 
-function DatosPago({ pedido, limite }: { pedido: Pedido; limite: PedidoConfirmadoViewModel['limite'] }) {
+function DatosPago({ pedido, etiqueta, plazo }: { pedido: Pedido; etiqueta: string; plazo: string | null }) {
   const { colores } = useTheme();
   return (
     <View style={[styles.datos, { borderTopColor: colores.hairline }]}>
-      <DatoCompra etiqueta="Forma de pago" valor={etiquetaMetodoPago(pedido.metodoPago)} />
-      {limite ? (
-        <View style={styles.plazo} accessible accessibilityLabel={`Paga antes del ${limite}.`}>
+      <DatoCompra etiqueta={etiqueta} valor={etiquetaMetodoPago(pedido.metodoPago)} />
+      {plazo ? (
+        <View style={styles.plazo} accessible accessibilityLabel={plazo}>
           <View style={styles.iconoLinea}>
             <Hourglass color={colores.texto} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
           </View>
-          <Text style={[styles.textoPlazo, { color: colores.texto }]}>
-            Paga antes del {limite}.
-          </Text>
+          <Text style={[styles.textoPlazo, { color: colores.texto }]}>{plazo}</Text>
         </View>
       ) : null}
     </View>
   );
 }
 
-function TarjetaRecoger() {
+function TarjetaRecoger({ titulo }: { titulo: string }) {
   const { colores } = useTheme();
   return (
     <View
       style={[styles.tarjeta, { backgroundColor: colores.superficie, shadowColor: colores.sombraTarjeta }]}
     >
       <Text accessibilityRole="header" style={[styles.subtitulo, { color: colores.texto }]}>
-        Dónde lo recoges
+        {titulo}
       </Text>
       <DatosRecogerSalon />
     </View>
@@ -317,6 +292,7 @@ function TarjetaRecoger() {
 /**
  * Un solo botón primario: pagar o revisar el pago cuando aplica; si no, Mis pedidos.
  * Tras volver de Mercado Pago sin ver el pago, revisar va primero y pagar otra vez queda atrás.
+ * Con el pago en proceso nunca se ofrece pagar: solo revisar de nuevo.
  */
 function botonesPedido(vm: PedidoConfirmadoViewModel) {
   const primarioRevisar = vm.errorConsulta !== null || vm.pagoPorConfirmar;
@@ -328,6 +304,7 @@ function botonesPedido(vm: PedidoConfirmadoViewModel) {
 }
 
 function AccionesPedido({ vm }: { vm: PedidoConfirmadoViewModel }) {
+  const { textos } = vm;
   const { primarioRevisar, primarioPagar, pagarSecundario, revisarSecundario } = botonesPedido(vm);
   const conPrimario = primarioRevisar || primarioPagar;
 
@@ -336,24 +313,24 @@ function AccionesPedido({ vm }: { vm: PedidoConfirmadoViewModel }) {
       <BotonPrimario vm={vm} primarioRevisar={primarioRevisar} primarioPagar={primarioPagar} />
       {pagarSecundario ? (
         <Button
-          titulo="Pagar de nuevo"
+          titulo={textos.botonPagarDeNuevo}
           variante="contorno"
           onPress={vm.pagar}
           cargando={vm.abriendo}
-          accessibilityHint="Abre Mercado Pago en el navegador. Si ya pagaste, no lo hagas."
+          accessibilityHint={textos.pistaPagarDeNuevo}
         />
       ) : null}
       {revisarSecundario ? (
-        <Button titulo="Revisar de nuevo" variante="secundario" onPress={vm.revisarDeNuevo} />
+        <Button titulo={textos.botonRevisarDeNuevo} variante="secundario" onPress={vm.revisarDeNuevo} />
       ) : null}
       <Button
-        titulo="Ver mis pedidos"
+        titulo={textos.botonMisPedidos}
         variante={conPrimario ? 'secundario' : 'primario'}
         onPress={vm.verMisPedidos}
         deshabilitado={vm.abriendo}
       />
       <Button
-        titulo="Seguir comprando"
+        titulo={textos.botonSeguirComprando}
         variante={conPrimario || revisarSecundario ? 'contorno' : 'secundario'}
         onPress={vm.seguirComprando}
         deshabilitado={vm.abriendo}
@@ -372,17 +349,17 @@ function BotonPrimario({
   primarioPagar: boolean;
 }) {
   if (primarioRevisar) {
-    return <Button titulo="Revisar mi pago" onPress={vm.revisarDeNuevo} cargando={vm.consultando} />;
+    return <Button titulo={vm.textos.botonRevisarMiPago} onPress={vm.revisarDeNuevo} cargando={vm.consultando} />;
   }
   if (!primarioPagar) {
     return null;
   }
   return (
     <Button
-      titulo={vm.vista === 'porPagar' ? 'Pagar con Mercado Pago' : 'Reintentar pago'}
+      titulo={vm.textos.botonPagar}
       onPress={vm.pagar}
       cargando={vm.abriendo}
-      accessibilityHint="Abre Mercado Pago en el navegador"
+      accessibilityHint={vm.textos.pistaPagar}
     />
   );
 }
@@ -454,17 +431,29 @@ const styles = StyleSheet.create({
     fontFamily: fuente.textoMedio,
     fontVariant: ['tabular-nums'],
   },
-  lineasConsulta: {
-    alignSelf: 'stretch',
-    alignItems: 'center',
-    gap: espacio.s,
-  },
   aviso: {
     marginTop: espacio.m,
     fontFamily: fuente.texto,
     fontSize: tipo.cuerpo.tamano,
     lineHeight: tipo.cuerpo.linea,
     textAlign: 'center',
+  },
+  verificando: {
+    marginTop: espacio.m,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    gap: espacio.s,
+  },
+  puntoVerificando: {
+    width: icono.tamanoPequeno,
+    height: icono.tamanoPequeno,
+    borderRadius: radio.pastilla,
+  },
+  textoVerificando: {
+    fontFamily: fuente.textoMedio,
+    fontSize: tipo.cuerpo.tamano,
+    lineHeight: tipo.cuerpo.linea,
   },
   filaAviso: {
     marginTop: espacio.m,
@@ -553,10 +542,6 @@ const styles = StyleSheet.create({
     marginTop: espacio.s,
     width: esqueleto.anchoMedio,
     height: tipo.titulo.linea,
-  },
-  lineaMensaje: {
-    width: esqueleto.anchoMedio,
-    height: esqueleto.linea,
   },
   lineaCorta: {
     width: esqueleto.anchoCorto,

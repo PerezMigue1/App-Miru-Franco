@@ -3,15 +3,18 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useAuth } from '@/features/auth/viewmodels/useAuth';
 import { ApiError } from '@/shared/api/apiClient';
+import { obtenerTexto } from '@/shared/api/textosSitio';
 
 import {
   actualizarCantidad,
   itemConProblema,
   mensajeErrorCarrito,
-  obtenerCarrito,
+  obtenerCarritoRevisado,
   piezasCarrito,
   quitarDelCarrito,
+  tomarAvisosCarrito,
   totalCarrito,
+  type ArticuloRetirado,
   type ItemCarrito,
 } from '../models/carritoModel';
 
@@ -47,6 +50,26 @@ export interface CarritoViewModel {
   quitando: boolean;
   verTienda: () => void;
   continuar: () => void;
+  /**
+   * Artículos que se dejaron de vender y se quitaron del carrito antes de pagar, uno por renglón
+   * ("X ya no está a la venta y lo quitamos de tu carrito."). Vacío si no hay.
+   */
+  avisosRetirados: string[];
+  cerrarAvisosRetirados: () => void;
+  textoCerrarAviso: string;
+}
+
+/** "Nombre, 250ml": cómo se nombra al artículo en el aviso. */
+function nombreArticulo(retirado: ArticuloRetirado): string {
+  return [retirado.nombre, retirado.tamanio].filter(Boolean).join(', ');
+}
+
+/** El aviso de un artículo retirado (el producto se desactivó o su presentación ya no está disponible). */
+function textoRetirado(retirado: ArticuloRetirado): string {
+  return obtenerTexto(
+    retirado.motivo === 'producto' ? 'tienda.carrito.productoRetirado' : 'tienda.carrito.presentacionRetirada',
+    { producto: nombreArticulo(retirado) || null },
+  );
 }
 
 /** Una fila que se está guardando conserva el valor que la clienta ya ve. */
@@ -81,6 +104,7 @@ export function useCarritoViewModel(): CarritoViewModel {
   const [errores, setErrores] = useState<Readonly<Record<number, string>>>({});
   const [porQuitar, setPorQuitar] = useState<ItemCarrito | null>(null);
   const [quitando, setQuitando] = useState(false);
+  const [avisosRetirados, setAvisosRetirados] = useState<string[]>([]);
 
   // Solo la última lectura escribe la lista (reenfoques rápidos o pantalla desmontada).
   const solicitud = useRef(0);
@@ -108,6 +132,7 @@ export function useCarritoViewModel(): CarritoViewModel {
     setOcupados(new Set());
     setErrores({});
     setPorQuitar(null);
+    setAvisosRetirados([]);
     setEstado('cargando');
   }, [cuenta]);
 
@@ -142,10 +167,15 @@ export function useCarritoViewModel(): CarritoViewModel {
     if (!yaCargo.current) {
       setEstado('cargando');
     }
-    obtenerCarrito()
-      .then((lista) => {
+    // Revisado: lo que se dejó de vender ya viene quitado y queda por avisar.
+    obtenerCarritoRevisado()
+      .then(({ items: lista }) => {
         if (actual !== solicitud.current) {
           return;
+        }
+        const nuevos = tomarAvisosCarrito().map(textoRetirado);
+        if (nuevos.length > 0) {
+          setAvisosRetirados((previos) => [...previos, ...nuevos.filter((aviso) => !previos.includes(aviso))]);
         }
         setItems((previos) => conservarOcupados(lista, previos, ocupadosRef.current));
         yaCargo.current = true;
@@ -270,6 +300,8 @@ export function useCarritoViewModel(): CarritoViewModel {
 
   const hayProblemas = items.some(itemConProblema);
 
+  const cerrarAvisosRetirados = useCallback(() => setAvisosRetirados([]), []);
+
   const continuar = useCallback(() => {
     if (items.length === 0 || hayProblemas || ocupadosRef.current.size > 0) {
       return;
@@ -295,5 +327,8 @@ export function useCarritoViewModel(): CarritoViewModel {
     quitando,
     verTienda,
     continuar,
+    avisosRetirados,
+    cerrarAvisosRetirados,
+    textoCerrarAviso: obtenerTexto('tienda.carrito.cerrarAviso'),
   };
 }

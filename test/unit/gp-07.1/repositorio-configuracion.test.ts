@@ -18,10 +18,13 @@ import {
 import { archivosGuardados, fallarArchivos, leerArchivo, limpiarArchivos } from '../../helpers/archivosLocales';
 import {
   ARCHIVO_CONFIGURACION,
+  CLABE_FICTICIA,
   CONFIGURACION_COMPLETA,
+  CONFIGURACION_COMPLETA_EN_ARCHIVO,
   CONFIGURACION_GUARDADA,
   contenidoArchivo,
   DATOS_EXCLUIDOS,
+  DATOS_TRANSFERENCIA,
   respuestaCompleta,
   rutaConfiguracion,
   RUTA_CONFIGURACION,
@@ -109,8 +112,8 @@ describe('orden de carga: memoria vigente, red, archivo y respaldo', () => {
 
     await expect(cargarConfiguracion()).resolves.toEqual(CONFIGURACION_COMPLETA);
     expect(estadoConfiguracion().origen).toBe('red');
-    // Y reemplaza lo guardado con la versión nueva.
-    expect(JSON.parse(leerArchivo(ARCHIVO_CONFIGURACION) ?? '').configuracion).toEqual(CONFIGURACION_COMPLETA);
+    // Y reemplaza lo guardado con la versión nueva (sin datos de transferencia, GP-07.5).
+    expect(JSON.parse(leerArchivo(ARCHIVO_CONFIGURACION) ?? '').configuracion).toEqual(CONFIGURACION_COMPLETA_EN_ARCHIVO);
   });
 
   it('archivo: sin red, usa lo guardado en el archivo', async () => {
@@ -182,7 +185,8 @@ describe('vigencia de la caché', () => {
 });
 
 describe('archivo en disco', () => {
-  it('guarda solo la versión, la fecha de lectura y la configuración normalizada', async () => {
+  // GP-07.5: los datos de transferencia quedan en memoria, pero nunca en el archivo.
+  it('guarda solo la versión, la fecha de lectura y la configuración normalizada, sin datos de transferencia', async () => {
     jest.useFakeTimers({ now: AHORA });
     simularServidor(rutaConfiguracion());
 
@@ -190,10 +194,11 @@ describe('archivo en disco', () => {
 
     expect(archivosGuardados()).toEqual([`file:///documentos/${ARCHIVO_CONFIGURACION}`]);
     const texto = leerArchivo(ARCHIVO_CONFIGURACION) ?? '';
-    expect(JSON.parse(texto)).toEqual({ version: 1, leidoEn: AHORA, configuracion: CONFIGURACION_COMPLETA });
-    for (const dato of DATOS_EXCLUIDOS) {
+    expect(JSON.parse(texto)).toEqual({ version: 1, leidoEn: AHORA, configuracion: CONFIGURACION_COMPLETA_EN_ARCHIVO });
+    for (const dato of [...DATOS_EXCLUIDOS, ...DATOS_TRANSFERENCIA, CLABE_FICTICIA]) {
       expect(texto).not.toContain(dato);
     }
+    expect(obtenerConfiguracion().reglas.pagos.transferencia).toEqual(CONFIGURACION_COMPLETA.reglas.pagos.transferencia);
   });
 
   it.each([

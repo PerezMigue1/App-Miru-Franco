@@ -12,6 +12,7 @@ import { ScreenHeader } from '@/shared/ui/ScreenHeader';
 import { borde, espacio, fuente, pantalla, tipo } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
+import { AvisoTienda } from '../components/AvisoTienda';
 import { FilaCarrito, FilaCarritoEsqueleto } from '../components/FilaCarrito';
 import { formatoPrecio } from '../viewmodels/presentacionTienda';
 import { useCarritoViewModel, type ItemCarrito } from '../viewmodels/useCarritoViewModel';
@@ -114,6 +115,18 @@ export default function CarritoView() {
   return (
     <View style={[styles.raiz, { backgroundColor: colores.fondo }]}>
       <ScreenHeader titulo={TITULO} subtitulo={SUBTITULO} tituloEnContenido={conLista} />
+      {/* Región en vivo siempre montada: TalkBack anuncia qué se quitó del carrito y por qué. */}
+      <View collapsable={false} accessibilityLiveRegion="polite" style={styles.avisos}>
+        {vm.conSesion && vm.avisosRetirados.length > 0 ? (
+          <View style={styles.aviso}>
+            <AvisoTienda
+              tipo="aviso"
+              textos={vm.avisosRetirados}
+              cerrar={{ etiqueta: vm.textoCerrarAviso, onPress: vm.cerrarAvisosRetirados }}
+            />
+          </View>
+        ) : null}
+      </View>
       <View style={styles.flex}>{cuerpo}</View>
 
       {vm.conSesion && conItems ? (
@@ -172,6 +185,12 @@ const styles = StyleSheet.create({
   },
   flex: {
     flex: 1,
+  },
+  avisos: {
+    paddingHorizontal: pantalla.margen,
+  },
+  aviso: {
+    paddingBottom: espacio.m,
   },
   lista: {
     gap: espacio.m,

@@ -2,7 +2,7 @@ import { useFocusEffect, useRouter, type Href } from 'expo-router';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 import { ApiError } from '@/shared/api/apiClient';
-import { obtenerConfiguracion, suscribir } from '@/shared/api/configuracionPublica';
+import { obtenerConfiguracion, suscribir, type DatosTransferencia } from '@/shared/api/configuracionPublica';
 import { rutaVisorDocumento } from '@/shared/api/documentosLegales';
 import { obtenerTexto } from '@/shared/api/textosSitio';
 import { useCandado } from '@/shared/ui/useCandado';
@@ -36,6 +36,7 @@ import {
   type PoliticaConsultada,
 } from '../models/gestionCitaModel';
 import { duracionParaMostrar } from '../models/servicioModel';
+import { transferenciaEnSalon } from './formaPagoReserva';
 import { useAceptacionAnticipos, type AceptacionAnticipos } from './useAceptacionAnticipos';
 
 // La vista no importa de models/: recibe estos tipos del viewmodel.
@@ -55,6 +56,11 @@ export interface PresentacionDetalle {
   /** "2 h 30 min", o null. */
   duracion: string | null;
   formaPago: FormaPagoCita;
+  /**
+   * Datos para pagar por transferencia en el salón (el anticipo apartado en el salón o el saldo), solo
+   * con la cita vigente y la transferencia activa y completa; si no, null (PagoEnSalonCita de la web).
+   */
+  transferencia: DatosTransferencia | null;
   /** Motivo de la cancelación para la clienta, o null. */
   motivoCancelacion: string | null;
   /** Se puede reprogramar o cancelar. */
@@ -135,6 +141,7 @@ function presentacionDe(cita: Cita, ahora: Date, config: ReturnType<typeof obten
     insigniaAnticipo: etiquetaEstadoAnticipo(estadoAnticipo(cita)),
     duracion: duracionParaMostrar(cita.servicioDuracionMinutos),
     formaPago: formaPagoDeCita(cita, ahora, config),
+    transferencia: esVigente(cita) ? transferenciaEnSalon(config) : null,
     // La cancelación por anticipo no pagado ya la explica la forma de pago: no se repite.
     motivoCancelacion: esCanceladaPorAnticipo(cita) ? null : motivoCancelacionParaClienta(cita),
     cambios,
