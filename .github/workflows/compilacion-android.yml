@@ -59,7 +59,7 @@ jobs:
           echo "perfil=$perfil" >> "$GITHUB_OUTPUT"
 
       - name: Descargar el código
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # EXPO_PUBLIC_API_URL y EXPO_PUBLIC_WEB_URL se insertan en src al compilar y la ofuscación
       # las codifica, así que el análisis del bundle ya no las ve; por eso se revisan aquí, antes.
@@ -85,7 +85,7 @@ jobs:
           '
 
       - name: Preparar Node 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -94,7 +94,7 @@ jobs:
         run: npm ci --ignore-scripts
 
       - name: Preparar EAS CLI
-        uses: expo/expo-github-action@c7b66a9c327a43a8fa7c0158e7f30d6040d2481e # v8.2.1
+        uses: expo/expo-github-action@9da89d3617bb88139671bad31b09c65714c2ee06 # 9.0.1
         with:
           eas-version: 25.3.0
           token: ${{ secrets.EXPO_TOKEN }}
@@ -169,10 +169,10 @@ jobs:
     timeout-minutes: 45
     steps:
       - name: Descargar el código
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Preparar Java 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 21
@@ -194,7 +194,7 @@ jobs:
       # Solo reportes: MobSF (JSON y PDF), resumen de JADX y salida de aapt2.
       - name: Subir reportes del análisis
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: analisis-binario-android
           path: |

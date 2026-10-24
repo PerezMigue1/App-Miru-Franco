@@ -173,10 +173,31 @@ Análisis del binario (`.github/scripts/analizar-binario.sh`):
 
 - Revisa `targetSdk` 36, `minSdk`, `versionCode` y los permisos finales con aapt2; la alineación de 16 KB (zipalign y segmentos de las `.so` de `arm64-v8a`); secretos y URLs de desarrollo con JADX y en el bundle; la evidencia de ofuscación con 10 identificadores de `src` (5 nombres locales no exportados y 5 textos únicos), y el reporte de MobSF (informativo).
 - Las apariciones de `localhost` que generan librerías conocidas (por ejemplo `http://localhost:8081` de `getDevServer` de React Native) se listan aparte como permitidas; cualquier otra hace fallar el job.
+- En `resources/` solo se permiten, por archivo, nombre y valor exacto, los dos textos del menú de desarrollo de React Native (`catalyst_change_bundle_location_input_hint` y `catalyst_change_bundle_location_instructions` de `ReactAndroid/src/main/res/devsupport/values/strings.xml`). Un recurso con otro nombre o valor hace fallar el job, y el resumen muestra el nombre del recurso, nunca su valor.
 - Con la ofuscación, los textos de `src` (incluidas `EXPO_PUBLIC_API_URL` y `EXPO_PUBLIC_WEB_URL`) quedan codificados en el bundle, así que esa búsqueda ya no ve una URL de desarrollo escrita en ellos.
 - Lo compensa el paso "Verificar el perfil de compilación", que antes de `eas build` falla si el perfil de `eas.json` no trae las URLs de producción exactas y `OFUSCAR_JS=1`.
-- Falla solo por hallazgos de JADX, un `localhost` no permitido, `targetSdk` distinto de 36, falta de `arm64-v8a`, alineación de 16 KB o, en `preview` y `production`, más de 2 de los 10 identificadores visibles en el bundle.
+- Falla solo por hallazgos de JADX, un `localhost` o recurso no permitido, `targetSdk` distinto de 36, falta de `arm64-v8a`, alineación de 16 KB o, en `preview` y `production`, más de 2 de los 10 identificadores visibles en el bundle.
 - Los reportes quedan como artefactos 14 días; nunca se sube el APK, el AAB ni el keystore desechable.
+- `USE_BIOMETRIC` y `USE_FINGERPRINT` (de `androidx.biometric`, que trae `expo-secure-store`) están en `blockedPermissions` porque la app no usa `requireAuthentication`. Si algún día se usa, hay que quitarlos de la lista.
+
+Hallazgos de MobSF aceptados (v4.5.3, build de production con versionCode 2):
+
+| Severidad | Hallazgo | Justificación |
+|---|---|---|
+| high | Se instala en Android 7.0 sin parches (minSdk 24) | Es el mínimo por omisión de Expo SDK 57; subirlo a 29 dejaría fuera a las clientas con Android 7 a 9. |
+| high | Cifrado CBC con relleno PKCS5 | Es el CryptoObject de relleno de `androidx.biometric` (`CryptoObjectUtils`); SecureStore cifra con AES/GCM. |
+| warning | `taskAffinity` en `BrowserProxyActivity` | Viene de `expo-web-browser`, no está exportada y la usa el inicio con Google. |
+| warning | Receiver exportado protegido con `DUMP` | `ProfileInstallReceiver` de AndroidX; `DUMP` solo lo tienen adb y el sistema. |
+| warning | Revelación de dirección IP | Texto de ayuda del servidor de desarrollo en `DebugServerException` de React Native. |
+| warning | Crea archivos temporales | Cachés de Fresco y expo-image, subida multipart y recorte de fotos, en almacenamiento privado. |
+| warning | Información sensible escrita en el código | Falsos positivos por nombres como `key` en Compose, Glide, Fresco, rnscreens y Expo; ninguna clase propia. |
+| warning | Generador aleatorio inseguro | `kotlin.random` y OkHttp para ids y máscaras de WebSocket; PKCE usa `expo-crypto`. |
+| warning | MD5 débil | Suma de verificación de archivos en `expo-file-system` y `expo-asset`, no seguridad. |
+| warning | WebView con JavaScript | `DomWebView` de `@expo/dom-webview` (componentes DOM de Expo); la app no tiene ninguno. |
+| warning | `allowFileAccessFromFileURLs` en WebView | El mismo `DomWebView`; nunca recibe URLs de la clienta. |
+| warning | SHA-1 débil | UUID v5 de Expo (lo exige el RFC 4122) y llaves de caché de Fresco. |
+| warning | Almacenamiento externo | Caché de Fresco y `FileProvider` de AndroidX y expo-clipboard; la app no guarda datos ahí. |
+| warning | Posibles secretos en el código | Cadenas de las `.so` (tablas hex y símbolos C++); JADX con los patrones del CI no encuentra secretos. |
 
 ## Pruebas
 
