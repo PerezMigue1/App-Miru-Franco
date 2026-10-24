@@ -14,7 +14,7 @@
 #
 # Falla (exit 1, después de escribir reportes y resumen) solo si:
 #   - hay hallazgos de JADX o del bundle (secretos, o URLs de desarrollo fuera de las excepciones
-#     permitidas del bundle o por encima de su máximo de apariciones);
+#     permitidas del bundle y de recursos o por encima de su máximo de apariciones);
 #   - targetSdk no es 36;
 #   - falta arm64-v8a;
 #   - la alineación de 16 KB no pasa;
@@ -90,8 +90,9 @@ PATRONES_DESARROLLO=(
 )
 
 # Excepciones exactas de URLs de desarrollo, SOLO para las cadenas del bundle (en el código propio
-# de JADX y en resources/ no hay excepciones). Cada entrada es "máximo|modo|texto|librería": el
-# texto es fijo, de una librería, y se compara literal (sin expresión regular). Modo "exacta"
+# de JADX no hay excepciones; las de resources/ van en EXCEPCIONES_RECURSOS). Cada entrada es
+# "máximo|modo|texto|librería": el texto es fijo, de una librería, y se compara literal (sin
+# expresión regular). Modo "exacta"
 # acepta cualquier aparición del texto; modo "suelta" solo la que no es parte de una URL (sin "/"
 # ni "@" antes y sin ":", "/" ni "." después), para que una URL nueva con localhost no se cuele.
 #
@@ -109,6 +110,23 @@ EXCEPCIONES_BUNDLE=(
   # Analizador de URL de Expo (parseFileHost, "localhost" === t, línea 1046). Lo usa
   # node_modules/expo/src/winter/url.ts.
   "1|suelta|localhost|whatwg-url-minimum (node_modules/whatwg-url-minimum/dist/whatwg-url-minimum.js)"
+)
+
+# Excepciones exactas de URLs de desarrollo en resources/, SOLO para PATRONES_DESARROLLO (los
+# secretos no tienen excepciones). Cada entrada es "máximo|archivo|recurso|valor|librería": el
+# archivo es relativo a la salida de JADX y solo se acepta la línea que, sin la sangría, es
+# exactamente <string name="recurso">valor</string>. Un recurso con otro nombre, otro valor u otro
+# archivo sigue siendo hallazgo. Las líneas de más por encima del máximo también.
+#
+# El valor se escribe con $'...' porque trae comillas invertidas, "\n" literales de Android y
+# seis espacios duros seguidos (U+00A0, bytes \xc2\xa0) que en la fuente son &#160;.
+EXCEPCIONES_RECURSOS=(
+  # Menú de desarrollo de React Native 0.86.3 (proyecto catalyst, translatable="false"):
+  # node_modules/react-native/ReactAndroid/src/main/res/devsupport/values/strings.xml, línea 7.
+  # Llega por el AAR com.facebook.react:react-android.
+  "1|resources/res/values/strings.xml|catalyst_change_bundle_location_input_hint|127.0.0.1:8081|react-native (ReactAndroid/src/main/res/devsupport/values/strings.xml)"
+  # El mismo archivo, línea 8.
+  "1|resources/res/values/strings.xml|catalyst_change_bundle_location_instructions|"$'You can connect either via USB (localhost - default) or Wifi. If you connect via USB and running with a physical device, make sure you:\\n 1. Connect your device via USB\\n 2. Set the bundle location to `localhost:8081`\\n 3. Run this command in your terminal:\\n\xc2\xa0\xc2\xa0\xc2\xa0\xc2\xa0\xc2\xa0\xc2\xa0`%1$s`'"|react-native (ReactAndroid/src/main/res/devsupport/values/strings.xml)"
 )
 
 # Evidencia de ofuscación: nombres locales no exportados y literales de texto únicos de src. Con
@@ -149,6 +167,7 @@ AVISOS_MOBSF="sin dato"
 TOTAL_JADX=0
 FILAS_JADX=()
 FILAS_PERMITIDAS=()
+FILAS_PERMITIDAS_RECURSOS=()
 VISIBLES=()
 NOTAS=()
 FALLAS=()
@@ -342,15 +361,90 @@ registrar_hallazgo() {
   TOTAL_JADX=$((TOTAL_JADX + $2))
 }
 
-# $1 = nombre, $2 = regex, resto = opciones de grep y rutas relativas a SALIDA_JADX.
-# Solo usa grep -l y grep -c: nunca imprime el texto encontrado.
+# Quita la sangría y los espacios finales de una línea.
+recortar() {
+  local linea="$1"
+  linea="${linea#"${linea%%[![:space:]]*}"}"
+  printf '%s' "${linea%"${linea##*[![:space:]]}"}"
+}
+
+# $1 = archivo relativo a SALIDA_JADX, $2 = línea ya recortada. Verdadero si la línea es una de
+# EXCEPCIONES_RECURSOS para ese archivo (comparación literal, sin expresión regular).
+es_excepcion_recurso() {
+  local entrada maximo archivo recurso valor libreria
+  for entrada in "${EXCEPCIONES_RECURSOS[@]}"; do
+    IFS='|' read -r maximo archivo recurso valor libreria <<< "$entrada"
+    if [[ "$1" == "$archivo" && "$2" == "<string name=\"$recurso\">$valor</string>" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Nombre del recurso de una línea XML (atributo name), solo si es un identificador válido.
+nombre_recurso() {
+  if [[ "$1" =~ name=\"([A-Za-z0-9_.]+)\" ]]; then
+    printf '%s' "${BASH_REMATCH[1]}"
+  else
+    printf 'sin nombre'
+  fi
+}
+
+# $1 = nombre, $2 = regex, $3 = archivo .xml de resources/, $4 = "si" para saltar las líneas de
+# EXCEPCIONES_RECURSOS. Registra un hallazgo por recurso con su nombre y nunca su valor: las
+# líneas se leen a variables y no se imprimen.
+buscar_en_recurso() {
+  local nombre="$1" regex="$2" archivo="$3" excepciones="$4" linea recurso
+  local -A conteos=()
+  while IFS= read -r linea; do
+    linea="$(recortar "$linea")"
+    if [[ "$excepciones" == "si" ]] && es_excepcion_recurso "$archivo" "$linea"; then
+      continue
+    fi
+    recurso="$(nombre_recurso "$linea")"
+    conteos["$recurso"]=$(( ${conteos["$recurso"]:-0} + 1 ))
+  done < <(grep -E --binary-files=text -e "$regex" "$SALIDA_JADX/$archivo" || true)
+  for recurso in "${!conteos[@]}"; do
+    registrar_hallazgo "$nombre" "${conteos[$recurso]}" "$archivo (recurso: $recurso)"
+  done
+}
+
+# $1 = nombre, $2 = regex, $3 = "si" para aplicar EXCEPCIONES_RECURSOS, resto = opciones de grep y
+# rutas relativas a SALIDA_JADX. Solo usa grep -l y grep -c: nunca imprime el texto encontrado.
+# En los .xml de resources/ el hallazgo lleva el nombre del recurso, nunca su valor.
 buscar_en_jadx() {
-  local nombre="$1" regex="$2" archivo conteo
-  shift 2
+  local nombre="$1" regex="$2" excepciones="$3" archivo conteo
+  shift 3
   while IFS= read -r archivo; do
+    if [[ "$archivo" == resources/*.xml ]]; then
+      buscar_en_recurso "$nombre" "$regex" "$archivo" "$excepciones"
+      continue
+    fi
     conteo="$(grep -cE --binary-files=text -e "$regex" "$SALIDA_JADX/$archivo" || true)"
     registrar_hallazgo "$nombre" "$conteo" "$archivo"
   done < <(cd "$SALIDA_JADX" && grep -rlsE --binary-files=text --exclude=index.android.bundle -e "$regex" "$@" || true)
+}
+
+# Cuenta cuántas veces aparece cada línea de EXCEPCIONES_RECURSOS en su archivo. Las de más por
+# encima del máximo son hallazgo. La tabla de permitidas lleva el recurso, nunca el valor.
+aplicar_excepciones_recursos() {
+  local entrada maximo archivo recurso valor libreria linea encontradas
+  for entrada in "${EXCEPCIONES_RECURSOS[@]}"; do
+    IFS='|' read -r maximo archivo recurso valor libreria <<< "$entrada"
+    encontradas=0
+    if [[ -f "$SALIDA_JADX/$archivo" ]]; then
+      while IFS= read -r linea; do
+        if [[ "$(recortar "$linea")" == "<string name=\"$recurso\">$valor</string>" ]]; then
+          encontradas=$((encontradas + 1))
+        fi
+      done < <(grep -F --binary-files=text -e "name=\"$recurso\"" "$SALIDA_JADX/$archivo" || true)
+    fi
+    FILAS_PERMITIDAS_RECURSOS+=("$(printf '| \140%s\140 | %s | %s | %s | %s |' "$(celda "$recurso")" \
+      "$(celda "$archivo")" "$(celda "$libreria")" "$maximo" "$encontradas")")
+    if (( encontradas > maximo )); then
+      registrar_hallazgo "excepcion_sobre_maximo" "$((encontradas - maximo))" "$archivo (recurso: $recurso)"
+    fi
+  done
 }
 
 # $1 = nombre, $2 = regex, $3 = archivo de cadenas. Cuenta apariciones (grep -o), no líneas,
@@ -416,17 +510,18 @@ aplicar_excepciones_bundle() {
 buscar_patrones() {
   local entrada rutas_desarrollo=(resources)
   aplicar_excepciones_bundle
+  aplicar_excepciones_recursos
   if [[ -d "$SALIDA_JADX/sources/com/mirufranco" ]]; then
     rutas_desarrollo+=(sources/com/mirufranco)
   else
     NOTAS+=("JADX no generó sources/com/mirufranco; las URLs de desarrollo se buscaron en el bundle y en resources/.")
   fi
   for entrada in "${PATRONES_SECRETOS[@]}"; do
-    buscar_en_jadx "${entrada%%=*}" "${entrada#*=}" sources resources
+    buscar_en_jadx "${entrada%%=*}" "${entrada#*=}" no sources resources
     buscar_en_bundle "${entrada%%=*}" "${entrada#*=}" "$CADENAS_BUNDLE"
   done
   for entrada in "${PATRONES_DESARROLLO[@]}"; do
-    buscar_en_jadx "${entrada%%=*}" "${entrada#*=}" --exclude-dir=lib "${rutas_desarrollo[@]}"
+    buscar_en_jadx "${entrada%%=*}" "${entrada#*=}" si --exclude-dir=lib "${rutas_desarrollo[@]}"
     buscar_en_bundle "${entrada%%=*}" "${entrada#*=}" "$CADENAS_BUNDLE_FILTRADAS"
   done
 }
@@ -511,6 +606,12 @@ tabla_permitidas() {
   printf '%s\n' "${FILAS_PERMITIDAS[@]}"
 }
 
+tabla_permitidas_recursos() {
+  echo "| Recurso | Archivo | Librería | Máximo | Encontradas |"
+  echo "|---|---|---|---|---|"
+  printf '%s\n' "${FILAS_PERMITIDAS_RECURSOS[@]}"
+}
+
 lista_visibles() {
   local identificador
   if (( ${#VISIBLES[@]} == 0 )); then
@@ -535,8 +636,8 @@ escribir_resumen_jadx() {
   {
     echo "# Resumen de JADX ${VERSION_JADX}"
     echo ""
-    echo "Solo se anotan el patrón, el conteo y la ruta; nunca el texto encontrado. En JADX se"
-    echo "cuentan líneas; en el bundle, apariciones."
+    echo "Solo se anotan el patrón, el conteo y la ruta (en recursos, también el nombre del"
+    echo "recurso); nunca el texto encontrado. En JADX se cuentan líneas; en el bundle, apariciones."
     echo ""
     tabla_jadx
     echo ""
@@ -545,6 +646,12 @@ escribir_resumen_jadx() {
     echo "Excepciones fijas de librerías; solo aplican al bundle, no a JADX ni a resources/."
     echo ""
     tabla_permitidas
+    echo ""
+    echo "## Permitidas en recursos"
+    echo ""
+    echo "Recursos fijos de librerías, por archivo, nombre y valor exacto; solo para URLs de desarrollo."
+    echo ""
+    tabla_permitidas_recursos
     echo ""
     echo "Patrones de secretos (toda la salida de JADX y el bundle):"
     for entrada in "${PATRONES_SECRETOS[@]}"; do echo "- ${entrada%%=*}"; done
@@ -582,6 +689,10 @@ escribir_resumen() {
     echo "### Permitidas en el bundle"
     echo ""
     tabla_permitidas
+    echo ""
+    echo "### Permitidas en recursos"
+    echo ""
+    tabla_permitidas_recursos
     echo ""
     echo "### Identificadores propios visibles en el bundle (${#VISIBLES[@]} de ${#IDENTIFICADORES_PROPIOS[@]})"
     echo ""
