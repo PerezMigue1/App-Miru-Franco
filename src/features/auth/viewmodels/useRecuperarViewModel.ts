@@ -3,14 +3,11 @@ import { useState } from 'react';
 
 import { esSinRespuesta, mensajeParaClienta } from '@/shared/api/mensajesError';
 import { obtenerTexto } from '@/shared/api/textosSitio';
+import { useEsperaLimite } from '@/shared/api/useEsperaLimite';
 import { useTextos } from '@/shared/api/useTextos';
 import { useCandado } from '@/shared/ui/useCandado';
 
-import {
-  estadoHttp,
-  normalizarCorreo,
-  problemaDeCorreo,
-} from '../models/AuthModel';
+import { normalizarCorreo, problemaDeCorreo } from '../models/AuthModel';
 import { solicitarEnlaceRecuperacion } from '../models/authService';
 
 /** Mismo mensaje siempre (del catálogo): no revela si el correo tiene cuenta. */
@@ -23,6 +20,10 @@ export interface RecuperarViewModel {
   error: string | null;
   mensaje: string | null;
   cargando: boolean;
+  /** Tras un 429: "Enviar enlace" queda deshabilitado hasta que pasen los segundos del servidor. */
+  enEspera: boolean;
+  /** Texto de "Enviar enlace": "Enviando…" o, tras un 429, "Intenta de nuevo en N s". */
+  textoEnviar: string;
   enviar: () => void;
   volver: () => void;
   /**
@@ -39,6 +40,8 @@ export function useRecuperarViewModel(): RecuperarViewModel {
   const [error, setError] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [cargando, setCargando] = useState(false);
+  const limite = useEsperaLimite();
+  const texto = useTextos();
 
   const setCorreo = (texto: string) => {
     setCorreoCrudo(texto);
@@ -58,7 +61,8 @@ export function useRecuperarViewModel(): RecuperarViewModel {
       await solicitarEnlaceRecuperacion(normalizarCorreo(correo));
       setMensaje(mensajeNeutro());
     } catch (fallo) {
-      if (esSinRespuesta(fallo) || estadoHttp(fallo) === 429) {
+      // Un 429 muestra su message y deja el botón en espera con los segundos del servidor.
+      if (limite.esperarSiLimite(fallo) || esSinRespuesta(fallo)) {
         setError(mensajeParaClienta(fallo));
       } else {
         // Cualquier otra respuesta del servidor muestra el mismo mensaje neutro.
@@ -71,7 +75,7 @@ export function useRecuperarViewModel(): RecuperarViewModel {
 
   const candado = useCandado();
   const enviar = () => {
-    if (cargando) {
+    if (cargando || limite.activa) {
       return;
     }
     // Candado inmediato además de cargando: solicitar() ya muestra cualquier error en pantalla.
@@ -86,7 +90,17 @@ export function useRecuperarViewModel(): RecuperarViewModel {
     }
   };
 
-  const notaGoogle = useTextos()('auth.recuperar.notaGoogle');
-
-  return { correo, setCorreo, errorCorreo, error, mensaje, cargando, enviar, volver, notaGoogle };
+  return {
+    correo,
+    setCorreo,
+    errorCorreo,
+    error,
+    mensaje,
+    cargando,
+    enEspera: limite.activa,
+    textoEnviar: limite.texto ?? texto(cargando ? 'auth.recuperar.enviando' : 'auth.recuperar.enviar'),
+    enviar,
+    volver,
+    notaGoogle: texto('auth.recuperar.notaGoogle'),
+  };
 }

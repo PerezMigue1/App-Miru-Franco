@@ -42,6 +42,12 @@ let generacion = 0;
 let enVuelo: Promise<void> | null = null;
 /** Ids de los avisos que llegaron en vivo mientras la carga en vuelo esperaba; null sin carga. */
 let llegadosEnCarga: Set<string> | null = null;
+/**
+ * Ids de todos los avisos que ya entraron en esta sesión (en vivo o con la lista). Un aviso
+ * recuperado puede repetirse por el flujo (GP-09): si ya se vio, aunque la clienta lo haya borrado o
+ * el servidor ya no lo traiga, no vuelve a entrar ni a salir en pantalla. Se vacía al cerrar sesión.
+ */
+let vistos = new Set<string>();
 
 /** Llama a cada oyente; uno que falla no impide avisar a los demás. */
 function avisarA<T extends unknown[]>(lista: Set<(...args: T) => void>, ...args: T): void {
@@ -107,14 +113,31 @@ export function useNoLeidos(): number {
 
 // ── Acciones ─────────────────────────────────────────────────────────────────────────────────
 
+/** La lista sin ids repetidos: se queda la primera vez que aparece cada uno (la más reciente). */
+function sinRepetidos(avisos: Aviso[]): Aviso[] {
+  const ids = new Set<string>();
+  return avisos.filter((aviso) => {
+    if (ids.has(aviso.id)) {
+      return false;
+    }
+    ids.add(aviso.id);
+    return true;
+  });
+}
+
 /**
  * La lista del servidor más los avisos que llegaron en vivo mientras se pedía y que la respuesta no
- * trae (el servidor la armó antes): esos van primero, como están ahora en memoria. Sin ids repetidos.
+ * trae (el servidor la armó antes): esos van primero, como están ahora en memoria. Sin ids repetidos,
+ * aunque la respuesta traiga dos veces el mismo aviso.
  */
 function combinarConLlegados(respuesta: Aviso[], llegados: ReadonlySet<string>): Aviso[] {
-  const enRespuesta = new Set(respuesta.map((aviso) => aviso.id));
+  const unicos = sinRepetidos(respuesta);
+  const enRespuesta = new Set(unicos.map((aviso) => aviso.id));
   const vivos = estado.avisos.filter((aviso) => llegados.has(aviso.id) && !enRespuesta.has(aviso.id));
-  return [...vivos, ...respuesta];
+  for (const aviso of unicos) {
+    vistos.add(aviso.id);
+  }
+  return [...vivos, ...unicos];
 }
 
 async function ejecutarCarga(gen: number): Promise<void> {
@@ -154,11 +177,15 @@ export function cargarAvisos(): Promise<void> {
   return carga;
 }
 
-/** Un aviso que llegó en vivo: entra al inicio sin pedir la lista y sin repetir su id. */
+/**
+ * Un aviso que llegó en vivo: entra al inicio sin pedir la lista y sin repetir su id. Uno que ya se
+ * vio en esta sesión (repetido por el flujo o ya traído por la lista) no entra ni sale en pantalla.
+ */
 export function agregarAviso(aviso: Aviso): void {
-  if (estado.avisos.some((actual) => actual.id === aviso.id)) {
+  if (vistos.has(aviso.id) || estado.avisos.some((actual) => actual.id === aviso.id)) {
     return;
   }
+  vistos.add(aviso.id);
   // Si hay una carga en vuelo, su respuesta no debe borrarlo al llegar.
   llegadosEnCarga?.add(aviso.id);
   fijar({ avisos: [aviso, ...estado.avisos] });
@@ -236,6 +263,7 @@ export function limpiarAvisos(): void {
   generacion += 1;
   enVuelo = null;
   llegadosEnCarga = null;
+  vistos = new Set<string>();
   estado = ESTADO_INICIAL;
   avisarA(oyentes);
 }

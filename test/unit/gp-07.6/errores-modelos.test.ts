@@ -1,6 +1,6 @@
 /// <reference types="jest" />
 
-import { esCuentaYaActivada } from '@/features/auth/models/AuthModel';
+import { mensajeDelReenvio } from '@/features/auth/models/AuthModel';
 import {
   MENSAJES_ANTICIPO_EN_SALON,
   MENSAJES_ANTICIPO_PARA_CLIENTA,
@@ -151,13 +151,21 @@ describe('gestionCitaModel: registrar la aceptación de la política', () => {
   });
 });
 
-describe('AuthModel.esCuentaYaActivada', () => {
-  it.each<[string, unknown, boolean]>([
-    ['el 400 del reenvío con la cuenta activada', new ApiError(400, 'Este correo electrónico ya está activado.'), true],
-    ['otro 400', new ApiError(400, 'Código incorrecto.'), false],
-    ['el mismo texto con otro status', new ApiError(409, 'Este correo electrónico ya está activado.'), false],
-    ['sin red', new ErrorDeRed(), false],
-  ])('%s: %s', (_caso, error, esperado) => {
-    expect(esCuentaYaActivada(error)).toBe(esperado);
+// GP-09: el reenvío ya no responde 400 por una cuenta activada; su 200 trae un mensaje neutro.
+describe('AuthModel.mensajeDelReenvio', () => {
+  const NEUTRO = 'Si la cuenta existe y falta activarla, te enviamos un código nuevo.';
+  it.each<[string, unknown, string | null]>([
+    ['el 200 con su mensaje neutro', { success: true, message: NEUTRO }, NEUTRO],
+    ['el mensaje con espacios', { message: `  ${NEUTRO} ` }, NEUTRO],
+    ['sin message', { success: true }, null],
+    ['un message vacío', { message: '   ' }, null],
+    ['un message que no es texto', { message: 42 }, null],
+    ['un nombre HTTP en inglés', { message: 'OK' }, null],
+    ['otro nombre HTTP en mayúsculas', { message: 'TOO MANY REQUESTS' }, null],
+    ['un texto técnico', { message: 'TypeError: ficticio en reenviarCodigoException' }, null],
+    ['sin cuerpo', null, null],
+    ['un cuerpo que no es objeto', 'texto suelto', null],
+  ])('%s', (_caso, respuesta, esperado) => {
+    expect(mensajeDelReenvio(respuesta)).toBe(esperado);
   });
 });

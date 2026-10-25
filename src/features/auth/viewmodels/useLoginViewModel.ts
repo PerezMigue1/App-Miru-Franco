@@ -1,13 +1,16 @@
 import { usePathname, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
-import { mensajeParaClienta } from '@/shared/api/mensajesError';
+import { CODIGO_BLOQUEO_TEMPORAL, mensajeParaClienta } from '@/shared/api/mensajesError';
 import { obtenerTexto } from '@/shared/api/textosSitio';
+import { useEsperaLimite } from '@/shared/api/useEsperaLimite';
+import { useTextos } from '@/shared/api/useTextos';
 import { useCandado } from '@/shared/ui/useCandado';
 
 import {
   ErrorRolNoPermitido,
   MENSAJE_ROL_NO_PERMITIDO,
+  esBloqueoTemporal,
   esCuentaSinActivar,
   estadoHttp,
   normalizarCorreo,
@@ -31,6 +34,10 @@ export interface LoginViewModel {
   errores: ErroresLogin;
   errorGeneral: string | null;
   cargando: boolean;
+  /** Tras un 429 (límite o BLOQUEO_TEMPORAL): "Entrar" queda deshabilitado hasta que pase la espera. */
+  enEspera: boolean;
+  /** Texto de "Entrar": "Entrando…" o, tras un 429, "Intenta de nuevo en N s". */
+  textoEntrar: string;
   entrar: () => void;
   /** Al regresar de la activación: el correo escrito y nada más (sin contraseña ni errores). */
   prepararAcceso: (correo: string) => void;
@@ -46,8 +53,10 @@ function mensajeDeLogin(error: unknown): string {
   if (estado === 401) {
     return obtenerTexto('auth.login.credenciales');
   }
-  // 403 sin code del login: bloqueo temporal tras intentos fallidos (el backend no manda los minutos aparte).
+  // Un 429 (límite o BLOQUEO_TEMPORAL) muestra su message en español; el aviso propio de bloqueo es
+  // el respaldo del BLOQUEO_TEMPORAL sin message y del 403 sin code (bloqueo de antes de GP-09).
   return mensajeParaClienta(error, {
+    porCode: { [CODIGO_BLOQUEO_TEMPORAL]: obtenerTexto('auth.login.bloqueo') },
     respaldo: obtenerTexto(estado === 403 ? 'auth.login.bloqueo' : 'auth.login.noSePudo'),
   });
 }
@@ -55,7 +64,8 @@ function mensajeDeLogin(error: unknown): string {
 /**
  * Inicio de sesión (CP-01 y CP-02): valida, llama al backend y, si todo sale bien, la sesión
  * guardada hace que las rutas protegidas abran Inicio. Una credencial inválida solo muestra un
- * mensaje: no se crea ninguna sesión.
+ * mensaje: no se crea ninguna sesión. Un 429 (incluido BLOQUEO_TEMPORAL) nunca es sesión vencida ni
+ * cuenta sin activar: muestra el message del servidor y deja "Entrar" en espera (useEsperaLimite).
  */
 export function useLoginViewModel(): LoginViewModel {
   const { ingresar } = useAuth();
@@ -67,9 +77,19 @@ export function useLoginViewModel(): LoginViewModel {
   const [errores, setErrores] = useState<ErroresLogin>(SIN_ERRORES);
   const [errorGeneral, setErrorGeneral] = useState<string | null>(null);
   const [cargando, setCargando] = useState(false);
+  const limite = useEsperaLimite();
+  const texto = useTextos();
+  // Correo (normalizado) del 429 BLOQUEO_TEMPORAL que dejó "Entrar" en espera; null si la espera es
+  // por IP (429 sin code), que sigue aunque se cambie el correo.
+  const bloqueoDe = useRef<string | null>(null);
 
   const setCorreo = (texto: string) => {
     setCorreoCrudo(texto);
+    if (bloqueoDe.current !== null && normalizarCorreo(texto) !== bloqueoDe.current) {
+      // El bloqueo era de esa cuenta: con otro correo se puede intentar de nuevo.
+      bloqueoDe.current = null;
+      limite.detener();
+    }
     if (correoEnVivo) {
       setErrores((previos) => ({ ...previos, correo: problemaDeCorreo(texto) }));
     }
@@ -101,6 +121,9 @@ export function useLoginViewModel(): LoginViewModel {
     try {
       await ingresar(email, clave);
     } catch (error) {
+      if (limite.esperarSiLimite(error)) {
+        bloqueoDe.current = esBloqueoTemporal(error) ? email : null;
+      }
       if (esCuentaSinActivar(error)) {
         // La activación regresa a esta misma pantalla de acceso.
         push({ pathname: '/activar', params: { email, volverA: rutaAcceso(ruta) } });
@@ -114,7 +137,7 @@ export function useLoginViewModel(): LoginViewModel {
 
   const candado = useCandado();
   const entrar = () => {
-    if (cargando) {
+    if (cargando || limite.activa) {
       return;
     }
     // Candado inmediato además de cargando: enviar() ya muestra cualquier error en pantalla.
@@ -138,6 +161,8 @@ export function useLoginViewModel(): LoginViewModel {
     errores,
     errorGeneral,
     cargando,
+    enEspera: limite.activa,
+    textoEntrar: limite.texto ?? texto(cargando ? 'auth.login.entrando' : 'auth.login.entrar'),
     entrar,
     prepararAcceso,
   };

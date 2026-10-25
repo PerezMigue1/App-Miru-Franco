@@ -289,6 +289,18 @@ function TarjetaRecoger({ titulo }: { titulo: string }) {
   );
 }
 
+/** "Volver al carrito" en el lugar de pagar, con la misma variante que tendría pagar ahí. */
+function BotonVolverCarrito({ vm, variante }: { vm: PedidoConfirmadoViewModel; variante: 'primario' | 'contorno' }) {
+  return (
+    <Button
+      titulo={vm.textos.botonVolverCarrito}
+      variante={variante}
+      onPress={vm.irAlCarrito}
+      accessibilityHint={vm.textos.pistaVolverCarrito}
+    />
+  );
+}
+
 /**
  * Un solo botón primario: pagar o revisar el pago cuando aplica; si no, Mis pedidos.
  * Tras volver de Mercado Pago sin ver el pago, revisar va primero y pagar otra vez queda atrás.
@@ -296,8 +308,9 @@ function TarjetaRecoger({ titulo }: { titulo: string }) {
  */
 function botonesPedido(vm: PedidoConfirmadoViewModel) {
   const primarioRevisar = vm.errorConsulta !== null || vm.pagoPorConfirmar;
-  const primarioPagar = !primarioRevisar && vm.puedePagar;
-  const pagarSecundario = vm.pagoPorConfirmar && vm.puedePagar;
+  // Tras un 409 de piezas agotadas, "Volver al carrito" ocupa el lugar de pagar (el viewmodel lo dice).
+  const primarioPagar = !primarioRevisar && (vm.puedePagar || vm.volverAlCarrito);
+  const pagarSecundario = vm.pagoPorConfirmar && (vm.puedePagar || vm.volverAlCarrito);
   const revisarSecundario =
     !primarioRevisar && vm.vista === 'pendiente' && !vm.consultando && !vm.abriendo;
   return { primarioRevisar, primarioPagar, pagarSecundario, revisarSecundario };
@@ -311,12 +324,16 @@ function AccionesPedido({ vm }: { vm: PedidoConfirmadoViewModel }) {
   return (
     <View style={styles.acciones}>
       <BotonPrimario vm={vm} primarioRevisar={primarioRevisar} primarioPagar={primarioPagar} />
-      {pagarSecundario ? (
+      {pagarSecundario && vm.volverAlCarrito ? (
+        <BotonVolverCarrito vm={vm} variante="contorno" />
+      ) : null}
+      {pagarSecundario && !vm.volverAlCarrito ? (
         <Button
           titulo={textos.botonPagarDeNuevo}
           variante="contorno"
           onPress={vm.pagar}
           cargando={vm.abriendo}
+          deshabilitado={vm.pagoEnEspera}
           accessibilityHint={textos.pistaPagarDeNuevo}
         />
       ) : null}
@@ -354,11 +371,15 @@ function BotonPrimario({
   if (!primarioPagar) {
     return null;
   }
+  if (vm.volverAlCarrito) {
+    return <BotonVolverCarrito vm={vm} variante="primario" />;
+  }
   return (
     <Button
       titulo={vm.textos.botonPagar}
       onPress={vm.pagar}
       cargando={vm.abriendo}
+      deshabilitado={vm.pagoEnEspera}
       accessibilityHint={vm.textos.pistaPagar}
     />
   );

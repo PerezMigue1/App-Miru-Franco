@@ -214,5 +214,12 @@
   "citas.reserva.sinConfirmar": "No supimos si tu cita quedó registrada. Revisa Mis citas antes de intentar de nuevo.",
   "citas.reserva.verMisCitas": "Revisar Mis citas",
   "citas.cancelar.anticipoEnProceso": "Si ya pagaste tu anticipo y aún no se refleja, espera unos minutos antes de cancelar. Si el pago se aprueba después de cancelar, el salón revisará la devolución.",
-  "citas.cancelar.anticipoSinConfirmar": "No pudimos revisar el pago de tu anticipo. Si ya lo pagaste, espera unos minutos antes de cancelar; si el pago se aprueba después de cancelar, el salón revisará la devolución."
+  "citas.cancelar.anticipoSinConfirmar": "No pudimos revisar el pago de tu anticipo. Si ya lo pagaste, espera unos minutos antes de cancelar; si el pago se aprueba después de cancelar, el salón revisará la devolución.",
+  "red.conectando": "Conectando con el salón…",
+  "errores.esperaLimite": "Intenta de nuevo en {segundos} s",
+  "auth.recuperar.enviar": "Enviar enlace",
+  "auth.recuperar.enviando": "Enviando…",
+  "tienda.pedido.pago.sinPiezas": "Ya no hay piezas suficientes de uno de los productos de tu pedido. Revisa tu pedido en Mis pedidos.",
+  "tienda.pago.botonVolverCarrito": "Volver al carrito",
+  "tienda.pago.pistaVolverCarrito": "Abre tu carrito con las piezas que hay ahora"
 }

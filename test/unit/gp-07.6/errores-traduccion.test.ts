@@ -255,7 +255,7 @@ describe('mensajeSinContexto', () => {
 });
 
 describe('apiClient: tiempo agotado y referencia', () => {
-  it('el límite de 15 s da ErrorDeRed con motivo tiempoAgotado y su texto propio', async () => {
+  it('el límite de 60 s da ErrorDeRed con motivo tiempoAgotado y su texto propio', async () => {
     jest.useFakeTimers();
     globalThis.fetch = jest.fn(
       (_url: unknown, init?: RequestInit) =>
@@ -266,7 +266,7 @@ describe('apiClient: tiempo agotado y referencia', () => {
 
     const pedido = apiGet('/api/servicios', { publica: true });
     const resultado = expect(pedido).rejects.toMatchObject({ name: 'ErrorDeRed', motivo: 'tiempoAgotado' });
-    await jest.advanceTimersByTimeAsync(15000);
+    await jest.advanceTimersByTimeAsync(60000);
     await resultado;
 
     const error = await pedido.catch((e: unknown) => e);

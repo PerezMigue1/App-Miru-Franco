@@ -6,96 +6,18 @@ import '../../helpers/mocksPantallas';
 import { fireEvent, screen, waitFor } from 'expo-router/testing-library';
 
 import { CLAVE, CORREO } from '../../helpers/datosClienta';
-import { abrirDesdeBienvenida, LIMITE_MS, prepararPruebasDePantalla, type App } from '../../helpers/pantallas';
-import { leerSecureStore } from '../../helpers/secureStore';
+import { LIMITE_MS, prepararPruebasDePantalla } from '../../helpers/pantallas';
 import {
-  CATALOGOS_VACIOS,
-  llamadasA,
-  respuesta,
-  servidorConRutas,
-  type Llamada,
-} from '../../helpers/servidorSimulado';
-
-const PREGUNTA = '¿Cuál es el nombre de tu primera mascota?';
-
-/** GET /api/pregunta-seguridad: { success, data[] }. */
-const PREGUNTAS = {
-  success: true,
-  data: [
-    { id: '1', pregunta: PREGUNTA },
-    { id: '2', pregunta: '¿En qué ciudad naciste?' },
-  ],
-};
-
-/** Lo que piden las pantallas de fondo y el selector de preguntas. */
-const simularServidor = servidorConRutas({
-  ...CATALOGOS_VACIOS,
-  'GET /api/pregunta-seguridad': () => respuesta(PREGUNTAS),
-});
-
-/** Lo que responde hoy POST /api/auth/verificar-correo sin sesión de admin, exista o no la cuenta. */
-const RESPUESTA_CORREO_NEUTRAL = { existe: false, message: 'Comprobaremos el correo al crear la cuenta' };
-
-/**
- * Espera a que llegue la respuesta neutral de la verificación del correo y revisa que el campo no
- * afirme nada: ni "Correo disponible" ni el texto del servidor.
- */
-async function esperarRespuestaNeutral(llamadas: Llamada[]): Promise<void> {
-  await waitFor(() =>
-    expect(llamadasA(llamadas, 'POST', '/api/auth/verificar-correo').length).toBeGreaterThan(0),
-  );
-  await waitFor(() => expect(screen.queryByText('Verificando correo…')).not.toBeOnTheScreen());
-  expect(screen.queryByText('Correo disponible')).not.toBeOnTheScreen();
-  expect(screen.queryByText(RESPUESTA_CORREO_NEUTRAL.message)).not.toBeOnTheScreen();
-  expect(screen.queryByText('Este correo ya está registrado')).not.toBeOnTheScreen();
-}
-
-/**
- * Abre la app sin sesión en '/', cierra la intro de la grieta si aparece y, desde la hoja de
- * bienvenida, toca "Crear cuenta": queda en Registro, encima de la pestaña Inicio.
- */
-async function abrirRegistro(): Promise<App> {
-  const app = await abrirDesdeBienvenida('Crear cuenta', '/registro');
-  expect(await screen.findByText('Crea tu cuenta')).toBeOnTheScreen();
-  expect(screen.getByRole('tab', { name: 'Registro' })).toBeSelected();
-  expect(screen.getByLabelText('Paso 1 de 2: Tu cuenta')).toBeOnTheScreen();
-  return app;
-}
-
-/** Paso 1, "Tu cuenta": todos los campos con datos ficticios válidos. */
-async function llenarPaso1(): Promise<void> {
-  await fireEvent.changeText(screen.getByLabelText('Nombre completo'), '  Clienta Ficticia ');
-  await fireEvent.changeText(screen.getByLabelText('Correo electrónico'), 'Clienta@Ejemplo.test');
-  // Pegado con espacios: el campo lo deja en 10 dígitos.
-  await fireEvent.changeText(screen.getByLabelText('Teléfono'), '771 123 4567');
-  // El campo de fecha agrega las diagonales: queda 15/03/1990.
-  await fireEvent.changeText(screen.getByLabelText('Fecha de nacimiento'), '15031990');
-  expect(screen.getByLabelText('Fecha de nacimiento')).toHaveProp('value', '15/03/1990');
-
-  // La pregunta se elige en una hoja que carga la lista del servidor al abrirse.
-  await fireEvent.press(screen.getByText('Elige una pregunta'));
-  await fireEvent.press(await screen.findByRole('radio', { name: PREGUNTA }));
-  await waitFor(() => expect(screen.queryByText('¿En qué ciudad naciste?')).not.toBeOnTheScreen());
-  expect(screen.getByText(PREGUNTA)).toBeOnTheScreen();
-
-  await fireEvent.changeText(screen.getByLabelText('Respuesta de seguridad'), ' Firulais ');
-  await fireEvent.changeText(screen.getByLabelText('Contraseña'), CLAVE);
-  await fireEvent.changeText(screen.getByLabelText('Confirmar contraseña'), CLAVE);
-}
-
-/** Paso 2, "Tu cabello": tipo, un color opcional, sin alergias, con tratamientos y el aviso. */
-async function llenarPaso2(): Promise<void> {
-  await fireEvent.press(screen.getByRole('radio', { name: 'Tipo de cabello: Lacio' }));
-  await fireEvent.changeText(screen.getByLabelText('Color natural (opcional)'), '  Castaño oscuro ');
-  await fireEvent.press(screen.getByRole('radio', { name: '¿Tienes alergias a productos?: No' }));
-  await fireEvent.press(screen.getByRole('radio', { name: '¿Tratamientos químicos previos?: Sí' }));
-  await fireEvent.changeText(
-    await screen.findByLabelText('Especifica los tratamientos'),
-    'Tinte hace seis meses',
-  );
-  await fireEvent.press(screen.getByRole('checkbox', { name: /^Acepto el/ }));
-  expect(screen.getByRole('checkbox', { name: /^Acepto el/ })).toBeChecked();
-}
+  abrirRegistro,
+  esperarRespuestaNeutral,
+  llenarPaso1,
+  llenarPaso2,
+  PREGUNTA,
+  RESPUESTA_CORREO_NEUTRAL,
+  simularServidor,
+} from '../../helpers/registroPantalla';
+import { leerSecureStore } from '../../helpers/secureStore';
+import { llamadasA, respuesta } from '../../helpers/servidorSimulado';
 
 /** Cuerpo que la app arma hoy para POST /api/usuarios/registro con los datos de arriba. */
 const CUERPO_ESPERADO = {
@@ -267,6 +189,56 @@ describe('Registro de una clienta en dos pasos (GP-05)', () => {
       expect(screen.getByRole('tab', { name: 'Acceso' })).toBeSelected();
       expect(screen.getByLabelText('Correo electrónico')).toHaveProp('value', 'Clienta@Ejemplo.test');
       expect(screen.getByText('¿Olvidaste tu contraseña?')).toBeOnTheScreen();
+
+      esperarConsolaLimpia();
+    },
+    LIMITE_MS,
+  );
+
+  it(
+    'cada campo se valida al salir de él y la tecla del teclado avanza sin enviar el registro',
+    async () => {
+      const llamadas = simularServidor({
+        'POST /api/auth/verificar-correo': () => respuesta(RESPUESTA_CORREO_NEUTRAL),
+      });
+      await abrirRegistro();
+
+      // Paso 1 vacío: la tecla "siguiente" y salir del campo marcan lo que falta en cada uno.
+      const vacios: [etiqueta: string, error: string][] = [
+        ['Nombre completo', 'El nombre completo es requerido'],
+        ['Correo electrónico', 'El correo electrónico es requerido'],
+        ['Teléfono', 'El teléfono es requerido'],
+        ['Fecha de nacimiento', 'La fecha de nacimiento es requerida'],
+        ['Respuesta de seguridad', 'La respuesta a la pregunta de seguridad es requerida'],
+        ['Contraseña', 'Te faltan requisitos de la contraseña.'],
+        ['Confirmar contraseña', 'Confirma tu contraseña'],
+      ];
+      for (const [etiqueta, error] of vacios) {
+        const campo = screen.getByLabelText(etiqueta);
+        await fireEvent(campo, 'submitEditing');
+        await fireEvent(campo, 'blur');
+        expect(await screen.findByText(error)).toBeOnTheScreen();
+      }
+      expect(screen.getByLabelText('Paso 1 de 2: Tu cuenta')).toBeOnTheScreen();
+
+      // Paso 2: los opcionales y las alergias avanzan con la tecla del teclado.
+      await llenarPaso1();
+      await fireEvent.press(screen.getByRole('button', { name: 'Continuar' }));
+      expect(await screen.findByText('Cuéntanos sobre tu cabello')).toBeOnTheScreen();
+      for (const etiqueta of ['Color natural (opcional)', 'Color actual (opcional)', 'Productos usados (opcional)']) {
+        await fireEvent.changeText(screen.getByLabelText(etiqueta), 'Dato ficticio');
+        await fireEvent(screen.getByLabelText(etiqueta), 'submitEditing');
+        expect(screen.getByLabelText(etiqueta)).toHaveProp('value', 'Dato ficticio');
+      }
+      await fireEvent.press(screen.getByRole('radio', { name: '¿Tienes alergias a productos?: Sí' }));
+      const alergias = await screen.findByLabelText('Especifica tus alergias');
+      await fireEvent.changeText(alergias, 'Alergia ficticia');
+      await fireEvent(alergias, 'submitEditing');
+      await fireEvent(alergias, 'blur');
+      const consentimiento = screen.getByRole('checkbox', { name: /^Autorizo el uso de mis datos de salud/ });
+      await fireEvent.press(consentimiento);
+      expect(consentimiento).toBeChecked();
+      expect(llamadasA(llamadas, 'POST', '/api/usuarios/registro')).toHaveLength(0);
 
       esperarConsolaLimpia();
     },

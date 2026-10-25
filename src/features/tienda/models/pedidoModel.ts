@@ -3,6 +3,7 @@ import type { EtiquetaEstado, TonoBadge } from '@/features/citas/models/citaMode
 import { fechaLegible, horaLegible } from '@/features/citas/models/citaModel';
 import { esObjeto, listaDe, primeraImagen, texto, urlHttps, type Crudo } from '@/features/inicio/models/inicioService';
 import { obtenerConfiguracion, type ConfiguracionPublica } from '@/shared/api/configuracionPublica';
+import { textoDelServidor } from '@/shared/api/mensajesError';
 import { obtenerTexto, type ClaveTexto } from '@/shared/api/textosSitio';
 
 import { esSinExistencias, mensajeComunTienda } from './carritoModel';
@@ -107,7 +108,7 @@ export interface ResultadoEstadoPago {
 }
 
 /** Motivo de un error al pedir la preferencia de Mercado Pago (el backend no manda code). */
-export type MotivoConflictoPedido = 'noPendiente' | 'vencido' | 'total' | 'enSalon' | 'noDisponible';
+export type MotivoConflictoPedido = 'noPendiente' | 'vencido' | 'total' | 'enSalon' | 'noDisponible' | 'sinPiezas';
 
 /**
  * Regreso de Mercado Pago a la app: el backend (con ?origen=app) redirige a
@@ -667,7 +668,31 @@ export function esPedidoNoEncontrado(error: unknown): boolean {
   return error instanceof ApiError && error.status === 404;
 }
 
-/** Por qué el backend no creó el pedido (400 o 404 de validarItems y crear). */
+/**
+ * 409 de piezas agotadas (GP-09, ronda 8 del backend): crear el pedido o pedir su preferencia de
+ * pago responde "Ya no hay suficientes piezas de X (presentación)" y nunca se vende de más. El
+ * backend no manda code: se reconoce porque el texto menciona las piezas, que no alcanzan o el
+ * stock. Va antes que los demás 409, porque el nombre del producto podría decir "total" o "pendiente".
+ */
+export function esPiezasAgotadas(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 409 && /suficientes|piezas|stock/.test(error.message.toLowerCase());
+}
+
+/** La frase del contrato del backend para las piezas agotadas: "Ya no hay suficientes piezas de X". */
+const FRASE_PIEZAS_AGOTADAS = /^ya no hay (suficientes piezas|piezas suficientes)\b/;
+
+/**
+ * El texto de las piezas agotadas: el message del backend tal cual (ya viene en español para la
+ * clienta y dice qué producto) solo si es la frase del contrato; si viene vacío, técnico u otro
+ * texto, el de la app de esa clave.
+ */
+function textoPiezasAgotadas(error: unknown, respaldo: ClaveTexto, config: ConfiguracionPublica): string {
+  const contrato = error instanceof ApiError && FRASE_PIEZAS_AGOTADAS.test(error.message.toLowerCase().trim());
+  const delBackend = contrato ? textoDelServidor(error) : null;
+  return delBackend ?? obtenerTexto(respaldo, {}, config);
+}
+
+/** Por qué el backend no creó el pedido (400 o 404 de validarItems y crear, 409 de piezas agotadas). */
 type MotivoCrearPedido = 'sinExistencias' | 'retirado' | 'enLineaApagado' | 'enSalonApagado';
 
 /**
@@ -681,6 +706,9 @@ function motivoCrearPedido(error: unknown): MotivoCrearPedido | null {
   }
   if (error.status === 404) {
     return 'retirado';
+  }
+  if (esPiezasAgotadas(error)) {
+    return 'sinExistencias';
   }
   if (error.status !== 400) {
     return null;
@@ -709,11 +737,17 @@ const MENSAJES_CREAR_PEDIDO: Record<MotivoCrearPedido, ClaveTexto> = {
   enSalonApagado: 'tienda.pedido.crear.enSalonApagado',
 };
 
-/** Mensaje para la clienta al fallar crearPedido. Nunca el texto técnico del servidor. */
+/**
+ * Mensaje para la clienta al fallar crearPedido. Nunca el texto técnico del servidor; el 409 de
+ * piezas agotadas muestra el del backend, que ya es para la clienta (textoPiezasAgotadas).
+ */
 export function mensajeCrearPedido(error: unknown, config: ConfiguracionPublica = obtenerConfiguracion()): string {
   const comun = mensajeComunTienda(error);
   if (comun) {
     return comun;
+  }
+  if (esPiezasAgotadas(error)) {
+    return textoPiezasAgotadas(error, 'tienda.pedido.crear.sinExistencias', config);
   }
   const motivo = motivoCrearPedido(error);
   return obtenerTexto(motivo ? MENSAJES_CREAR_PEDIDO[motivo] : 'tienda.pedido.crear.generico', {}, config);
@@ -725,7 +759,7 @@ export function mensajeRevisarMisPedidos(config: ConfiguracionPublica = obtenerC
 }
 
 /**
- * El error de crearPedido se arregla en el carrito: sin existencias o un producto que ya no está
+ * El error de crearPedido se arregla en el carrito: sin existencias (400 o 409) o un producto que ya no está
  * en la tienda (retirado, sin precio o sin la presentación). La forma de pago apagada no.
  */
 export function pideRevisarCarrito(error: unknown): boolean {
@@ -736,7 +770,8 @@ export function pideRevisarCarrito(error: unknown): boolean {
 /**
  * Motivo de un error de crearPreferenciaPedido: 409 "Este pedido ya no está pendiente de pago",
  * 409 "Este pedido venció: vuelve a hacer tu compra", 409 "El total del pedido no coincide…",
- * 400 "Este pedido se paga al recogerlo en el salón" y 503. null si no es ninguno.
+ * 400 "Este pedido se paga al recogerlo en el salón", 503 y el 409 de piezas agotadas
+ * (esPiezasAgotadas, revisado antes que los otros 409). null si no es ninguno.
  */
 export function motivoConflictoPedido(error: unknown): MotivoConflictoPedido | null {
   if (!(error instanceof ApiError)) {
@@ -751,6 +786,9 @@ export function motivoConflictoPedido(error: unknown): MotivoConflictoPedido | n
   }
   if (error.status !== 409) {
     return null;
+  }
+  if (esPiezasAgotadas(error)) {
+    return 'sinPiezas';
   }
   if (mensaje.includes('venci')) {
     return 'vencido';
@@ -770,11 +808,13 @@ const MENSAJES_CONFLICTO: Record<MotivoConflictoPedido, ClaveTexto> = {
   total: 'tienda.pedido.pago.total',
   enSalon: 'tienda.pedido.pago.enSalon',
   noDisponible: 'tienda.pedido.pago.noDisponible',
+  sinPiezas: 'tienda.pedido.pago.sinPiezas',
 };
 
 /**
  * Mensaje para la clienta al fallar crearPreferenciaPedido. El plazo vencido usa las horas guardadas
- * en el pedido (si se pasa) y el total que no coincide, el teléfono de la configuración.
+ * en el pedido (si se pasa) y el total que no coincide, el teléfono de la configuración. Las piezas
+ * agotadas muestran el message del backend (textoPiezasAgotadas).
  */
 export function mensajePreferenciaPedido(
   error: unknown,
@@ -786,6 +826,9 @@ export function mensajePreferenciaPedido(
     return comun;
   }
   const motivo = motivoConflictoPedido(error);
+  if (motivo === 'sinPiezas') {
+    return textoPiezasAgotadas(error, MENSAJES_CONFLICTO.sinPiezas, config);
+  }
   if (motivo) {
     return obtenerTexto(
       MENSAJES_CONFLICTO[motivo],

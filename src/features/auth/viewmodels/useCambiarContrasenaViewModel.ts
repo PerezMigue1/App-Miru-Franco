@@ -6,6 +6,7 @@ import { BackHandler } from 'react-native';
 import { ApiError } from '@/shared/api/apiClient';
 import { mensajeParaClienta } from '@/shared/api/mensajesError';
 import { obtenerTexto } from '@/shared/api/textosSitio';
+import { useEsperaLimite } from '@/shared/api/useEsperaLimite';
 import { generacionActual } from '@/shared/api/tokenStorage';
 import { soloDigitos, telefonoSinLada } from '@/shared/ui/digitos';
 import { duracion } from '@/shared/ui/tokens';
@@ -56,12 +57,25 @@ export interface CambiarContrasenaViewModel {
   /** Ya hay un código vigente para esta contraseña actual: el paso 1 continúa sin pedir otro. */
   codigoVigente: boolean;
   enviando: boolean;
+  /** Texto del botón del paso 1: "Enviar código", "Continuar", "Enviando código…" o la espera del 429. */
+  tituloEnvio: string;
   enviarCodigo: () => void;
   cambiando: boolean;
+  /** Tras un 429 al cambiar con el código: "Cambiar contraseña" queda deshabilitado hasta que pase la espera. */
+  cambioEnEspera: boolean;
+  /** Texto de "Cambiar contraseña": "Cambiando…" o, tras un 429, "Intenta de nuevo en N s". */
+  tituloCambiar: string;
   cambiarContrasena: () => void;
   reenviando: boolean;
   /** Segundos que faltan para poder pedir otro código (0 = ya se puede). */
   espera: number;
+  /**
+   * Tras un 429 al pedir el código: "Enviar código" y "Reenviar código" quedan deshabilitados hasta
+   * que pasen los segundos del servidor.
+   */
+  enEspera: boolean;
+  /** Texto de "Reenviar código": "Reenviando…" o, tras un 429, "Intenta de nuevo en N s". */
+  tituloReenviar: string;
   reenviar: () => void;
   /** Paso 2 → paso 1 sin perder lo escrito. */
   volverAlPaso1: () => void;
@@ -180,9 +194,19 @@ function destinoDelError(error: unknown, ruta: 'codigo' | 'cambio', sesionVigent
   return { tipo: 'aviso', mensaje: mensajeParaClienta(error, { respaldo: errorGenerico() }) };
 }
 
+/** "Continuar" si ya hay un código vigente para la contraseña actual; si no, se pide uno. */
+function tituloDelEnvio(enviando: boolean, codigoVigente: boolean): string {
+  if (enviando) {
+    return 'Enviando código…';
+  }
+  return codigoVigente ? 'Continuar' : 'Enviar código';
+}
+
 /**
  * Cambiar contraseña en dos pasos: datos (actual, nueva y confirmación) y código del correo. Las
- * contraseñas y el código viven solo en este estado; al cambiarla, la sesión se cierra.
+ * contraseñas y el código viven solo en este estado; al cambiarla, la sesión se cierra. Un 429 al
+ * pedir el código muestra el message del servidor y deja los botones del código en espera con sus
+ * segundos (useEsperaLimite); la espera propia de 60 s tras un envío correcto no cambia.
  */
 export function useCambiarContrasenaViewModel(): CambiarContrasenaViewModel {
   const { back } = useRouter();
@@ -207,6 +231,9 @@ export function useCambiarContrasenaViewModel(): CambiarContrasenaViewModel {
   const [cambiando, setCambiando] = useState(false);
   const [reenviando, setReenviando] = useState(false);
   const [espera, setEspera] = useState(0);
+  const limite = useEsperaLimite();
+  // El cambio con el código (POST /api/auth/me/password) tiene su propio límite y su propia espera.
+  const limiteCambio = useEsperaLimite();
   const [enfoque, setEnfoque] = useState<{ campo: CampoContrasena; vez: number } | null>(null);
   const solicitud = useRef(0);
   const vecesEnfoque = useRef(0);
@@ -363,6 +390,9 @@ export function useCambiarContrasenaViewModel(): CambiarContrasenaViewModel {
       setEspera(ESPERA_SEGUNDOS);
       return true;
     } catch (error) {
+      if (montado.current) {
+        limite.esperarSiLimite(error);
+      }
       aplicarError(error, 'codigo', generacion);
       return false;
     }
@@ -436,6 +466,9 @@ export function useCambiarContrasenaViewModel(): CambiarContrasenaViewModel {
         await cerrarTrasCambioDeContrasena();
       }
     } catch (error) {
+      if (montado.current) {
+        limiteCambio.esperarSiLimite(error);
+      }
       aplicarError(error, 'cambio', generacion);
     } finally {
       if (montado.current) {
@@ -500,21 +533,26 @@ export function useCambiarContrasenaViewModel(): CambiarContrasenaViewModel {
     vigenciaMinutos,
     codigoVigente: codigoVigente && espera > 0,
     enviando,
+    tituloEnvio: limite.texto ?? tituloDelEnvio(enviando, codigoVigente && espera > 0),
     enviarCodigo: () => {
-      if (!enviando) {
+      if (!enviando && !limite.activa) {
         candadoEnvio(enviar);
       }
     },
     cambiando,
+    cambioEnEspera: limiteCambio.activa,
+    tituloCambiar: limiteCambio.texto ?? (cambiando ? 'Cambiando…' : 'Cambiar contraseña'),
     cambiarContrasena: () => {
-      if (!cambiando && !reenviando) {
+      if (!cambiando && !reenviando && !limiteCambio.activa) {
         candadoCambio(confirmar);
       }
     },
     reenviando,
     espera,
+    enEspera: limite.activa,
+    tituloReenviar: limite.texto ?? (reenviando ? 'Reenviando…' : 'Reenviar código'),
     reenviar: () => {
-      if (!reenviando && !cambiando && espera <= 0) {
+      if (!reenviando && !cambiando && espera <= 0 && !limite.activa) {
         candadoReenvio(reenviarCodigo);
       }
     },

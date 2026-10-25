@@ -16,7 +16,7 @@ import { generacionActual, guardarSesion, type SesionGuardada } from '@/shared/a
 
 /**
  * GP-03: cliente HTTP de la app (src/shared/api/apiClient.ts). Revisa la URL base, las cabeceras,
- * los métodos, la lectura de respuestas y errores, el límite de 15 s y checkHealth. Todo con fetch
+ * los métodos, la lectura de respuestas y errores, el límite de 60 s (GP-09) y checkHealth. Todo con fetch
  * simulado; la renovación de sesión es de GP-05 y aquí no se dispara (las sesiones son recientes y
  * sin refreshToken, y ninguna petición protegida recibe un 401).
  */
@@ -320,7 +320,8 @@ describe('errores HTTP', () => {
 
   it('con cuerpo vacío usa el mensaje genérico', async () => {
     responder(null, 503);
-    const error = (await capturarError(apiGet('/a', { publica: true }))) as ApiError;
+    // Un POST: una lectura con 503 se repite una vez (GP-09) y aquí solo se revisa el mensaje.
+    const error = (await capturarError(apiPost('/a', undefined, { publica: true }))) as ApiError;
     expect(error.message).toBe('Error en la solicitud (503).');
     expect(error.code).toBeUndefined();
   });
@@ -380,7 +381,7 @@ describe('fallo de red', () => {
   });
 });
 
-describe('límite de 15 s', () => {
+describe('límite de 60 s (GP-09: Render tarda de 30 a 60 s en despertar)', () => {
   afterEach(() => {
     jest.clearAllTimers();
     jest.useRealTimers();
@@ -398,7 +399,7 @@ describe('límite de 15 s', () => {
     );
   }
 
-  it('aborta a los 15000 ms y lanza ErrorDeRed', async () => {
+  it('aborta a los 60000 ms y lanza ErrorDeRed', async () => {
     jest.useFakeTimers();
     fetchQueEspera();
     const resultado = apiGet('/lenta', { publica: true }).then(
@@ -408,7 +409,7 @@ describe('límite de 15 s', () => {
     expect(fetchSimulado()).toHaveBeenCalledTimes(1);
     const senal = llamada().init.signal as AbortSignal;
 
-    jest.advanceTimersByTime(14999);
+    jest.advanceTimersByTime(59999);
     expect(senal.aborted).toBe(false);
 
     jest.advanceTimersByTime(1);

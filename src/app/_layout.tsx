@@ -21,10 +21,12 @@ import { AvisoEnPantalla } from '@/features/notificaciones/components/AvisoEnPan
 import { useNoLeidos } from '@/features/notificaciones/viewmodels/avisosEstado';
 import { useAvisosEnApp } from '@/features/notificaciones/viewmodels/preferenciaAvisosEstado';
 import { useAvisosEnVivo } from '@/features/notificaciones/viewmodels/useAvisosEnVivo';
+import { useReanudarAvisos } from '@/features/notificaciones/viewmodels/useReanudarAvisos';
 import { useCargaConfiguracion, useConfiguracionPublica } from '@/shared/api/useConfiguracionPublica';
 import { SesionCabeceraProvider, type SesionCabecera } from '@/shared/ui/AccionesCabecera';
 import { AparienciaProvider, useApariencia } from '@/shared/ui/apariencia';
 import { FondoBarraEstado } from '@/shared/ui/FondoBarraEstado';
+import { FranjaConexion } from '@/shared/ui/FranjaConexion';
 import { IntroGrieta } from '@/shared/ui/IntroGrieta';
 import { useTheme } from '@/shared/ui/useTheme';
 
@@ -81,6 +83,9 @@ function Navegacion({ fuentesListas }: { fuentesListas: boolean }) {
   // app" en Perfil (GP-07.6), no hay conexión en vivo: la bandeja se pide al abrirla.
   const avisosEnApp = useAvisosEnApp(estado === 'autenticado' ? (usuario?.id ?? null) : null);
   useAvisosEnVivo(estado === 'autenticado', avisosEnApp);
+  // Si el servidor cerró el flujo de avisos por inactividad (GP-09), se reabre cuando la clienta
+  // vuelve a usar la app: un toque en cualquier lugar o una pantalla nueva.
+  const reanudarAlTocar = useReanudarAvisos();
   // Tras una sesión vencida a mitad de una reserva, al volver a entrar regresa sola a ella.
   useRegresoReserva();
   // La apariencia guardada se aplica antes de mostrar nada: sin parpadeo de tema.
@@ -107,7 +112,11 @@ function Navegacion({ fuentesListas }: { fuentesListas: boolean }) {
   }
 
   return (
-    <GestureHandlerRootView style={[styles.raiz, { backgroundColor: colores.fondo }]}>
+    // onTouchStart solo se entera del toque: no toma el responder ni lo bloquea.
+    <GestureHandlerRootView
+      onTouchStart={reanudarAlTocar}
+      style={[styles.raiz, { backgroundColor: colores.fondo }]}
+    >
       {/* Íconos claros de la barra de estado en toda la app: siempre van sobre el cromo carbón. */}
       <StatusBar style="light" />
       <SesionRequeridaProvider>
@@ -159,6 +168,9 @@ function Navegacion({ fuentesListas }: { fuentesListas: boolean }) {
       </SesionRequeridaProvider>
       {/* Encima del Stack y debajo de la intro de la grieta (que ya es carbón). */}
       <FondoBarraEstado />
+      {/* "Conectando con el salón…" mientras una petición tarda más de 3 s (GP-09): bajo la barra
+          de estado, sin recibir toques y debajo del aviso interno. */}
+      <FranjaConexion />
       {/* Aviso interno que llega en vivo: arriba, bajo la barra de estado, encima del Stack y debajo
           de la intro. Solo la tarjeta recibe toques. */}
       <AvisoEnPantalla />

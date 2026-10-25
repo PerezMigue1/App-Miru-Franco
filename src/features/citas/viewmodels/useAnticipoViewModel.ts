@@ -8,6 +8,7 @@ import { obtenerConfiguracion, suscribir } from '@/shared/api/configuracionPubli
 import { rutaVisorDocumento } from '@/shared/api/documentosLegales';
 import { mensajeParaClienta } from '@/shared/api/mensajesError';
 import { obtenerTexto } from '@/shared/api/textosSitio';
+import { useEsperaLimite } from '@/shared/api/useEsperaLimite';
 import { useCandado } from '@/shared/ui/useCandado';
 
 import {
@@ -81,6 +82,13 @@ export interface AnticipoViewModel {
   recargar: () => void;
   /** Acción del botón principal: pagar, volver a revisar el pago o ir a Mis citas. */
   accionPrincipal: () => void;
+  /**
+   * Tras un 429 de la preferencia (10 por minuto, GP-09): el botón queda deshabilitado hasta que
+   * pase el tiempo que pidió el servidor.
+   */
+  enEspera: boolean;
+  /** "Intenta de nuevo en N s" mientras dura la espera; null si no hay. */
+  textoEspera: string | null;
   regresar: () => void;
   verMisCitas: () => void;
 }
@@ -137,6 +145,8 @@ export function useAnticipoViewModel(
   const candado = useCandado();
   const configuracion = useSyncExternalStore(suscribir, obtenerConfiguracion, obtenerConfiguracion);
   const casilla = useAceptacionAnticipos(RUTA_ORIGEN_ANTICIPO);
+  const espera = useEsperaLimite();
+  const { esperarSiLimite } = espera;
   const [estado, setEstado] = useState<EstadoCargaAnticipo>('cargando');
   const [errorCarga, setErrorCarga] = useState<unknown>(null);
   const [cita, setCita] = useState<Cita | null>(null);
@@ -280,6 +290,8 @@ export function useAnticipoViewModel(
         if (!montada.current || manejarConflicto(error, id)) {
           return;
         }
+        // Un 429 no se repite antes de su retryAfter: el botón queda en espera con la cuenta.
+        esperarSiLimite(error);
         setPago({ tipo: 'error', mensaje: mensajeDeError(error, MENSAJE_NO_ABRIO) });
         return;
       }
@@ -313,7 +325,7 @@ export function useAnticipoViewModel(
       }
       await revisarEstado(id);
     },
-    [manejarConflicto, revisarEstado],
+    [esperarSiLimite, manejarConflicto, revisarEstado],
   );
 
   // Con ?pagar=1, la primera carga lista abre el pago sin otro toque. Si falla o la clienta cierra
@@ -361,6 +373,9 @@ export function useAnticipoViewModel(
       candado(() => revisarEstado(id));
       return;
     }
+    if (espera.activa) {
+      return;
+    }
     // Pagar con el botón pide la casilla y el consentimiento, como la web (el pago automático de
     // ?pagar=1 llega justo después de reservar o del detalle, que ya lo registraron).
     candado(async () => {
@@ -376,7 +391,7 @@ export function useAnticipoViewModel(
       }
       await pagar(id);
     });
-  }, [candado, casilla, cita, enProceso, pagar, pago.tipo, revisarEstado, verMisCitas]);
+  }, [candado, casilla, cita, enProceso, espera.activa, pagar, pago.tipo, revisarEstado, verMisCitas]);
 
   const abrirPolitica = useCallback(() => {
     router.push(rutaVisorDocumento('anticipos'));
@@ -416,6 +431,8 @@ export function useAnticipoViewModel(
     abrirPolitica,
     recargar,
     accionPrincipal,
+    enEspera: espera.activa,
+    textoEspera: espera.texto,
     regresar,
     verMisCitas,
   };

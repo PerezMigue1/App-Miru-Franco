@@ -49,7 +49,7 @@ const TECNICO = 'TypeError: Cannot read properties of undefined (reading "id")';
 const THROTTLER = new ApiError(429, 'ThrottlerException: Too Many Requests');
 const AUN_NO = 'Aún no responde';
 
-/** Un fetch que nunca responde hasta que se acaba el límite de 15 s de apiClient. */
+/** Un fetch que nunca responde hasta que se acaba el límite de 60 s de apiClient. */
 function servidorQueNoResponde(): void {
   globalThis.fetch = jest.fn(
     (_url: unknown, init?: RequestInit) =>
@@ -118,7 +118,8 @@ describe('acceso', () => {
   });
 
   it.each<[string, ManejadorVm, string]>([
-    ['la cuenta ya activada (400 sin code)', () => errorServidor(400, 'Este correo electrónico ya está activado.'), 'Tu cuenta ya está activada. Vuelve e inicia sesión.'],
+    // GP-09: el reenvío ya no responde 400 ni 404; si llega uno, no dice nada de la cuenta.
+    ['un 400 sin code', () => errorServidor(400, 'Este correo electrónico ya está activado.'), 'No pudimos reenviar el código. Intenta de nuevo.'],
     ['un 500', () => errorServidor(500, TECNICO), 'No pudimos reenviar el código. Intenta de nuevo.'],
     ['sin red', sinRed, TEXTO_SIN_CONEXION],
   ])('reenviar el código con %s', async (_caso, salida, esperado) => {
@@ -211,7 +212,7 @@ describe('tienda', () => {
     const { result } = await renderHook(() => useCatalogoViewModel());
 
     await act(async () => {
-      await jest.advanceTimersByTimeAsync(15000);
+      await jest.advanceTimersByTimeAsync(60000);
     });
 
     await waitFor(() => expect(result.current.estado).toBe('error'));

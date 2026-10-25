@@ -1,5 +1,6 @@
 import { duracion } from '@/shared/ui/tokens';
 
+import { registrarPeticion } from './estadoConexion';
 import {
   aMarcaDeTiempo,
   borrarSesionSi,
@@ -11,7 +12,12 @@ import {
   type SesionGuardada,
 } from './tokenStorage';
 
-const TIMEOUT_MS = 15000;
+/**
+ * Límite de espera de una petición. Render (plan gratis) duerme el servidor a los 15 minutos sin uso
+ * y la primera petición tarda de 30 a 60 s en despertarlo: mientras tanto se ve "Conectando con el
+ * salón…" (estadoConexion.ts), no "Sin conexión".
+ */
+const TIMEOUT_MS = 60000;
 const MINUTO_MS = 60 * 1000;
 /** Duración del acceso si no se puede leer del token (el backend lo emite por 15 minutos). */
 const DURACION_ACCESO_MS = 15 * MINUTO_MS;
@@ -31,13 +37,16 @@ export class ApiError extends Error {
   readonly code?: string;
   /** Referencia de un 5xx del backend (8 caracteres hexadecimales) para buscarlo en su registro. */
   readonly referencia?: string;
+  /** Segundos que pide esperar un 429 o un 503 (entero de 1 o más), si los mandó. */
+  readonly retryAfter?: number;
 
-  constructor(status: number, message: string, code?: string, referencia?: string) {
+  constructor(status: number, message: string, code?: string, referencia?: string, retryAfter?: number) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.code = code;
     this.referencia = referencia;
+    this.retryAfter = retryAfter;
   }
 }
 
@@ -118,6 +127,8 @@ export function getBaseUrl(): string {
 
 async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
   const controller = new AbortController();
+  // Toda petición de apiClient cuenta para el aviso de conexión lenta hasta que llega su respuesta.
+  const terminar = registrarPeticion();
   let vencida = false;
   const timeoutId = setTimeout(() => {
     vencida = true;
@@ -130,6 +141,7 @@ async function fetchWithTimeout(url: string, init: RequestInit): Promise<Respons
     throw crearErrorApi({ tipo: 'red', motivo: vencida ? 'tiempoAgotado' : 'sinRed' });
   } finally {
     clearTimeout(timeoutId);
+    terminar();
   }
 }
 
@@ -145,6 +157,11 @@ async function parseBody(response: Response): Promise<unknown> {
   }
 }
 
+/** Texto de un error sin message ni error en el cuerpo: solo clasifica, nunca se muestra. */
+export function mensajeGenerico(status: number): string {
+  return `Error en la solicitud (${status}).`;
+}
+
 function getErrorMessage(body: unknown, status: number): string {
   if (body && typeof body === 'object') {
     const { message, error } = body as { message?: unknown; error?: unknown };
@@ -158,7 +175,7 @@ function getErrorMessage(body: unknown, status: number): string {
       return error;
     }
   }
-  return `Error en la solicitud (${status}).`;
+  return mensajeGenerico(status);
 }
 
 /** `code` del cuerpo de error del backend, solo si es un texto no vacío. */
@@ -181,6 +198,50 @@ function getErrorReferencia(body: unknown, status: number): string | undefined {
   return typeof referencia === 'string' && /^[0-9A-F]{8}$/.test(referencia) ? referencia : undefined;
 }
 
+/** Segundos enteros de 1 o más; null si el valor no sirve (cero, negativo o no numérico). */
+function segundosValidos(valor: number): number | null {
+  return Number.isFinite(valor) && valor > 0 ? Math.max(1, Math.ceil(valor)) : null;
+}
+
+/** Encabezado Retry-After: segundos (solo dígitos) o una fecha HTTP futura. null si no sirve. */
+function segundosDeEncabezado(encabezado: string | null | undefined, ahora: number): number | null {
+  const valor = encabezado?.trim() ?? '';
+  if (/^\d+$/.test(valor)) {
+    return segundosValidos(Number(valor));
+  }
+  // Una fecha HTTP siempre lleva letras (día y mes): un número con signo o decimales no pasa por
+  // fecha, y un texto vacío tampoco.
+  if (!/[a-z]/i.test(valor)) {
+    return null;
+  }
+  const fecha = Date.parse(valor);
+  return Number.isNaN(fecha) ? null : segundosValidos((fecha - ahora) / 1000);
+}
+
+/** `retryAfter` del cuerpo: un número o un texto de solo dígitos. null si no viene o no sirve. */
+function segundosDelCuerpo(cuerpo: unknown): number | null {
+  if (!cuerpo || typeof cuerpo !== 'object') {
+    return null;
+  }
+  const { retryAfter } = cuerpo as { retryAfter?: unknown };
+  if (typeof retryAfter === 'number') {
+    return segundosValidos(retryAfter);
+  }
+  return typeof retryAfter === 'string' && /^\d+$/.test(retryAfter.trim()) ? segundosValidos(Number(retryAfter)) : null;
+}
+
+/**
+ * Segundos de espera de un 429 o un 503: `retryAfter` del cuerpo y, si no viene o no sirve, el
+ * encabezado Retry-After (segundos o fecha HTTP). undefined si ninguno sirve.
+ */
+export function leerRetryAfter(
+  cuerpo: unknown,
+  encabezado?: string | null,
+  ahora: number = Date.now(),
+): number | undefined {
+  return segundosDelCuerpo(cuerpo) ?? segundosDeEncabezado(encabezado, ahora) ?? undefined;
+}
+
 /**
  * Codes con que el servidor da por terminada una sesión. Un rechazo con otro code (por ejemplo el
  * 409 RENOVACION_EN_CURSO de /api/auth/movil/renovar, que también consume el refreshToken) cierra
@@ -191,13 +252,14 @@ const CODES_SESION_TERMINADA: ReadonlySet<string> = new Set(['SESION_VENCIDA', '
 /** Datos para crear un error de la API; el Factory decide la clase, el mensaje, el status y el code. */
 export type DatosErrorApi =
   | { tipo: 'red'; motivo?: MotivoErrorDeRed }
-  | { tipo: 'respuesta'; status: number; cuerpo: unknown }
+  | { tipo: 'respuesta'; status: number; cuerpo: unknown; retryAfter?: string | null }
   | { tipo: 'sesionTerminada'; code?: string };
 
 /**
  * Factory de errores de la API: toda creación de ApiError y ErrorDeRed de este archivo pasa por
  * aquí. 'red': sin red ('sinRed', por omisión) o sin respuesta a tiempo ('tiempoAgotado');
- * 'respuesta': cuerpo de error del backend, con su code y, en un 5xx, su referencia;
+ * 'respuesta': cuerpo de error del backend, con su code, en un 5xx su referencia y, en un 429 o un
+ *   503, los segundos de espera (del cuerpo o del encabezado Retry-After, que llega en `retryAfter`);
  * 'sesionTerminada': 401 con el mensaje para la clienta y el code del rechazo si es de sesión
  *   terminada (SESION_VENCIDA en otro caso).
  * El message de un ApiError solo sirve para clasificar: a la pantalla llega el texto de
@@ -215,6 +277,7 @@ export function crearErrorApi(datos: DatosErrorApi): ApiError | ErrorDeRed {
         getErrorMessage(datos.cuerpo, datos.status),
         getErrorCode(datos.cuerpo),
         getErrorReferencia(datos.cuerpo, datos.status),
+        datos.status === 429 || datos.status === 503 ? leerRetryAfter(datos.cuerpo, datos.retryAfter) : undefined,
       );
     case 'sesionTerminada':
       return new ApiError(
@@ -247,10 +310,20 @@ function enviar(
   });
 }
 
+/** Encabezado Retry-After de una respuesta, si se puede leer. */
+function encabezadoRetryAfter(response: Response): string | null {
+  return response.headers?.get('retry-after') ?? null;
+}
+
 async function leer<T>(response: Response): Promise<T> {
   const data = await parseBody(response);
   if (!response.ok) {
-    throw crearErrorApi({ tipo: 'respuesta', status: response.status, cuerpo: data });
+    throw crearErrorApi({
+      tipo: 'respuesta',
+      status: response.status,
+      cuerpo: data,
+      retryAfter: encabezadoRetryAfter(response),
+    });
   }
   return data as T;
 }
@@ -396,7 +469,10 @@ async function pedirRenovacionMovil(refreshToken: string): Promise<RespuestaMovi
   if (consumido) {
     return { tipo: 'rechazo', code: getErrorCode(datos) };
   }
-  return { tipo: 'falla', error: crearErrorApi({ tipo: 'respuesta', status, cuerpo: datos }) };
+  return {
+    tipo: 'falla',
+    error: crearErrorApi({ tipo: 'respuesta', status, cuerpo: datos, retryAfter: encabezadoRetryAfter(respuesta) }),
+  };
 }
 
 /**
@@ -749,7 +825,52 @@ async function solicitudProtegida<T>(method: HttpMethod, path: string, body: unk
   return solicitudClasica<T>(method, path, body);
 }
 
-async function request<T>(
+/** Espera de un 503 en lectura antes de su único reintento: `retryAfter` con tope de 10 s; 2 s si no vino. */
+const ESPERA_SATURACION_S = 2;
+const TOPE_ESPERA_SATURACION_S = 10;
+
+export function esperaTrasSaturacion(retryAfter?: number): number {
+  return Math.min(retryAfter ?? ESPERA_SATURACION_S, TOPE_ESPERA_SATURACION_S) * 1000;
+}
+
+function esperar(ms: number): Promise<void> {
+  return new Promise((resolver) => {
+    setTimeout(resolver, ms);
+  });
+}
+
+function esSaturacion(error: unknown): error is ApiError {
+  return error instanceof ApiError && error.status === 503;
+}
+
+/**
+ * Lectura con un solo reintento ante un 503 (servidor saturado), tras su espera. Una escritura
+ * nunca pasa por aquí: repetir un POST podría crear dos pedidos. Si la sesión cambió durante la
+ * espera (se cerró o se inició otra), no se repite: la petición era de la sesión anterior. El
+ * reintento vuelve a pasar por el camino normal, así comparte el vuelo único de renovación.
+ */
+async function leerConReintento<T>(path: string, opciones: OpcionesSolicitud): Promise<T> {
+  const generacion = generacionActual();
+  try {
+    return await solicitar<T>('GET', path, undefined, opciones);
+  } catch (error) {
+    if (!esSaturacion(error)) {
+      throw error;
+    }
+    await esperar(esperaTrasSaturacion(error.retryAfter));
+    const conSesion = !opciones.publica && opciones.token === undefined;
+    if (conSesion && generacion !== generacionActual()) {
+      throw error;
+    }
+    return solicitar<T>('GET', path, undefined, opciones);
+  }
+}
+
+function request<T>(method: HttpMethod, path: string, body: unknown, opciones: OpcionesSolicitud): Promise<T> {
+  return method === 'GET' ? leerConReintento<T>(path, opciones) : solicitar<T>(method, path, body, opciones);
+}
+
+async function solicitar<T>(
   method: HttpMethod,
   path: string,
   body: unknown,

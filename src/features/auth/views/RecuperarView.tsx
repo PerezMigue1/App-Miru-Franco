@@ -38,10 +38,10 @@ export default function RecuperarView() {
         <Aviso tipo="exito" texto={recuperar.mensaje} />
         <Aviso tipo="error" texto={recuperar.error} />
         <Button
-          titulo={recuperar.cargando ? 'Enviando…' : 'Enviar enlace'}
+          titulo={recuperar.textoEnviar}
           onPress={recuperar.enviar}
           cargando={recuperar.cargando}
-          deshabilitado={google.abriendo}
+          deshabilitado={google.abriendo || recuperar.enEspera}
         />
         <AccesoGoogle google={google} ocupado={recuperar.cargando} />
         <Text style={[styles.nota, { color: colores.textoSuave }]}>{recuperar.notaGoogle}</Text>

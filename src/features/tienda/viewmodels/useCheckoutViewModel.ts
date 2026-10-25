@@ -51,6 +51,7 @@ import {
 import {
   buscarPedidoRecienCreado,
   crearPedido,
+  esPiezasAgotadas,
   mensajeCrearPedido,
   mensajeRevisarMisPedidos,
   pideRevisarCarrito,
@@ -59,7 +60,7 @@ import {
 } from '../models/pedidoModel';
 
 import { abrirEnlace, useDocumentoVisto } from './checkoutTienda';
-import { avisarCambioCarrito } from './usePiezasCarrito';
+import { avisarCambioCarrito, releerCarrito } from './usePiezasCarrito';
 
 export type PasoCheckout = 1 | 2 | 3;
 export type EstadoCheckout = 'cargando' | 'listo' | 'error';
@@ -246,6 +247,21 @@ export function useCheckoutViewModel(): CheckoutViewModel {
     };
   }, [recargar]);
 
+  /**
+   * Tras un 409 de piezas agotadas se vuelve a leer el carrito en silencio (la misma lectura del
+   * Carrito): las piezas de la pestaña y el resumen quedan al día y el aviso del error se conserva.
+   * Una lista vacía no reemplaza el resumen: el botón "Revisar carrito" lleva a arreglarlo.
+   */
+  const releerTrasPiezasAgotadas = useCallback(() => {
+    solicitud.current += 1;
+    const actual = solicitud.current;
+    void releerCarrito().then((lista) => {
+      if (actual === solicitud.current && lista !== null && lista.length > 0) {
+        setItems(lista);
+      }
+    });
+  }, []);
+
   const puedeContinuar = paso !== 2 || metodo !== null;
 
   const continuar = useCallback(() => {
@@ -418,12 +434,28 @@ export function useCheckoutViewModel(): CheckoutViewModel {
         if (!montada.current) {
           return;
         }
+        // El 409 de piezas agotadas muestra el texto del backend (dice qué producto) y relee el carrito.
         setErrorEnvio(mensajeCrearPedido(error));
         setRevisarCarrito(pideRevisarCarrito(error));
         setEnviando(false);
+        if (esPiezasAgotadas(error)) {
+          releerTrasPiezasAgotadas();
+        }
       }
     });
-  }, [items, metodo, revisarMisPedidos, casillas, configuracion, terminosVisto, reembolsosVisto, candado, mostrarFallaConsentimiento, router]);
+  }, [
+    items,
+    metodo,
+    revisarMisPedidos,
+    casillas,
+    configuracion,
+    terminosVisto,
+    reembolsosVisto,
+    candado,
+    mostrarFallaConsentimiento,
+    releerTrasPiezasAgotadas,
+    router,
+  ]);
 
   const verMisPedidos = useCallback(() => {
     // Mis pedidos queda en lugar del checkout: atrás regresa al carrito, nunca a confirmar otra vez.

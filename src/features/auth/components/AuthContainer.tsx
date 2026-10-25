@@ -64,6 +64,7 @@ import {
   espacio,
   fuente,
   icono,
+  opacidad,
   pantalla,
   radio,
   tipo,
@@ -423,12 +424,15 @@ export function Enlace({
   onPress,
   alinear = 'inicio',
   accessibilityHint,
+  deshabilitado = false,
 }: {
   texto: string;
   onPress?: () => void;
   alinear?: 'inicio' | 'centro' | 'fin';
   /** Por ejemplo, "Se abre en el navegador". */
   accessibilityHint?: string;
+  /** No responde al toque, se atenúa como el Button y se anuncia como deshabilitado. */
+  deshabilitado?: boolean;
 }) {
   const { colores } = useTheme();
   const { estilo: estiloPresion, hundir, soltar } = usePresion();
@@ -437,10 +441,12 @@ export function Enlace({
     <Pressable
       accessibilityRole="link"
       accessibilityHint={accessibilityHint}
+      accessibilityState={{ disabled: deshabilitado }}
+      disabled={deshabilitado}
       onPress={onPress}
       onPressIn={hundir}
       onPressOut={soltar}
-      style={{ alignSelf: alineacion[alinear] }}
+      style={[{ alignSelf: alineacion[alinear] }, deshabilitado ? styles.enlaceDeshabilitado : null]}
     >
       {/* Se hunde como un botón (140 ms): el enlace también es una acción. */}
       <Animated.View style={[styles.enlace, estiloPresion]}>
@@ -526,10 +532,10 @@ function FormularioAcceso({
       </View>
       <Aviso tipo="error" texto={errorGeneral} />
       <Button
-        titulo={cargando ? textos.entrando : textos.entrar}
+        titulo={login.textoEntrar}
         onPress={entrarConCorreo}
         cargando={cargando}
-        deshabilitado={google.abriendo}
+        deshabilitado={google.abriendo || login.enEspera}
       />
       <AccesoGoogle google={google} ocupado={cargando} />
     </>
@@ -1048,9 +1054,10 @@ function PasoCabello({ registro, refs }: { registro: RegistroViewModel; refs: Re
       <Aviso tipo="error" texto={errorGeneral} />
       <View style={styles.botonesPaso}>
         <Button
-          titulo={cargando ? textos.registrando : textos.finalizar}
+          titulo={registro.textoFinalizar}
           onPress={crearCuenta}
           cargando={cargando}
+          deshabilitado={registro.enEspera}
         />
         <Button titulo="Atrás" variante="secundario" onPress={atras} deshabilitado={cargando} />
       </View>
@@ -1695,6 +1702,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: espacio.xs,
     borderRadius: radio.campo,
+  },
+  enlaceDeshabilitado: {
+    opacity: opacidad.deshabilitado,
   },
   textoEnlace: {
     fontFamily: fuente.textoMedio,

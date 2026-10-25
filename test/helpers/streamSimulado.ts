@@ -37,6 +37,8 @@ export interface FlujoSimulado {
   enviarAviso(fila: unknown): void;
   /** El keep-alive que el backend manda cada 28 s. */
   enviarKeepAlive(): void;
+  /** Tras 30 min sin avisos el backend manda "event: cierre" y termina el flujo (GP-09). */
+  enviarCierre(): void;
   /** Texto tal cual (para cortes a mitad de línea o formatos raros). */
   enviarTexto(texto: string): void;
   enviarBytes(bytes: Uint8Array): void;
@@ -81,6 +83,10 @@ function crearFlujo(signal: AbortSignal | null | undefined): { flujo: FlujoSimul
   const flujo: FlujoSimulado = {
     enviarAviso: (fila) => enviarTexto(`id: 0\nevent: notificacion\ndata: ${JSON.stringify(fila)}\n\n`),
     enviarKeepAlive: () => enviarTexto('id: 0\nevent: keep-alive\ndata: \n\n'),
+    enviarCierre: () => {
+      enviarTexto('id: 0\nevent: cierre\ndata: {"motivo":"inactividad"}\n\n');
+      cerrarCon(() => control.close());
+    },
     enviarTexto,
     enviarBytes,
     cortar: () => cerrarCon(() => control.close()),
@@ -90,11 +96,16 @@ function crearFlujo(signal: AbortSignal | null | undefined): { flujo: FlujoSimul
   return { flujo, cuerpo };
 }
 
-function respuestaBase(status: number, tipo: string, cuerpo: ReadableStream<Uint8Array> | null) {
+function respuestaBase(
+  status: number,
+  tipo: string,
+  cuerpo: ReadableStream<Uint8Array> | null,
+  encabezados: Record<string, string> = {},
+) {
   return {
     ok: status >= 200 && status < 300,
     status,
-    headers: new Headers({ 'Content-Type': tipo }),
+    headers: new Headers({ 'Content-Type': tipo, ...encabezados }),
     body: cuerpo,
   };
 }
@@ -117,9 +128,12 @@ export function abrirFlujo(): Promise<FlujoSimulado> {
   });
 }
 
-/** Encola una respuesta sin flujo con ese status (por ejemplo 401 o 500). */
-export function responderEstado(status: number, tipo = 'application/json'): void {
-  fetchSimulado().mockImplementationOnce(() => Promise.resolve(respuestaBase(status, tipo, null)));
+/**
+ * Encola una respuesta sin flujo con ese status (por ejemplo 401 o 500) y, si hacen falta, otros
+ * encabezados (por ejemplo { 'Retry-After': '45' } en un 429).
+ */
+export function responderEstado(status: number, tipo = 'application/json', encabezados: Record<string, string> = {}): void {
+  fetchSimulado().mockImplementationOnce(() => Promise.resolve(respuestaBase(status, tipo, null, encabezados)));
 }
 
 /** Encola un error de red; con `siempre`, todas las peticiones que sigan fallan igual. */

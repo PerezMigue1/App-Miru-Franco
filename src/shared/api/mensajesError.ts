@@ -1,4 +1,4 @@
-import { ApiError, ErrorDeRed } from './apiClient';
+import { ApiError, ErrorDeRed, mensajeGenerico } from './apiClient';
 import { obtenerTexto, RESPALDO_TEXTOS, type ClaveTexto } from './textosSitio';
 
 /**
@@ -7,6 +7,8 @@ import { obtenerTexto, RESPALDO_TEXTOS, type ClaveTexto } from './textosSitio';
  *   1. el code estable del backend: primero el de la feature (opciones.porCode) y luego los comunes;
  *   2. el tipo de error (sin red, tiempo agotado, sesión, límite de solicitudes, servidor...);
  *   3. el respaldo de la pantalla (opciones.respaldo) o el texto general del tipo.
+ * La excepción es un límite (429 o 503 con su espera, o BLOQUEO_TEMPORAL): su message ya viene en
+ * español para la clienta y se muestra tal cual, antes que todo lo demás (GP-09).
  * Los textos se leen del catálogo por sus claves 'errores.*' de textosSitio.ts. Hoy son respaldos de
  * la app: esas claves no existen en el catálogo del backend (textos-sitio/catalogo.ts) y el admin podrá
  * editarlos cuando el backend las agregue. Los textos propios de cada dominio (por ejemplo,
@@ -138,11 +140,73 @@ function fraseReferencia(error: unknown): string {
   return referencia ? obtenerTexto('errores.referencia', { referencia }) : '';
 }
 
+/** Code del 429 por varias contraseñas incorrectas: no es sesión vencida ni cuenta sin activar. */
+export const CODIGO_BLOQUEO_TEMPORAL = 'BLOQUEO_TEMPORAL';
+/** Espera de un 429 que no dijo cuánto esperar (el límite más común del backend es por minuto). */
+export const ESPERA_LIMITE_S = 60;
+
+/** Nombres HTTP en inglés que llegan como `error` cuando el cuerpo no trae message. */
+const NOMBRES_HTTP: ReadonlySet<string> = new Set([
+  'bad request',
+  'conflict',
+  'too many requests',
+  'internal server error',
+  'service unavailable',
+]);
+
+/**
+ * El message de un ApiError tal cual, solo para las respuestas cuyo texto el backend ya escribe en
+ * español para la clienta (contratos de las rondas 6 a 8: límites, saturación y piezas agotadas).
+ * Es el único lugar de src que devuelve un message; quien lo llama decide antes, por status o code,
+ * que la respuesta es de esas. null si no es un ApiError o si el texto no es para la clienta: vacío,
+ * el genérico de apiClient, un nombre HTTP o uno técnico (ThrottlerException...).
+ */
+export function textoDelServidor(error: unknown): string | null {
+  if (!(error instanceof ApiError)) {
+    return null;
+  }
+  const texto = error.message.trim();
+  const tecnico = /exception/i.test(texto) || NOMBRES_HTTP.has(texto.toLowerCase());
+  return texto && texto !== mensajeGenerico(error.status) && !tecnico ? texto : null;
+}
+
+/**
+ * El message del backend de un límite: un 429 o un 503 que dice cuánto esperar (retryAfter) o el 429
+ * BLOQUEO_TEMPORAL. Desde las rondas 6 y 7 ese message ya viene en español para la clienta ("Hay
+ * mucha demanda, intenta de nuevo en unos segundos"). null si no es un límite o si el texto no es
+ * para la clienta (ver textoDelServidor).
+ */
+export function mensajeDelLimite(error: unknown): string | null {
+  if (!(error instanceof ApiError) || (error.status !== 429 && error.status !== 503)) {
+    return null;
+  }
+  if (error.retryAfter === undefined && error.code !== CODIGO_BLOQUEO_TEMPORAL) {
+    return null;
+  }
+  return textoDelServidor(error);
+}
+
+/**
+ * Segundos que la acción queda en espera tras un 429: los que pidió el servidor o ESPERA_LIMITE_S si
+ * no los mandó. null si no es un 429 (un 503 no deja la acción en espera: solo se muestra su texto).
+ */
+export function segundosDeLimite(error: unknown): number | null {
+  if (!(error instanceof ApiError) || error.status !== 429) {
+    return null;
+  }
+  return error.retryAfter ?? ESPERA_LIMITE_S;
+}
+
 /**
  * Texto para la clienta de cualquier error (ApiError, ErrorDeRed, Error, texto o undefined). Nunca
- * devuelve el message de un ApiError. Un 5xx con referencia agrega la frase para compartirla.
+ * devuelve el message de un ApiError, salvo el de un límite (mensajeDelLimite), que gana a todo. Un
+ * 5xx con referencia agrega la frase para compartirla.
  */
 export function mensajeParaClienta(error: unknown, opciones: OpcionesMensajeError = {}): string {
+  const delLimite = mensajeDelLimite(error);
+  if (delLimite) {
+    return [delLimite, fraseReferencia(error)].filter(Boolean).join(' ');
+  }
   const delCode = textoDelCode(error, opciones.porCode ?? {});
   const tipo = tipoDeError(error);
   const base =
@@ -152,10 +216,14 @@ export function mensajeParaClienta(error: unknown, opciones: OpcionesMensajeErro
 }
 
 /**
- * Solo lo que no depende de la pantalla: un code conocido o sin red, tiempo agotado, sesión
- * terminada o límite de solicitudes. null si no es nada de eso (la feature decide el resto).
+ * Solo lo que no depende de la pantalla: el message de un límite (429 o 503 con su espera), un code
+ * conocido o sin red, tiempo agotado, sesión terminada o límite de solicitudes. null si no es nada
+ * de eso (la feature decide el resto).
  */
 export function mensajeSinContexto(error: unknown, porCode: Readonly<Record<string, string>> = {}): string | null {
+  if (mensajeDelLimite(error)) {
+    return mensajeParaClienta(error);
+  }
   const delCode = textoDelCode(error, porCode);
   if (delCode !== undefined) {
     return delCode;

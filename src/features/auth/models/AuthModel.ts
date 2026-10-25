@@ -1,4 +1,5 @@
 import { ApiError, ErrorDeRed, esUrlPermitida } from '@/shared/api/apiClient';
+import { CODIGO_BLOQUEO_TEMPORAL } from '@/shared/api/mensajesError';
 import { soloDigitos, telefonoSinLada } from '@/shared/ui/digitos';
 
 /** Tipos y reglas del dominio de autenticación (contratos del backend NestJS ya desplegado). */
@@ -131,11 +132,30 @@ export function esCuentaSinActivar(error: unknown): boolean {
 }
 
 /**
- * 400 del reenvío del código porque la cuenta ya se activó ("Este correo electrónico ya está
- * activado.", sin code): se reconoce por el texto, que nunca se muestra.
+ * 429 BLOQUEO_TEMPORAL del login (varias contraseñas incorrectas): el bloqueo es de esa cuenta, no
+ * de la IP, así que con otro correo ya no aplica. Nunca es sesión vencida ni cuenta sin activar.
  */
-export function esCuentaYaActivada(error: unknown): boolean {
-  return error instanceof ApiError && error.status === 400 && error.message.toLowerCase().includes('ya está activad');
+export function esBloqueoTemporal(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 429 && error.code === CODIGO_BLOQUEO_TEMPORAL;
+}
+
+/** Textos del 200 que no son para la clienta: nombres HTTP en inglés. */
+const NOMBRES_HTTP_EXITO: ReadonlySet<string> = new Set(['ok', 'created', 'success', 'bad request', 'too many requests']);
+
+/**
+ * Mensaje neutro del 200 de POST /api/auth/reenviar-codigo (Ronda 7 del backend): responde lo mismo
+ * exista o no la cuenta y esté o no activada, así que se muestra tal cual y nunca dice nada de la
+ * cuenta. null si la respuesta no trae un texto para la clienta (la pantalla usa el suyo del catálogo).
+ */
+export function mensajeDelReenvio(respuesta: unknown): string | null {
+  if (typeof respuesta !== 'object' || respuesta === null) {
+    return null;
+  }
+  const { message: texto } = respuesta as { message?: unknown };
+  const limpio = typeof texto === 'string' ? texto.trim() : '';
+  // Vacío, técnico (una excepción) o un nombre HTTP en inglés: la pantalla usa su texto del catálogo.
+  const tecnico = /exception/i.test(limpio) || NOMBRES_HTTP_EXITO.has(limpio.toLowerCase());
+  return limpio && !tecnico ? limpio : null;
 }
 
 // ── Validaciones (sin expresiones regulares) ───────────────────────────────────────────────

@@ -3,7 +3,7 @@ import { AppState } from 'react-native';
 
 import { useAuth } from '@/features/auth/viewmodels/useAuth';
 
-import { obtenerCarrito, piezasCarrito } from '../models/carritoModel';
+import { obtenerCarrito, obtenerCarritoRevisado, piezasCarrito, type ItemCarrito } from '../models/carritoModel';
 
 /**
  * Piezas del carrito para el número de la pestaña Carrito: un estado pequeño en memoria que
@@ -95,6 +95,21 @@ export function publicarPiezasCarrito(n: number) {
   // Una lectura que ya iba en camino traería un número más viejo que este.
   generacion += 1;
   fijar(Math.max(0, n));
+}
+
+/**
+ * Vuelve a leer el carrito con la misma lectura de la pantalla Carrito (obtenerCarritoRevisado: lo
+ * que se dejó de vender se quita y queda por avisar) y publica sus piezas en la pestaña. La usan el
+ * checkout y la confirmación tras un 409 de piezas agotadas (GP-09). Devuelve la lista o null si no
+ * se pudo leer; nunca lanza.
+ */
+export function releerCarrito(): Promise<ItemCarrito[] | null> {
+  return obtenerCarritoRevisado()
+    .then(({ items }) => {
+      publicarPiezasCarrito(piezasCarrito(items));
+      return items;
+    })
+    .catch(() => null);
 }
 
 /**

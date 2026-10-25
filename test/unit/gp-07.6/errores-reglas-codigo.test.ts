@@ -14,7 +14,8 @@ import { cadenas, leer, nombre, sinComentarios, src } from '../../helpers/reglas
  *    propios de la feature).
  * 2. En los modelos, el `.message` de un ApiError solo se compara para clasificar el error
  *    (`.message.toLowerCase()`, `patron.test(error.message)` o `textoPropio(error.message, ...)`,
- *    que devuelve un texto propio de la app); nunca se devuelve ni se guarda tal cual.
+ *    que devuelve un texto propio de la app); nunca se devuelve ni se guarda tal cual. La única
+ *    excepción (GP-09) es textoDelServidor de shared/api/mensajesError.ts.
  * 3. Hay un solo MENSAJE_SIN_CONEXION en todo src (en shared/api/mensajesError.ts).
  * 4. Ninguna vista ni componente escribe "Revisa tu conexión": ese texto depende del tipo de error.
  */
@@ -36,6 +37,11 @@ const PANTALLAS = TODO_SRC.filter(
   (ruta) => /[\\/](views|components|viewmodels)[\\/]/.test(ruta) || ruta.startsWith(src('shared', 'ui')) || ruta.startsWith(src('app')),
 );
 const MODELOS = TODO_SRC.filter((ruta) => !PANTALLAS.includes(ruta));
+/**
+ * GP-09: los límites (429 y 503 con su espera) y las piezas agotadas (409) traen un message ya escrito
+ * para la clienta. Se devuelve tal cual en un solo lugar, textoDelServidor de mensajesError.ts.
+ */
+const UNICO_QUE_DEVUELVE_MESSAGE = 'src/shared/api/mensajesError.ts';
 
 /** Cada `.message` del código (sin comentarios) con su línea y si es una comparación permitida. */
 function usosDeMessage(texto: string): { linea: number; permitido: boolean }[] {
@@ -64,13 +70,27 @@ describe('el texto del servidor no llega a la pantalla', () => {
   });
 
   it('en los modelos, el .message solo se compara para clasificar el error', () => {
-    const indebidos = MODELOS.flatMap((ruta) =>
+    const indebidos = MODELOS.filter((ruta) => nombre(ruta) !== UNICO_QUE_DEVUELVE_MESSAGE).flatMap((ruta) =>
       usosDeMessage(leer(ruta))
         .filter(({ permitido }) => !permitido)
         .map(({ linea }) => `${nombre(ruta)}:${linea}`),
     );
 
     expect(indebidos).toEqual([]);
+  });
+
+  it('mensajesError.ts devuelve el .message en un solo lugar: textoDelServidor (GP-09)', () => {
+    const codigo = sinComentarios(leer(src('shared', 'api', 'mensajesError.ts')));
+    const indebidos = usosDeMessage(codigo).filter(({ permitido }) => !permitido);
+    const inicio = codigo.indexOf('export function textoDelServidor(');
+    const fin = codigo.indexOf('\nexport ', inicio + 1);
+
+    expect(indebidos).toHaveLength(1);
+    expect(inicio).toBeGreaterThan(-1);
+    const lineaInicio = codigo.slice(0, inicio).split('\n').length;
+    const lineaFin = codigo.slice(0, fin).split('\n').length;
+    expect(indebidos[0].linea).toBeGreaterThan(lineaInicio);
+    expect(indebidos[0].linea).toBeLessThan(lineaFin);
   });
 
   it('el detector distingue una comparación de un uso indebido', () => {

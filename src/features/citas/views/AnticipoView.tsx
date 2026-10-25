@@ -73,9 +73,11 @@ export default function AnticipoView() {
           </ScrollView>
           <View style={[styles.pie, { paddingBottom: bottom + espacio.l }]}>
             <Button
-              titulo={tituloBoton(vm.pago, vm.avisoSalon != null)}
+              titulo={(sinNavegador ? null : vm.textoEspera) ?? tituloBoton(vm.pago, vm.avisoSalon != null)}
               onPress={vm.accionPrincipal}
               cargando={ocupado}
+              // La espera del 429 solo detiene pagar; revisar el pago o ir a Mis citas siguen.
+              deshabilitado={!sinNavegador && vm.enEspera}
               accessibilityHint={sinNavegador ? undefined : 'Abre Mercado Pago en el navegador'}
             />
           </View>

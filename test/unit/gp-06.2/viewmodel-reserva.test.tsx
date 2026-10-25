@@ -56,6 +56,7 @@ import {
 } from '../../helpers/citasFicticias';
 import { espiarConsola } from '../../helpers/consola';
 import { abrirSesionSimulada, navegadorRegresa } from '../../helpers/google';
+import { limite429, MENSAJE_LIMITE } from '../../helpers/limitesRed';
 import { ESPECIALISTA_DOS, ESPECIALISTA_UNO, especialistaCruda, imagenServicio } from '../../helpers/serviciosFicticios';
 import { rutasConsentimientos } from '../../helpers/reservaFicticia';
 import { respuesta, type Llamada, type Manejador } from '../../helpers/servidorSimulado';
@@ -1384,6 +1385,33 @@ describe('useAnticipoViewModel: pagar', () => {
     const { result } = await abrirAnticipo();
     await accion(result);
     await waitFor(() => expect(result.current.pago).toEqual({ tipo: 'error', mensaje }));
+    expect(abrirSesionSimulada()).not.toHaveBeenCalled();
+  });
+
+  it('la preferencia con 429 (GP-09): el message del backend y el botón en espera hasta su retryAfter', async () => {
+    const llamadas = servidor({
+      [rutaCita()]: citaComo(CITA_PENDIENTE),
+      [rutaPreferencia()]: enOrden(() => limite429(3), errorRespuesta(ERRORES.interno)),
+    });
+    const { result } = await abrirAnticipo();
+    await accion(result);
+    await waitFor(() => expect(result.current.pago).toEqual({ tipo: 'error', mensaje: MENSAJE_LIMITE }));
+    expect(result.current).toMatchObject({ enEspera: true, textoEspera: 'Intenta de nuevo en 3 s' });
+
+    // Durante la espera el botón no pide otra preferencia.
+    await accion(result);
+    expect(veces(llamadas, rutaPreferencia())).toBe(1);
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(1000);
+    });
+    expect(result.current.textoEspera).toBe('Intenta de nuevo en 2 s');
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(2000);
+    });
+    expect(result.current).toMatchObject({ enEspera: false, textoEspera: null });
+
+    await accion(result);
+    await waitFor(() => expect(veces(llamadas, rutaPreferencia())).toBe(2));
     expect(abrirSesionSimulada()).not.toHaveBeenCalled();
   });
 

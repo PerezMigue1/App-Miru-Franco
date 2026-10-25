@@ -1251,7 +1251,8 @@ describe('useActivarViewModel', () => {
     expect(result.current.mensaje).toBeNull();
   });
 
-  it('reenviar con 429 también arranca la espera de 60 s', async () => {
+  // GP-09: el 429 usa la espera compartida (60 s si no trae retryAfter), no la propia del envío.
+  it('reenviar con 429 sin retryAfter deja el reenvío en espera 60 s', async () => {
     servidor({ [URL_REENVIAR]: { cuerpo: { message: 'Demasiadas solicitudes' }, status: 429 } });
     const { result } = await montarActivar();
 
@@ -1259,8 +1260,10 @@ describe('useActivarViewModel', () => {
       result.current.reenviar();
     });
 
-    await waitFor(() => expect(result.current.error).not.toBeNull());
-    expect(result.current.espera).toBe(60);
+    await waitFor(() => expect(result.current.error).toBe(MENSAJE_DEMASIADOS_INTENTOS));
+    expect(result.current.espera).toBe(0);
+    expect(result.current.reenvioEnLimite).toBe(true);
+    expect(result.current.textoReenviar).toBe('Intenta de nuevo en 60 s');
   });
 
   it('"Volver" y el Atrás de Android regresan a la pantalla de acceso sin activar', async () => {
