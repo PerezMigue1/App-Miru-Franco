@@ -131,6 +131,29 @@ export function esCuentaSinActivar(error: unknown): boolean {
   return error instanceof ApiError && error.status === 403 && error.code === CODIGO_CUENTA_NO_ACTIVADA;
 }
 
+/** Code estable del 403 del login con una cuenta que desactivó su titular (CONTRATO_APP_CUENTA.md). */
+export const CODIGO_CUENTA_DESACTIVADA = 'CUENTA_DESACTIVADA';
+
+/** El regreso de Google trajo `?error=cuenta_desactivada`: la titular desactivó su cuenta. */
+export class ErrorCuentaDesactivada extends Error {
+  constructor() {
+    super('La cuenta está desactivada.');
+    this.name = 'ErrorCuentaDesactivada';
+  }
+}
+
+/**
+ * Cuenta que desactivó su titular: el 403 CUENTA_DESACTIVADA del login (solo llega después de
+ * comprobar la contraseña correcta) o el regreso de Google con `error=cuenta_desactivada`. Se
+ * reconoce solo por el code: CUENTA_NO_ACTIVADA y cualquier otro 403 no abren Reactivar.
+ */
+export function esCuentaDesactivada(error: unknown): boolean {
+  if (error instanceof ErrorCuentaDesactivada) {
+    return true;
+  }
+  return error instanceof ApiError && error.status === 403 && error.code === CODIGO_CUENTA_DESACTIVADA;
+}
+
 /**
  * 429 BLOQUEO_TEMPORAL del login (varias contraseñas incorrectas): el bloqueo es de esa cuenta, no
  * de la IP, así que con otro correo ya no aplica. Nunca es sesión vencida ni cuenta sin activar.

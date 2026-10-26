@@ -24,6 +24,8 @@ export interface TextosAuth {
   pestanas: { acceso: string; registro: string };
   login: { titulo: string; texto: string; olvidaste: string; entrar: string; entrando: string };
   google: { boton: string; abriendo: string; ayuda: string };
+  /** Reactivar la cuenta que desactivó su titular (GP-09): el botón y el enlace discreto de Acceso. */
+  cuenta: { reactivar: string; enlace: string };
   registro: {
     titulo: string;
     texto: string;
@@ -87,6 +89,10 @@ export function useTextosAuth(): TextosAuth {
         boton: texto('auth.google.boton'),
         abriendo: texto('auth.google.abriendo'),
         ayuda: texto('auth.google.ayuda'),
+      },
+      cuenta: {
+        reactivar: texto('cuenta.reactivar.boton'),
+        enlace: texto('cuenta.reactivar.enlaceGoogle'),
       },
       registro: {
         titulo: texto('auth.registro.titulo'),

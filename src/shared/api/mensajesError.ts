@@ -148,10 +148,15 @@ export const ESPERA_LIMITE_S = 60;
 /** Nombres HTTP en inglés que llegan como `error` cuando el cuerpo no trae message. */
 const NOMBRES_HTTP: ReadonlySet<string> = new Set([
   'bad request',
+  'unauthorized',
+  'forbidden',
+  'not found',
   'conflict',
   'too many requests',
   'internal server error',
+  'bad gateway',
   'service unavailable',
+  'gateway timeout',
 ]);
 
 /**

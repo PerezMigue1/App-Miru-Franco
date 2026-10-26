@@ -72,6 +72,8 @@ const VARIABLES_CONTEXTO = [
   // GP-07.6 Tarea 5: cifras de constantes de la app ({digitos}, {minutos}, {segundos}, {megas}) y
   // datos de pantalla ({numero}, {paso}, {piezas}, {formaPago}) de los textos que salieron del código.
   'digitos', 'minutos', 'segundos', 'megas', 'numero', 'paso', 'piezas', 'formaPago',
+  // GP-09: {folio} de cuenta.listo.eliminada del catálogo del backend y de cuenta.app.folio.
+  'folio',
 ];
 
 describe('RESPALDO_TEXTOS', () => {

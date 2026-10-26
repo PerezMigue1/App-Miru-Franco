@@ -11,6 +11,7 @@ import {
   ErrorRolNoPermitido,
   MENSAJE_ROL_NO_PERMITIDO,
   esBloqueoTemporal,
+  esCuentaDesactivada,
   esCuentaSinActivar,
   estadoHttp,
   normalizarCorreo,
@@ -41,6 +42,13 @@ export interface LoginViewModel {
   entrar: () => void;
   /** Al regresar de la activación: el correo escrito y nada más (sin contraseña ni errores). */
   prepararAcceso: (correo: string) => void;
+  /**
+   * El login respondió 403 CUENTA_DESACTIVADA (solo llega con la contraseña correcta): el aviso
+   * está en errorGeneral y la pantalla ofrece "Reactivar mi cuenta".
+   */
+  cuentaDesactivada: boolean;
+  /** Abre Reactivar con el correo de la cuenta desactivada ya escrito. */
+  reactivar: () => void;
 }
 
 const SIN_ERRORES: ErroresLogin = { correo: null, clave: null };
@@ -82,6 +90,8 @@ export function useLoginViewModel(): LoginViewModel {
   // Correo (normalizado) del 429 BLOQUEO_TEMPORAL que dejó "Entrar" en espera; null si la espera es
   // por IP (429 sin code), que sigue aunque se cambie el correo.
   const bloqueoDe = useRef<string | null>(null);
+  // Correo (normalizado) que el login reconoció como cuenta desactivada por su titular; null si no.
+  const [desactivadaDe, setDesactivadaDe] = useState<string | null>(null);
 
   const setCorreo = (texto: string) => {
     setCorreoCrudo(texto);
@@ -89,6 +99,11 @@ export function useLoginViewModel(): LoginViewModel {
       // El bloqueo era de esa cuenta: con otro correo se puede intentar de nuevo.
       bloqueoDe.current = null;
       limite.detener();
+    }
+    if (desactivadaDe !== null && normalizarCorreo(texto) !== desactivadaDe) {
+      // La cuenta desactivada era la de ese correo: con otro ya no se ofrece reactivarla.
+      setDesactivadaDe(null);
+      setErrorGeneral(null);
     }
     if (correoEnVivo) {
       setErrores((previos) => ({ ...previos, correo: problemaDeCorreo(texto) }));
@@ -110,6 +125,7 @@ export function useLoginViewModel(): LoginViewModel {
     };
     setErrores(nuevos);
     setErrorGeneral(null);
+    setDesactivadaDe(null);
     if (nuevos.correo) {
       setCorreoEnVivo(true);
     }
@@ -127,6 +143,10 @@ export function useLoginViewModel(): LoginViewModel {
       if (esCuentaSinActivar(error)) {
         // La activación regresa a esta misma pantalla de acceso.
         push({ pathname: '/activar', params: { email, volverA: rutaAcceso(ruta) } });
+      } else if (esCuentaDesactivada(error)) {
+        // Solo por el code: cualquier otro 403 sigue con su mensaje y nunca ofrece reactivar.
+        setDesactivadaDe(email);
+        setErrorGeneral(obtenerTexto('cuenta.login.desactivada'));
       } else {
         setErrorGeneral(mensajeDeLogin(error));
       }
@@ -150,6 +170,15 @@ export function useLoginViewModel(): LoginViewModel {
     setClave('');
     setErrores(SIN_ERRORES);
     setErrorGeneral(null);
+    setDesactivadaDe(null);
+  };
+
+  // Reactivar regresa a esta misma pantalla de acceso, con el correo escrito.
+  const reactivar = () => {
+    if (desactivadaDe === null) {
+      return;
+    }
+    push({ pathname: '/reactivar', params: { email: desactivadaDe, volverA: rutaAcceso(ruta) } });
   };
 
   return {
@@ -165,5 +194,7 @@ export function useLoginViewModel(): LoginViewModel {
     textoEntrar: limite.texto ?? texto(cargando ? 'auth.login.entrando' : 'auth.login.entrar'),
     entrar,
     prepararAcceso,
+    cuentaDesactivada: desactivadaDe !== null,
+    reactivar,
   };
 }

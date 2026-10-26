@@ -151,6 +151,8 @@ function Navegacion({ fuentesListas }: { fuentesListas: boolean }) {
           <Stack.Protected guard={estado === 'autenticado'}>
             <Stack.Screen name="editar-perfil" />
             <Stack.Screen name="cambiar-contrasena" />
+            {/* Perfil > Mi cuenta (GP-09): desactivar o eliminar la cuenta propia. */}
+            <Stack.Screen name="mi-cuenta" />
             {/* Reserva, anticipo y confirmación (GP-06.2): solo con sesión. */}
             <Stack.Screen name="reservar/[servicioId]" />
             <Stack.Screen name="anticipo/[citaId]" />

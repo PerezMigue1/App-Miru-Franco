@@ -494,7 +494,9 @@ function FormularioAcceso({
   const { correo, setCorreo, salirCorreo, clave, setClave, errores, errorGeneral, cargando, entrar } =
     login;
   const refClaveAcceso = useRef<TextInput>(null);
-  const { login: textos } = useTextosAuth();
+  const { login: textos, cuenta } = useTextosAuth();
+  // El enlace discreto sobra mientras ya hay un botón "Reactivar mi cuenta" a la vista.
+  const ofreceReactivar = login.cuentaDesactivada || google.cuentaDesactivada;
   // Con Google abierto no se entra con correo (ni con la tecla del teclado); al entrar con correo,
   // el error anterior de Google ya no aplica.
   const entrarConCorreo = () => {
@@ -531,6 +533,15 @@ function FormularioAcceso({
         <Enlace texto={textos.olvidaste} onPress={onRecuperar} alinear="fin" />
       </View>
       <Aviso tipo="error" texto={errorGeneral} />
+      {/* Con el mismo aviso de Google a la vista, su botón basta (nunca dos "Reactivar"). */}
+      {login.cuentaDesactivada && !google.cuentaDesactivada ? (
+        <Button
+          titulo={cuenta.reactivar}
+          variante="secundario"
+          onPress={login.reactivar}
+          deshabilitado={google.abriendo || cargando}
+        />
+      ) : null}
       <Button
         titulo={login.textoEntrar}
         onPress={entrarConCorreo}
@@ -538,6 +549,14 @@ function FormularioAcceso({
         deshabilitado={google.abriendo || login.enEspera}
       />
       <AccesoGoogle google={google} ocupado={cargando} />
+      {ofreceReactivar ? null : (
+        <Enlace
+          texto={cuenta.enlace}
+          onPress={google.reactivar}
+          alinear="centro"
+          deshabilitado={google.abriendo || cargando}
+        />
+      )}
     </>
   );
 }
@@ -545,10 +564,11 @@ function FormularioAcceso({
 /**
  * Separador "o", botón "Continuar con Google" y su error, debajo del botón principal de cada
  * formulario. "ocupado": hay otro inicio en curso en ese formulario y Google queda deshabilitado.
+ * Si Google regresó con la cuenta desactivada, debajo del aviso va "Reactivar mi cuenta".
  */
 export function AccesoGoogle({ google, ocupado }: { google: GoogleViewModel; ocupado: boolean }) {
-  const { abriendo, error, entrar } = google;
-  const { google: textos } = useTextosAuth();
+  const { abriendo, error, entrar, cuentaDesactivada, reactivar } = google;
+  const { google: textos, cuenta } = useTextosAuth();
   return (
     <>
       <Separador />
@@ -563,6 +583,10 @@ export function AccesoGoogle({ google, ocupado }: { google: GoogleViewModel; ocu
         deshabilitado={ocupado}
       />
       <Aviso tipo="error" texto={error} />
+      {/* Google regresó con la cuenta desactivada por su titular: se ofrece reactivarla. */}
+      {cuentaDesactivada ? (
+        <Button titulo={cuenta.reactivar} variante="secundario" onPress={reactivar} deshabilitado={ocupado} />
+      ) : null}
     </>
   );
 }
@@ -1310,11 +1334,14 @@ export function Aviso({
   tipo: tipoAviso,
   texto,
   estilo,
+  cortes = false,
 }: {
   tipo: 'error' | 'exito';
   texto: string | null;
   /** Estilo del contenedor cuando hay mensaje (por ejemplo, márgenes). */
   estilo?: StyleProp<ViewStyle>;
+  /** El error se anuncia sin interrumpir (polite), como en Reactivar. */
+  cortes?: boolean;
 }) {
   const { colores } = useTheme();
   const entrada = useEntradaContenido();
@@ -1324,7 +1351,7 @@ export function Aviso({
   return (
     <View
       collapsable={false}
-      accessibilityLiveRegion={esError ? 'assertive' : 'polite'}
+      accessibilityLiveRegion={esError && !cortes ? 'assertive' : 'polite'}
       style={texto ? estilo : styles.fueraDeFlujo}
     >
       {/* El mensaje aparece en 220 ms (reducido: solo se funde) en lugar de saltar a la vista. */}

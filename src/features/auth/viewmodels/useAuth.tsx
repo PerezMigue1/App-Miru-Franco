@@ -24,6 +24,7 @@ import {
 } from '@/shared/api/tokenStorage';
 
 import {
+  ErrorCuentaDesactivada,
   ErrorRolNoPermitido,
   ROL_CLIENTE,
   type UsuarioSesion,
@@ -48,6 +49,13 @@ import { olvidarPerfilReciente } from '../models/perfilCompartido';
 
 export type EstadoSesion = 'cargando' | 'autenticado' | 'anonimo';
 
+/** Lo que Acceso muestra tras desactivar o eliminar la cuenta: el message del backend y el folio. */
+export interface AvisoBaja {
+  mensaje: string;
+  /** Solo al eliminar. */
+  folio: string | null;
+}
+
 interface ContextoAuth {
   estado: EstadoSesion;
   usuario: UsuarioSesion | null;
@@ -56,7 +64,8 @@ interface ContextoAuth {
   /**
    * Inicia sesión con Google (navegador del sistema + PKCE). Devuelve true si entró; false si la
    * clienta canceló o cerró el navegador, o si otro inicio o un cierre de sesión ganó mientras
-   * tanto. Lanza ErrorInicioGoogle, ErrorRolNoPermitido, ApiError o ErrorDeRed.
+   * tanto. Lanza ErrorInicioGoogle, ErrorCuentaDesactivada (regreso con error=cuenta_desactivada),
+   * ErrorRolNoPermitido, ApiError o ErrorDeRed.
    */
   ingresarConGoogle: () => Promise<boolean>;
   /**
@@ -81,6 +90,15 @@ interface ContextoAuth {
   /** Acceso debe abrirse con su aviso y el correo escrito (tras cambiar la contraseña). */
   avisoAcceso: { correo: string } | null;
   descartarAvisoAcceso: () => void;
+  /**
+   * Tras desactivar o eliminar la cuenta (200): el servidor ya revocó todas las sesiones, así que
+   * solo se borra la sesión local (token y refreshToken, sin /logout), se cortan los avisos en vivo
+   * y queda el aviso para Acceso. No es una sesión vencida.
+   */
+  cerrarTrasBajaDeCuenta: (aviso: AvisoBaja) => Promise<void>;
+  /** Aviso que muestra Acceso tras la baja, hasta que se cierra. */
+  avisoBaja: AvisoBaja | null;
+  descartarAvisoBaja: () => void;
 }
 
 const RENOVAR_CADA_MS = 10 * 60 * 1000;
@@ -166,6 +184,9 @@ async function pedirCodigoGoogle(challenge: string): Promise<string | null> {
     throw new ErrorInicioGoogle();
   }
   const retorno = leerRetornoGoogle(resultado.url);
+  if (retorno.tipo === 'cuentaDesactivada') {
+    throw new ErrorCuentaDesactivada();
+  }
   if (retorno.tipo === 'error') {
     throw new ErrorInicioGoogle();
   }
@@ -192,6 +213,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [usuario, setUsuario] = useState<UsuarioSesion | null>(null);
   const [sesionVencida, setSesionVencida] = useState(false);
   const [avisoAcceso, setAvisoAcceso] = useState<{ correo: string } | null>(null);
+  const [avisoBaja, setAvisoBaja] = useState<AvisoBaja | null>(null);
 
   const quedarAnonimo = useCallback(() => {
     setUsuario(null);
@@ -212,6 +234,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const descartarAvisoSesion = useCallback(() => setSesionVencida(false), []);
   const descartarAvisoAcceso = useCallback(() => setAvisoAcceso(null), []);
+  const descartarAvisoBaja = useCallback(() => setAvisoBaja(null), []);
 
   // Restaura la sesión guardada y la valida con /api/auth/me: solo un 401 la cierra. Si mientras
   // tanto se inicia o se cierra sesión (cambia la generación), el resultado se descarta.
@@ -341,6 +364,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUsuario(datos);
     setEstado('autenticado');
     setSesionVencida(false);
+    setAvisoBaja(null);
   }, []);
 
   const ingresar = useCallback(
@@ -447,6 +471,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     quedarAnonimo();
   }, [usuario, quedarAnonimo]);
 
+  const cerrarTrasBajaDeCuenta = useCallback(
+    async (aviso: AvisoBaja) => {
+      // Generación nueva: un 401 tardío de los tokens ya revocados no avisa "Tu sesión terminó".
+      nuevaGeneracion();
+      // Si el borrado local fallara, el token guardado ya no sirve: al reabrir, /me lo rechaza.
+      await borrarConReintento();
+      // Los avisos en vivo, el carrito y lo demás en memoria de la clienta se van ya.
+      avisarCierreSesion('salida');
+      setSesionVencida(false);
+      setAvisoBaja(aviso);
+      quedarAnonimo();
+    },
+    [quedarAnonimo],
+  );
+
   const valor = useMemo(
     () => ({
       estado,
@@ -460,6 +499,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       cerrarTrasCambioDeContrasena,
       avisoAcceso,
       descartarAvisoAcceso,
+      cerrarTrasBajaDeCuenta,
+      avisoBaja,
+      descartarAvisoBaja,
     }),
     [
       estado,
@@ -473,6 +515,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       cerrarTrasCambioDeContrasena,
       avisoAcceso,
       descartarAvisoAcceso,
+      cerrarTrasBajaDeCuenta,
+      avisoBaja,
+      descartarAvisoBaja,
     ],
   );
 

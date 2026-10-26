@@ -81,12 +81,15 @@ export interface PerfilViewModel {
   elegirApariencia: (preferencia: PreferenciaApariencia) => void;
   /** Fila "El salón" (textos del sitio): visible con y sin sesión. */
   filaSalon: { titulo: string; descripcion: string };
+  /** Fila "Mi cuenta" (GP-09): desactivar o eliminar la cuenta, solo con sesión. */
+  filaMiCuenta: { titulo: string; descripcion: string };
   // Navegación
   editarPerfil: () => void;
   abrirMisCitas: () => void;
   abrirMisPedidos: () => void;
   abrirSalon: () => void;
   cambiarContrasena: () => void;
+  abrirMiCuenta: () => void;
   abrirAviso: () => void;
   cerrarSesion: () => void;
 }
@@ -381,11 +384,13 @@ export function usePerfilViewModel(): PerfilViewModel {
       setHojaApariencia(false);
     },
     filaSalon: { titulo: texto('salon.titulo'), descripcion: texto('salon.perfil.descripcion') },
+    filaMiCuenta: { titulo: texto('cuenta.app.fila'), descripcion: texto('cuenta.app.filaDescripcion') },
     editarPerfil: () => push('/editar-perfil'),
     abrirMisCitas: () => push('/mis-citas' as Href),
     abrirMisPedidos: () => push('/mis-pedidos' as Href),
     abrirSalon: () => push('/salon' as Href),
     cambiarContrasena: () => push('/cambiar-contrasena'),
+    abrirMiCuenta: () => push('/mi-cuenta' as Href),
     abrirAviso,
     // Mientras una foto se sube o se quita, no se cierra la sesión; si no, se confirma antes.
     cerrarSesion: () => {
