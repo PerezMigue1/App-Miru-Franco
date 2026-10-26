@@ -29,8 +29,9 @@ export type AccionConsentimiento = 'aceptado' | 'revocado';
  * promociones...) se mandan sin documento.
  */
 export interface ItemConsentimiento {
-  tipo: TipoConsentimiento;
-  documentoSlug?: SlugDocumentoLegal;
+  /** Uno de los conocidos o el que mande el backend (por ejemplo, en los documentos pendientes). */
+  tipo: TipoConsentimiento | (string & Record<never, never>);
+  documentoSlug?: SlugDocumentoLegal | (string & Record<never, never>);
   version?: string;
   hash?: string;
   accion: AccionConsentimiento;

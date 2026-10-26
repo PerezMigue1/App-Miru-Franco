@@ -52,14 +52,12 @@ const VIEWMODELS = [
 ].map(viewmodel);
 const CITA_MODEL = citas('models', 'citaModel.ts');
 const PRESENTACION = viewmodel('presentacionCita');
+// Corrección de GP-09: BadgeEstado se movió a src/shared/ui (auth y tienda lo usan).
+const BADGE = src('shared', 'ui', 'BadgeEstado.tsx');
 const COMPONENTES = [
-  'TarjetaCita',
-  'HojaCancelarCita',
-  'BadgeEstado',
-  'CalendarioMensual',
-  'ResumenCita',
-  'SelectorHorario',
-].map(componente);
+  ...['TarjetaCita', 'HojaCancelarCita', 'CalendarioMensual', 'ResumenCita', 'SelectorHorario'].map(componente),
+  BADGE,
+];
 const TODOS = [...RUTAS, ...VISTAS, ...VIEWMODELS, CITA_MODEL, ...COMPONENTES];
 
 const MODULO_CITA = '../models/citaModel';
@@ -146,8 +144,8 @@ describe('Corrección B: los componentes toman las funciones de presentación de
     expect(piezasDe(texto, 'import', MODULO_CITA).valores).toEqual([]);
   });
 
-  it('BadgeEstado sigue tomando TonoBadge de citaModel solo como tipo', () => {
-    expect(piezasDe(leer(componente('BadgeEstado')), 'import', MODULO_CITA)).toEqual({
+  it('BadgeEstado toma TonoBadge de shared/ui/tonoBadge solo como tipo', () => {
+    expect(piezasDe(leer(BADGE), 'import', './tonoBadge')).toEqual({
       valores: [],
       tipos: ['TonoBadge'],
     });

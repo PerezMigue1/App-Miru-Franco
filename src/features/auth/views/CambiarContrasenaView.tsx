@@ -73,7 +73,7 @@ export default function CambiarContrasenaView() {
           <EmptyState
             titulo="No pudimos cargar tu cuenta"
             mensaje={vm.mensajeError ?? ''}
-            accion={{ titulo: 'Reintentar', onPress: vm.reintentar }}
+            accion={{ titulo: vm.textoReintentar, onPress: vm.reintentar }}
           />
         </View>
       ) : null}

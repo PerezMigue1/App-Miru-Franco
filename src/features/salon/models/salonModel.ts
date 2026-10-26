@@ -1,4 +1,4 @@
-import { fechaLocal } from '@/features/citas/models/citaModel';
+import { fechaLocal } from '@/shared/ui/fechasLegibles';
 import type {
   DiaHorario,
   DiaInhabil,

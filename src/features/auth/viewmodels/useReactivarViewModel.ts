@@ -1,6 +1,5 @@
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { BackHandler } from 'react-native';
 
 import { useEsperaLimite } from '@/shared/api/useEsperaLimite';
 import { useTextos } from '@/shared/api/useTextos';
@@ -9,6 +8,7 @@ import { useCandado } from '@/shared/ui/useCandado';
 
 import { esCodigoValido, estadoHttp, normalizarCorreo, problemaDeCorreo } from '../models/AuthModel';
 import { confirmarReactivacion, mensajeDeCuenta, solicitarReactivacion } from '../models/cuentaPropia';
+import { useAtrasSale } from './useAtrasSale';
 import type { RutaAcceso } from './useRetornoActivacion';
 
 /** Segundos entre un código y el siguiente (el backend no reenvía a la misma cuenta antes de un minuto). */
@@ -113,16 +113,9 @@ export function useReactivarViewModel(correoInicial: string, volverA: RutaAcceso
     [dismissTo, email, volverA],
   );
 
+  const volver = useCallback(() => regresar(false), [regresar]);
   // El Atrás de Android sale por el mismo camino que "Volver a iniciar sesión".
-  useFocusEffect(
-    useCallback(() => {
-      const suscripcion = BackHandler.addEventListener('hardwareBackPress', () => {
-        regresar(false);
-        return true;
-      });
-      return () => suscripcion.remove();
-    }, [regresar]),
-  );
+  useAtrasSale(volver);
 
   const setCorreo = (valor: string) => {
     setCorreoCrudo(valor);
@@ -223,8 +216,6 @@ export function useReactivarViewModel(correoInicial: string, volverA: RutaAcceso
     setError(null);
     setMensaje(null);
   };
-
-  const volver = () => regresar(false);
 
   const restantes = esperaOtro.restantes;
   const textos = useMemo<TextosReactivar>(() => {

@@ -1,6 +1,5 @@
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { BackHandler } from 'react-native';
 
 import { mensajeParaClienta } from '@/shared/api/mensajesError';
 import { obtenerTexto } from '@/shared/api/textosSitio';
@@ -11,6 +10,7 @@ import { useCandado } from '@/shared/ui/useCandado';
 
 import { esCodigoValido, estadoHttp, mensajeDelReenvio } from '../models/AuthModel';
 import { reenviarCodigo, verificarCodigo } from '../models/authService';
+import { useAtrasSale } from './useAtrasSale';
 import type { RutaAcceso } from './useRetornoActivacion';
 
 const ESPERA_REENVIO_S = 60;
@@ -119,16 +119,9 @@ export function useActivarViewModel(
     [dismissTo, email, volverA],
   );
 
+  const volver = useCallback(() => regresar(false), [regresar]);
   // El Atrás de Android sale por el mismo camino que "Volver a iniciar sesión".
-  useFocusEffect(
-    useCallback(() => {
-      const suscripcion = BackHandler.addEventListener('hardwareBackPress', () => {
-        regresar(false);
-        return true;
-      });
-      return () => suscripcion.remove();
-    }, [regresar]),
-  );
+  useAtrasSale(volver);
 
   useEffect(() => {
     if (espera <= 0) {
@@ -205,8 +198,6 @@ export function useActivarViewModel(
     // Candado inmediato además de cargando: enviarReenvio() ya muestra cualquier error en pantalla.
     candadoReenvio(enviarReenvio);
   };
-
-  const volver = () => regresar(false);
 
   const textos = useMemo<TextosActivar>(
     () => ({

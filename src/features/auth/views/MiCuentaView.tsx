@@ -111,7 +111,12 @@ function PasoRevision({ revision }: { revision: RevisionVista }) {
     return (
       <>
         <MiCuentaAviso tono="peligro" texto={revision.error} />
-        <Button titulo={revision.textoRevisarDeNuevo} variante="secundario" onPress={revision.revisarDeNuevo} />
+        <Button
+          titulo={revision.textoRevisarDeNuevo}
+          variante="secundario"
+          onPress={revision.revisarDeNuevo}
+          deshabilitado={revision.revisarEnEspera}
+        />
         {volver}
       </>
     );
@@ -139,7 +144,12 @@ function PasoRevision({ revision }: { revision: RevisionVista }) {
         <Text style={[styles.parrafo, { color: colores.texto }]}>{revision.sinPendientes}</Text>
       )}
       {conBloqueos ? (
-        <Button titulo={revision.textoRevisarDeNuevo} variante="secundario" onPress={revision.revisarDeNuevo} />
+        <Button
+          titulo={revision.textoRevisarDeNuevo}
+          variante="secundario"
+          onPress={revision.revisarDeNuevo}
+          deshabilitado={revision.revisarEnEspera}
+        />
       ) : null}
       {revision.puedeContinuar ? <Button titulo={revision.textoContinuar} onPress={revision.continuar} /> : null}
       {volver}

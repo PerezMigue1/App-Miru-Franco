@@ -52,6 +52,11 @@ export interface VigenciaDocumento {
   desde: string;
 }
 
+/** "Versión 1.2" y "Vigente desde el 14 de octubre de 2026" de una versión y su 'YYYY-MM-DD'. */
+export function vigenciaLegible(version: string, vigenteDesde: string): VigenciaDocumento {
+  return { version: `Versión ${version}`, desde: `Vigente desde el ${fechaVigenciaLegible(vigenteDesde)}` };
+}
+
 const SIN_ABRIR = 'No pudimos abrir el documento. Revisa tu conexión e intenta de nuevo.';
 
 interface Carga {
@@ -127,9 +132,7 @@ export function useDocumentoLegal(slug: string | string[] | undefined): Document
     desconocido: !valido,
     noPublicado,
     titulo: documento?.titulo ?? (valido ? TITULO_DOCUMENTO_LEGAL[slug] : ''),
-    vigencia: documento
-      ? { version: `Versión ${documento.version}`, desde: `Vigente desde el ${fechaVigenciaLegible(documento.vigenteDesde)}` }
-      : null,
+    vigencia: documento ? vigenciaLegible(documento.version, documento.vigenteDesde) : null,
     avisoAbrir,
     reintentar,
     abrirCompleto,

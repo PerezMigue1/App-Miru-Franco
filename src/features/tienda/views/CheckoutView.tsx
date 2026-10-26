@@ -168,7 +168,7 @@ function PieCheckout({ vm, bottom }: { vm: CheckoutViewModel; bottom: number }) 
           titulo={vm.botonFinal || textos.checkout.confirmarPedido}
           onPress={vm.confirmar}
           cargando={vm.enviando}
-          deshabilitado={vm.metodo === null}
+          deshabilitado={vm.metodo === null || vm.enEspera}
           accessibilityHint={enLinea ? textos.checkout.ayudaLinea : textos.checkout.ayudaSalon}
         />
       ) : null}

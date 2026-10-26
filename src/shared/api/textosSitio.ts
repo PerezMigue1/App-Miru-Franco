@@ -533,6 +533,17 @@ export const RESPALDO_TEXTOS = Object.freeze({
   'cuenta.reactivar.enviado':
     'Si tu cuenta está desactivada, te enviamos un código. Revisa tu correo, también la carpeta de spam.',
   'cuenta.reactivar.listo': 'Tu cuenta está activa otra vez. Ya puedes iniciar sesión.',
+  // Mis datos y privacidad (GP-09): lo que se conserva por ley, copia exacta de los valores por
+  // omisión de eliminarCuenta.conserva.* del catálogo del backend (corregidos en la Ronda 8: las
+  // facturas se conservan con sus datos fiscales). Los textos propios de la pantalla van en
+  // textosPropiosApp.json (privacidad.app.*).
+  'eliminarCuenta.conserva.titulo': 'Qué conservamos por ley',
+  'eliminarCuenta.conserva.intro': 'Algunos registros los tenemos que guardar aunque elimines tu cuenta:',
+  'eliminarCuenta.conserva.fiscal':
+    'Tus pedidos, pagos y ventas, sin tu nombre, y tus facturas con sus datos fiscales (nombre o razón social, RFC y correo de facturación), durante 5 años, como lo exige el artículo 30 del Código Fiscal de la Federación.',
+  'eliminarCuenta.conserva.historial': 'Tus citas, quejas y valoraciones, ya sin tu nombre.',
+  'eliminarCuenta.conserva.constancias':
+    'La constancia de tus consentimientos y de tus solicitudes ARCO, incluida la de esta eliminación con su folio.',
   // Propias de la app agregadas en GP-07.6 (textosPropiosApp.json): no existen en el catálogo del
   // backend y son respaldos de la app hasta que el backend agregue las claves. Viven en JSON porque
   // son datos, no código. Traen los defectos de citas, los avisos por tipo de falla, los textos que

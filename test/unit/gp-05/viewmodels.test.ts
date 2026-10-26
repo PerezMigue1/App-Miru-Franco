@@ -6,11 +6,7 @@ import { openBrowserAsync } from 'expo-web-browser';
 import { createElement, type ReactNode } from 'react';
 import { BackHandler } from 'react-native';
 
-import {
-  ERROR_CONSENTIMIENTO_SALUD,
-  ERROR_TELEFONO,
-  type PreguntaSeguridad,
-} from '@/features/auth/models/AuthModel';
+import { ERROR_TELEFONO, type PreguntaSeguridad } from '@/features/auth/models/AuthModel';
 import { useActivarViewModel } from '@/features/auth/viewmodels/useActivarViewModel';
 import { AuthProvider, useAuth } from '@/features/auth/viewmodels/useAuth';
 import { useBienvenida } from '@/features/auth/viewmodels/useBienvenida';
@@ -476,6 +472,9 @@ const PASO_1_VALIDO: Partial<CamposRegistro> = {
   confirmacion: CLAVE,
 };
 
+/** GP-09 (Ronda 5): versión y hash ficticios del texto de la autorización de datos sensibles. */
+const AUTORIZACION = { version: '1.0', hash: 'e'.repeat(64) };
+
 const PASO_2_VALIDO: Partial<CamposRegistro> = {
   tipoCabello: 'ondulado',
   tieneAlergias: false,
@@ -828,28 +827,24 @@ describe('useRegistroViewModel', () => {
       expect(llamadasA(simulado, URL_REGISTRO)).toHaveLength(0);
     });
 
-    it('con alergias pide su detalle y la autorización de datos de salud', async () => {
+    it('con alergias autorizadas pide su detalle; "No" borra el detalle y la autorización', async () => {
       servidor({ [URL_VERIFICAR_CORREO]: { cuerpo: { existe: false } } });
       const { result } = await renderHook(() => useRegistroViewModel());
       await llegarAlPaso2(result);
-      await llenar(result, { ...PASO_2_VALIDO, tieneAlergias: true });
+      // GP-09 (Ronda 5): el detalle solo se pide después de la autorización de datos sensibles.
+      await llenar(result, { ...PASO_2_VALIDO, tieneAlergias: true, autorizacionDatosSensibles: AUTORIZACION });
 
       await act(async () => {
         result.current.crearCuenta();
       });
       expect(result.current.errores.alergias).toBe('Especifica tus alergias');
 
+      // Responder "No" borra el detalle y la autorización.
       await cambiarCampo(result, 'alergias', 'Alergia ficticia al amoniaco');
-      await act(async () => {
-        result.current.crearCuenta();
-      });
-      expect(result.current.errores.consienteDatosSensibles).toBe(ERROR_CONSENTIMIENTO_SALUD);
-
-      // Responder "No" borra el detalle y el consentimiento.
       await cambiarCampo(result, 'tieneAlergias', false);
       expect(result.current.campos.alergias).toBe('');
-      expect(result.current.campos.consienteDatosSensibles).toBe(false);
-      expect(result.current.errores.consienteDatosSensibles).toBeNull();
+      expect(result.current.campos.autorizacionDatosSensibles).toBeNull();
+      expect(result.current.errores.alergias).toBeNull();
     });
 
     it('"Atrás" regresa al paso 1 sin perder lo escrito', async () => {
@@ -880,7 +875,7 @@ describe('useRegistroViewModel', () => {
         colorNatural: '  Castaño  ',
         tieneAlergias: true,
         alergias: ' Alergia ficticia al amoniaco ',
-        consienteDatosSensibles: true,
+        autorizacionDatosSensibles: AUTORIZACION,
         recibePromociones: true,
       });
 
@@ -909,6 +904,7 @@ describe('useRegistroViewModel', () => {
         aceptaAvisoPrivacidad: true,
         recibePromociones: true,
         consienteDatosSensibles: true,
+        autorizacionDatosSensibles: AUTORIZACION,
       });
       expect(mockRouter.push).toHaveBeenCalledWith({
         pathname: '/activar',
@@ -916,7 +912,7 @@ describe('useRegistroViewModel', () => {
       });
       // Los datos de salud no se conservan en memoria después de enviarlos.
       expect(result.current.campos.alergias).toBe('');
-      expect(result.current.campos.consienteDatosSensibles).toBe(false);
+      expect(result.current.campos.autorizacionDatosSensibles).toBeNull();
       expect(result.current.cargando).toBe(false);
     });
 

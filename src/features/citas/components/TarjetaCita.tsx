@@ -3,6 +3,7 @@ import { memo, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
+import { BadgeEstado } from '@/shared/ui/BadgeEstado';
 import { usePresion } from '@/shared/ui/movimiento';
 import { Skeleton } from '@/shared/ui/Skeleton';
 import {
@@ -29,7 +30,6 @@ import {
   horaLegible,
   limitePagoCorto,
 } from '../viewmodels/presentacionCita';
-import { BadgeEstado } from './BadgeEstado';
 
 interface TarjetaCitaProps {
   cita: Cita;

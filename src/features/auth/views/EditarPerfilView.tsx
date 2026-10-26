@@ -30,6 +30,7 @@ import {
 } from '../components/AuthContainer';
 import { EncabezadoVolver } from '../components/EncabezadoVolver';
 import { HojaConfirmacion } from '../components/HojaConfirmacion';
+import { HojaDatosSensibles } from '../components/HojaDatosSensibles';
 import { useEditarPerfilViewModel, type CampoPerfil } from '../viewmodels/useEditarPerfilViewModel';
 
 /** Editar perfil: "Tus datos" y "Tu cabello", con las reglas y los componentes del registro. */
@@ -163,15 +164,32 @@ export default function EditarPerfilView() {
               onCambiar={(t) => cambiar('productosUsados', t)}
               placeholder="Ej. Shampoo sin sulfatos"
             />
-            <Input
-              ref={texto('alergias')}
-              etiqueta="Alergias"
-              tipo="sensible"
-              valor={f.alergias}
-              onCambiar={(t) => cambiar('alergias', t)}
-              onSalir={() => salirDe('alergias')}
-              error={errores.alergias}
-            />
+            {vm.alergiasAutorizadas ? (
+              <Input
+                ref={texto('alergias')}
+                etiqueta="Alergias"
+                tipo="sensible"
+                valor={f.alergias}
+                onCambiar={(t) => cambiar('alergias', t)}
+                onSalir={() => salirDe('alergias')}
+                error={errores.alergias}
+              />
+            ) : (
+              // Sin la autorización vigente las alergias no se ven ni se mandan: se ofrece autorizar.
+              <View style={styles.grupo}>
+                <Text style={[styles.etiqueta, { color: colores.contorno }]}>Alergias</Text>
+                <Text style={[styles.valor, { color: colores.textoSuave }]}>{vm.textoSinAutorizacion}</Text>
+                <Aviso tipo="error" texto={vm.avisoAlergias} cortes />
+                <Aviso tipo="error" texto={vm.errorAlergias} cortes />
+                <Button
+                  titulo={vm.errorAlergias ? vm.textoReintentar : vm.textoAutorizar}
+                  variante="secundario"
+                  onPress={vm.errorAlergias ? vm.reintentarAlergias : vm.autorizacion.abrir}
+                  cargando={vm.recargandoAlergias}
+                  deshabilitado={vm.guardando}
+                />
+              </View>
+            )}
             {vm.pideConsentimiento ? (
               <View ref={bloque('consiente')}>
                 <Casilla
@@ -214,9 +232,10 @@ export default function EditarPerfilView() {
   
             <Aviso tipo="error" texto={vm.errorGeneral} />
             <Button
-              titulo={vm.guardando ? 'Guardando…' : 'Guardar cambios'}
+              titulo={vm.textoGuardar}
               onPress={vm.guardar}
               cargando={vm.guardando}
+              deshabilitado={vm.guardarEnEspera}
             />
           </ScrollView>
         </Animated.View>
@@ -231,6 +250,7 @@ export default function EditarPerfilView() {
         onConfirmar={vm.descartar}
         onCancelar={vm.seguirEditando}
       />
+      <HojaDatosSensibles vm={vm.autorizacion} />
     </KeyboardAvoidingView>
   );
 }

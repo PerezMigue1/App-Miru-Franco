@@ -16,6 +16,8 @@ interface HojaCancelarPedidoProps {
   /** Texto de la confirmación (textoCancelarPedido: si ya se pagó en línea, avisa de la devolución). */
   texto: string;
   cancelando: boolean;
+  /** Tras un 429: "Intenta de nuevo en N s" en lugar del texto del botón; null o sin pasar si no hay espera. */
+  textoEspera?: string | null;
   /** Mensaje para la clienta si la cancelación falló, o null. */
   error: string | null;
   /** false si, tras recargar, el pedido ya no se puede cancelar (por ejemplo, ya se prepara). */
@@ -30,6 +32,7 @@ export function HojaCancelarPedido({
   numero,
   texto,
   cancelando,
+  textoEspera = null,
   error,
   puedeConfirmar,
   onCancelar,
@@ -52,7 +55,7 @@ export function HojaCancelarPedido({
 
       <View style={styles.acciones}>
         <Button
-          titulo={cancelando ? textos.cancelando : textos.confirmar}
+          titulo={textoEspera ?? (cancelando ? textos.cancelando : textos.confirmar)}
           variante="peligro"
           onPress={onCancelar}
           cargando={cancelando}

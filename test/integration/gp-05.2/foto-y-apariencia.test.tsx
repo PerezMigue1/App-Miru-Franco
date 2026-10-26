@@ -11,6 +11,7 @@ import type { TestInstance } from 'test-renderer';
 
 import { temaClaro, temaOscuro } from '@/shared/ui/colores';
 
+import { permisoGaleria, simularAndroid } from '../../helpers/galeriaAndroid';
 import { LIMITE_MS, prepararPruebasDePantalla, ultimoBoton } from '../../helpers/pantallas';
 import { abrirPerfilConSesion } from '../../helpers/pantallasPerfil';
 import { CLIENTA, PERFIL_COMPLETO } from '../../helpers/perfilClienta';
@@ -27,6 +28,7 @@ import { llamadasA, respuesta, type Llamada } from '../../helpers/servidorSimula
 // Selector de imágenes: cada prueba decide el permiso y la foto elegida.
 jest.mock('expo-image-picker', () => ({
   PermissionStatus: { GRANTED: 'granted', DENIED: 'denied', UNDETERMINED: 'undetermined' },
+  getMediaLibraryPermissionsAsync: jest.fn(),
   requestMediaLibraryPermissionsAsync: jest.fn(),
   launchImageLibraryAsync: jest.fn(),
 }));
@@ -107,6 +109,17 @@ async function elegirDeGaleria(): Promise<void> {
   await fireEvent.press(ultimoBoton('Elegir de la galería'));
 }
 
+/**
+ * GP-09: en Android 12 o anterior, sin el permiso concedido sale la explicación; "Continuar" lo
+ * pide. (Con el permiso ya concedido, o en Android 13 o más nuevo, no hay explicación ni pregunta:
+ * test/integration/gp-09/perfil-galeria.)
+ */
+async function continuarExplicacion(): Promise<void> {
+  expect(await screen.findByRole('header', { name: 'Elegir tu foto de perfil' })).toBeOnTheScreen();
+  expect(ImagePicker.requestMediaLibraryPermissionsAsync).not.toHaveBeenCalled();
+  await fireEvent.press(ultimoBoton('Continuar'));
+}
+
 /** Nada de la subida salió: ni firma, ni Cloudinary, ni guardado. */
 function sinSubida(llamadas: Llamada[]): void {
   expect(llamadasA(llamadas, 'POST', RUTA_FIRMA)).toHaveLength(0);
@@ -149,14 +162,23 @@ describe('Foto de perfil y apariencia (GP-05.2)', () => {
   const esperarConsolaLimpia = prepararPruebasDePantalla();
 
   // Cada prueba cuenta sus propias llamadas al selector y al recorte.
+  let restaurarPlataforma: () => void = () => undefined;
+  afterEach(() => {
+    restaurarPlataforma();
+    restaurarPlataforma = () => undefined;
+  });
+
   beforeEach(() => {
+    // El permiso aún no está concedido: en Android 12 sale la explicación antes de pedirlo.
+    jest.mocked(ImagePicker.getMediaLibraryPermissionsAsync).mockReset();
+    jest.mocked(ImagePicker.getMediaLibraryPermissionsAsync).mockResolvedValue(permisoGaleria('negado'));
     jest.mocked(ImagePicker.requestMediaLibraryPermissionsAsync).mockReset();
     jest.mocked(ImagePicker.launchImageLibraryAsync).mockReset();
     jest.mocked(ImageManipulator.manipulate).mockClear();
   });
 
   it(
-    'con permiso: pide la firma, sube a Cloudinary, guarda la url en /me y muestra la foto nueva',
+    'con permiso (Android 12, tras la explicación): pide la firma, sube a Cloudinary, guarda la url en /me y muestra la foto nueva',
     async () => {
       jest.mocked(ImagePicker.requestMediaLibraryPermissionsAsync).mockResolvedValue(permiso(true));
       jest.mocked(ImagePicker.launchImageLibraryAsync).mockResolvedValue({
@@ -165,8 +187,10 @@ describe('Foto de perfil y apariencia (GP-05.2)', () => {
       });
       const { llamadas } = await abrirPerfilConSesion(RUTAS_FOTO);
       const { token } = sesionGuardada() ?? { token: '' };
+      restaurarPlataforma = simularAndroid(32);
 
       await elegirDeGaleria();
+      await continuarExplicacion();
 
       // Al terminar, el avatar ofrece cambiar la foto y la muestra.
       expect(await screen.findByRole('button', { name: 'Cambiar foto de perfil' })).toBeOnTheScreen();
@@ -215,13 +239,17 @@ describe('Foto de perfil y apariencia (GP-05.2)', () => {
   );
 
   it(
-    'sin permiso: explica en español cómo darlo, ofrece los ajustes y no sube nada',
+    'sin permiso para siempre (Android 12): explica en español cómo darlo, ofrece los ajustes y no sube nada',
     async () => {
-      jest.mocked(ImagePicker.requestMediaLibraryPermissionsAsync).mockResolvedValue(permiso(false));
+      jest
+        .mocked(ImagePicker.requestMediaLibraryPermissionsAsync)
+        .mockResolvedValue(permisoGaleria('negadoParaSiempre'));
       const abrirAjustes = jest.spyOn(Linking, 'openSettings').mockResolvedValue(undefined);
       const { llamadas } = await abrirPerfilConSesion(RUTAS_FOTO);
+      restaurarPlataforma = simularAndroid(32);
 
       await elegirDeGaleria();
+      await continuarExplicacion();
 
       expect(await screen.findByText(AVISO_PERMISO)).toBeOnTheScreen();
       expect(ImagePicker.launchImageLibraryAsync).not.toHaveBeenCalled();

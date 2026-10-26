@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import { BadgeEstado } from '@/features/citas/components/BadgeEstado';
+import { BadgeEstado } from '@/shared/ui/BadgeEstado';
 import { Button } from '@/shared/ui/Button';
 import { Skeleton } from '@/shared/ui/Skeleton';
 import { borde, espacio, esqueleto, fuente, tipo } from '@/shared/ui/tokens';

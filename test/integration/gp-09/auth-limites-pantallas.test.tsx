@@ -162,7 +162,7 @@ describe('Autenticación con límites en las pantallas (GP-09)', () => {
       await fireEvent.press(screen.getByRole('link', { name: 'Reenviar código' }));
       expect(await screen.findByText(RESPALDO_TEXTOS['auth.activar.noSeReenvio'])).toBeOnTheScreen();
       expect(screen.queryByText('Usuario no encontrado')).not.toBeOnTheScreen();
-      expect(screen.queryByText(RESPALDO_TEXTOS['auth.activar.yaActivada'])).not.toBeOnTheScreen();
+      expect(screen.queryByText(/ya está activad/i)).not.toBeOnTheScreen();
 
       await fireEvent.press(screen.getByRole('link', { name: 'Reenviar código' }));
       expect(await screen.findByText(NEUTRO_REENVIO)).toBeOnTheScreen();

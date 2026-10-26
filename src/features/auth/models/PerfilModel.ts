@@ -3,7 +3,10 @@ import { telefonoSinLada } from '@/shared/ui/digitos';
 
 import { normalizarTelefono, type TipoCabello } from './AuthModel';
 
-/** Perfil completo de la clienta (GET /api/auth/me). Las alergias son datos de salud: solo en memoria. */
+/**
+ * Perfil completo de la clienta (GET /api/auth/me). Las alergias son datos de salud: solo en memoria
+ * y solo con la autorización expresa de datos sensibles vigente (Ronda 5).
+ */
 export interface PerfilCuenta {
   id: string;
   nombre: string;
@@ -15,7 +18,12 @@ export interface PerfilCuenta {
   colorNatural: string;
   colorActual: string;
   productosUsados: string;
+  /** Vacío sin la autorización de datos sensibles: nunca se muestran ni se mandan. */
   alergias: string;
+  /** Solo true si /me lo dice expresamente (datosSensiblesAutorizados); nunca se supone. */
+  datosSensiblesAutorizados: boolean;
+  /** Tiene alergias guardadas que esperan su autorización (ocultas, no borradas). */
+  alergiasOcultas: boolean;
   /** null: /me no trae la respuesta (la clienta aún no la ha dado). */
   tratamientosQuimicos: boolean | null;
   tratamientos: string;
@@ -101,6 +109,9 @@ export function normalizarPerfil(respuesta: unknown): PerfilCuenta | null {
     return null;
   }
   const foto = texto(usuario.foto).trim();
+  // Ronda 5: sin la autorización vigente el backend manda alergias en null; si por algo llegaran,
+  // tampoco se usan.
+  const autorizados = usuario.datosSensiblesAutorizados === true;
   return {
     id: String(id),
     nombre: texto(usuario.nombre),
@@ -111,7 +122,9 @@ export function normalizarPerfil(respuesta: unknown): PerfilCuenta | null {
     colorNatural: texto(capilar(usuario, 'colorNatural')),
     colorActual: texto(capilar(usuario, 'colorActual')),
     productosUsados: texto(capilar(usuario, 'productosUsados')),
-    alergias: texto(capilar(usuario, 'alergias')),
+    alergias: autorizados ? texto(capilar(usuario, 'alergias')) : '',
+    datosSensiblesAutorizados: autorizados,
+    alergiasOcultas: !autorizados && usuario.alergiasOcultas === true,
     tratamientosQuimicos: siNoDe(capilar(usuario, 'tratamientosQuimicos')),
     tratamientos: texto(capilar(usuario, 'tratamientos')),
     recibePromociones: usuario.recibePromociones === true,
@@ -201,7 +214,10 @@ export function cambiosDelPerfil(
   if (formulario.tipoCabello && formulario.tipoCabello !== perfil.tipoCabello) {
     cambios.tipoCabello = formulario.tipoCabello;
   }
-  const textos = ['colorNatural', 'colorActual', 'productosUsados', 'alergias'] as const;
+  // Sin la autorización vigente las alergias no viajan: el backend no las guarda ni las borra.
+  const textos = perfil.datosSensiblesAutorizados
+    ? (['colorNatural', 'colorActual', 'productosUsados', 'alergias'] as const)
+    : (['colorNatural', 'colorActual', 'productosUsados'] as const);
   for (const campo of textos) {
     const nuevo = opcional(formulario[campo]);
     if (nuevo !== opcional(perfil[campo])) {
@@ -218,10 +234,23 @@ export function cambiosDelPerfil(
   return cambios;
 }
 
-/** Las alergias cambiaron y traen texto: hace falta el consentimiento de datos de salud. */
+/**
+ * Las alergias cambiaron y traen texto: hace falta el consentimiento de datos de salud. Sin la
+ * autorización de datos sensibles nunca (las alergias no se mandan).
+ */
 export function requiereConsentimientoPerfil(perfil: PerfilCuenta, alergias: string): boolean {
   const nuevo = opcional(alergias);
-  return nuevo !== null && nuevo !== opcional(perfil.alergias);
+  return perfil.datosSensiblesAutorizados && nuevo !== null && nuevo !== opcional(perfil.alergias);
+}
+
+/**
+ * Respuesta de PATCH /api/auth/me con alergiasPendientesDeAutorizacion: las alergias no se guardaron
+ * (no hay autorización vigente); el resto del guardado sí.
+ */
+export function alergiasPendientesDelGuardado(respuesta: unknown): boolean {
+  const raiz = objeto(respuesta);
+  const datos = objeto(raiz?.data) ?? raiz;
+  return datos?.alergiasPendientesDeAutorizacion === true;
 }
 
 // ── Foto (CP-08 y CP-13) ─────────────────────────────────────────────────────────────────────

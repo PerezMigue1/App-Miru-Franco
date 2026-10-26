@@ -63,8 +63,9 @@ export interface PerfilCapilar {
   colorNatural?: string;
   colorActual?: string;
   productosUsados?: string;
-  tieneAlergias: boolean;
-  /** Dato de salud: solo viaja en el registro; nunca se guarda en el teléfono ni en logs. */
+  /** Con "Sí" solo viaja junto con la autorización de datos sensibles (sin ella no se dice nada). */
+  tieneAlergias?: boolean;
+  /** Dato de salud: solo viaja en el registro y con la autorización; nunca se guarda en el teléfono ni en logs. */
   alergias?: string;
   tratamientosQuimicos: boolean;
   tratamientos?: string;
@@ -84,6 +85,24 @@ export interface DatosRegistro {
   recibePromociones: boolean;
   /** Obligatorio (true) si perfilCapilar.alergias trae texto; el backend no lo guarda. */
   consienteDatosSensibles?: true;
+  /**
+   * Versión y hash del texto de la autorización de datos sensibles que la clienta leyó y autorizó
+   * (Ronda 5). Sin ella el backend no guarda las alergias, así que la app ni siquiera las manda.
+   */
+  autorizacionDatosSensibles?: { version: string; hash: string };
+}
+
+/** POST /api/usuarios/registro → 201: la cuenta nueva, sin activar. */
+export interface RespuestaRegistro extends RespuestaSimple {
+  usuario?: {
+    /** true: mandó alergias sin una autorización vigente y el backend no las guardó. */
+    alergiasPendientesDeAutorizacion?: boolean;
+  };
+}
+
+/** El registro creó la cuenta sin las alergias porque faltó la autorización de datos sensibles. */
+export function alergiasPendientesDelRegistro(respuesta: RespuestaRegistro | null | undefined): boolean {
+  return respuesta?.usuario?.alergiasPendientesDeAutorizacion === true;
 }
 
 /** POST /api/auth/verificar-correo → 200. */
@@ -467,6 +486,14 @@ export function problemaDeRespuesta(respuesta: string): string | null {
 }
 
 // ── Perfil capilar (paso 2): reglas copiadas de la web (Register.tsx y consentimientoDatosSensibles) ──
+
+/** Code estable del 400 cuando llegan alergias sin consienteDatosSensibles (consentimiento-datos-sensibles.ts). */
+export const CODIGO_CONSENTIMIENTO_SALUD = 'CONSENTIMIENTO_SALUD_REQUERIDO';
+
+/** El backend pidió el consentimiento de datos de salud: se reconoce solo por su code. */
+export function esConsentimientoSaludRequerido(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 400 && error.code === CODIGO_CONSENTIMIENTO_SALUD;
+}
 
 export const ERROR_CONSENTIMIENTO_SALUD =
   'Para guardar tus alergias, marca la autorización para usar tus datos de salud.';

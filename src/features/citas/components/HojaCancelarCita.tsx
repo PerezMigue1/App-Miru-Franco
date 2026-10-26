@@ -33,6 +33,8 @@ interface HojaCancelarCitaProps {
   /** "Prefiero reprogramar" solo fuera de las horas de aviso de la cita. */
   puedeReprogramar: boolean;
   cancelando: boolean;
+  /** Tras un 429: "Intenta de nuevo en N s" en lugar del texto del botón; null o sin pasar si no hay espera. */
+  textoEspera?: string | null;
   /** Mensaje para la clienta si la cancelación falló, o null. */
   error: string | null;
   /** Cancela con el motivo ya recortado. */
@@ -60,6 +62,7 @@ function Formulario({
   puedeConfirmar,
   puedeReprogramar,
   cancelando,
+  textoEspera = null,
   error,
   onCancelar,
   onReprogramar,
@@ -154,7 +157,7 @@ function Formulario({
 
       <View style={styles.acciones}>
         <Button
-          titulo={cancelando ? 'Cancelando tu cita' : 'Cancelar cita'}
+          titulo={textoEspera ?? (cancelando ? 'Cancelando tu cita' : 'Cancelar cita')}
           variante="peligro"
           onPress={confirmar}
           deshabilitado={!valido || !puedeConfirmar}

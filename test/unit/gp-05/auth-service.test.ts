@@ -606,11 +606,15 @@ describe('reenviarCodigo', () => {
     expect(cuerpoEnviado()).toEqual({ email: CORREO });
   });
 
-  it('400: ApiError con el mensaje del backend', async () => {
-    responderJson({ message: 'La cuenta ya está activada' }, 400);
-    const error = (await capturarError(reenviarCodigo(CORREO))) as ApiError;
+  // El reenvío ya no responde 400 por el estado de la cuenta (Ronda 7: siempre el 200 neutro); el
+  // único 400 que queda es el de la validación del correo, y su texto técnico nunca llega a la clienta.
+  it('400 de validación del correo: ApiError, sin mostrar el texto técnico', async () => {
+    responderJson({ message: ['email must be an email'], error: 'Bad Request', statusCode: 400 }, 400);
+    const error = (await capturarError(reenviarCodigo('correo-sin-arroba'))) as ApiError;
+    expect(error).toBeInstanceOf(ApiError);
     expect(error.status).toBe(400);
-    expect(error.message).toBe('La cuenta ya está activada');
+    expect(cuerpoEnviado()).toEqual({ email: 'correo-sin-arroba' });
+    expect(mensajeParaClienta(error)).not.toMatch(/email must be/i);
   });
 
   it('429: más de 3 por minuto', async () => {

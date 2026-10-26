@@ -1,6 +1,6 @@
 import { ApiError, apiGet, apiPost, apiPut } from '@/shared/api/apiClient';
-import type { EtiquetaEstado, TonoBadge } from '@/features/citas/models/citaModel';
-import { fechaLegible, horaLegible } from '@/features/citas/models/citaModel';
+import type { EtiquetaEstado, TonoBadge } from '@/shared/ui/tonoBadge';
+import { fechaLegible, horaLegible } from '@/shared/ui/fechasLegibles';
 import { esObjeto, listaDe, primeraImagen, texto, urlHttps, type Crudo } from '@/features/inicio/models/inicioService';
 import { obtenerConfiguracion, type ConfiguracionPublica } from '@/shared/api/configuracionPublica';
 import { textoDelServidor } from '@/shared/api/mensajesError';

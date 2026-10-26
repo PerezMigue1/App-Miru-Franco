@@ -1,4 +1,4 @@
-import { BadgeEstado } from '@/features/citas/components/BadgeEstado';
+import { BadgeEstado } from '@/shared/ui/BadgeEstado';
 
 import { etiquetaEstadoPedido, type Pedido } from '../viewmodels/presentacionTienda';
 

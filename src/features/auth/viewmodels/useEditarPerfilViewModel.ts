@@ -6,6 +6,7 @@ import { BackHandler } from 'react-native';
 import { mensajeParaClienta } from '@/shared/api/mensajesError';
 import { obtenerTexto } from '@/shared/api/textosSitio';
 import { generacionActual } from '@/shared/api/tokenStorage';
+import { useEsperaLimite } from '@/shared/api/useEsperaLimite';
 import { telefonoSinLada } from '@/shared/ui/digitos';
 import { useCandado } from '@/shared/ui/useCandado';
 
@@ -15,6 +16,7 @@ import {
   ERROR_TELEFONO,
   TIPOS_CABELLO,
   convertirFechaNacimiento,
+  esConsentimientoSaludRequerido,
   esTelefonoValido,
   problemaDeAlergias,
   problemaDeNombre,
@@ -23,8 +25,9 @@ import {
   urlAvisoPrivacidad,
   type TipoCabello,
 } from '../models/AuthModel';
-import { actualizarPerfil, obtenerPerfilCompleto } from '../models/authService';
+import { actualizarPerfil, obtenerPerfilCompleto, releerPerfilCompleto } from '../models/authService';
 import {
+  alergiasPendientesDelGuardado,
   cambiosDeTratamientos,
   cambiosDelPerfil,
   formularioDesdePerfil,
@@ -34,6 +37,10 @@ import {
   type PerfilCuenta,
 } from '../models/PerfilModel';
 import { useAuth } from './useAuth';
+import {
+  useAutorizacionDatosSensibles,
+  type AutorizacionDatosSensiblesViewModel,
+} from './useAutorizacionDatosSensibles';
 
 export type CampoPerfil = keyof FormularioPerfil | 'consiente';
 export type ErroresPerfil = Partial<Record<CampoPerfil, string | null>>;
@@ -62,6 +69,28 @@ export interface EditarPerfilViewModel {
   errorGeneral: string | null;
   guardando: boolean;
   guardar: () => void;
+  /** "Guardar cambios", "Guardando…" o, tras un 429, "Intenta de nuevo en N s". */
+  textoGuardar: string;
+  /** Durante la espera de un 429 el botón no responde. */
+  guardarEnEspera: boolean;
+  /**
+   * Ronda 5: con la autorización de datos sensibles vigente se muestra el campo de alergias; sin ella
+   * no se muestran ni se mandan y en su lugar se ofrece autorizar.
+   */
+  alergiasAutorizadas: boolean;
+  /** Sin autorización: por qué no se ven (guardadas y ocultas, o aún sin registrar). */
+  textoSinAutorizacion: string;
+  /** "Leer y autorizar". */
+  textoAutorizar: string;
+  /** Hoja de la autorización (con sesión: la registra en el backend). */
+  autorizacion: AutorizacionDatosSensiblesViewModel;
+  /** Ya autorizó pero no se pudieron leer sus alergias: el botón reintenta solo la lectura. */
+  errorAlergias: string | null;
+  recargandoAlergias: boolean;
+  reintentarAlergias: () => void;
+  textoReintentar: string;
+  /** El guardado no incluyó las alergias por falta de autorización (alergiasPendientesDeAutorizacion). */
+  avisoAlergias: string | null;
   enfoque: EnfoquePerfil | null;
   ayudaTelefono: string;
   /** Opciones de tipo de cabello de "Tu cabello", en el orden en que se muestran. */
@@ -149,7 +178,10 @@ function mensajeDeGuardado(error: unknown): string {
 
 /**
  * Editar perfil: datos y perfil capilar de GET /me, con las reglas del registro. Solo se envía lo
- * que cambió. Las alergias (datos de salud) viven solo en el estado de esta pantalla.
+ * que cambió. Las alergias (datos de salud) viven solo en el estado de esta pantalla y solo con la
+ * autorización expresa de datos sensibles vigente (Ronda 5): sin ella no se muestran ni se mandan y
+ * se ofrece autorizarlas con el texto del backend; al autorizar se vuelven a leer. Un 429 al guardar
+ * deja el botón en espera con el message del backend.
  */
 export function useEditarPerfilViewModel(): EditarPerfilViewModel {
   const { back, dismissTo } = useRouter();
@@ -165,7 +197,12 @@ export function useEditarPerfilViewModel(): EditarPerfilViewModel {
   const [guardando, setGuardando] = useState(false);
   const [confirmarSalida, setConfirmarSalida] = useState(false);
   const [enfoque, setEnfoque] = useState<EnfoquePerfil | null>(null);
+  const [errorAlergias, setErrorAlergias] = useState<string | null>(null);
+  const [recargandoAlergias, setRecargandoAlergias] = useState(false);
+  const [avisoAlergias, setAvisoAlergias] = useState<string | null>(null);
+  const espera = useEsperaLimite();
   const solicitud = useRef(0);
+  const lecturaAlergias = useRef(0);
   const vecesEnfoque = useRef(0);
   const montado = useRef(true);
   const candado = useCandado();
@@ -208,8 +245,55 @@ export function useEditarPerfilViewModel(): EditarPerfilViewModel {
     cargar();
     return () => {
       solicitud.current += 1;
+      lecturaAlergias.current += 1;
     };
   }, [cargar]);
+
+  /**
+   * Tras autorizar: se vuelve a leer /me y solo se toman las alergias y la autorización, así no se
+   * pierde nada de lo que la clienta ya había cambiado en el formulario.
+   */
+  const recargarAlergias = useCallback(() => {
+    lecturaAlergias.current += 1;
+    const id = lecturaAlergias.current;
+    setRecargandoAlergias(true);
+    setErrorAlergias(null);
+    setAvisoAlergias(null);
+    releerPerfilCompleto()
+      .then((respuesta) => {
+        if (id !== lecturaAlergias.current) {
+          return;
+        }
+        const leido = normalizarPerfil(respuesta);
+        if (!leido) {
+          setErrorAlergias(obtenerTexto('auth.perfil.alergiasNoCargaron'));
+          return;
+        }
+        const alergias = {
+          alergias: leido.alergias,
+          datosSensiblesAutorizados: leido.datosSensiblesAutorizados,
+          alergiasOcultas: leido.alergiasOcultas,
+        };
+        setPerfil((previo) => (previo ? { ...previo, ...alergias } : leido));
+        setFormulario((previo) => ({ ...previo, alergias: leido.alergias }));
+      })
+      .catch((error: unknown) => {
+        if (id === lecturaAlergias.current) {
+          setErrorAlergias(mensajeParaClienta(error, { respaldo: obtenerTexto('auth.perfil.alergiasNoCargaron') }));
+        }
+      })
+      .finally(() => {
+        if (id === lecturaAlergias.current) {
+          setRecargandoAlergias(false);
+        }
+      });
+  }, []);
+
+  const autorizacion = useAutorizacionDatosSensibles({
+    ruta: '/editar-perfil',
+    registrarEnServidor: true,
+    onAutorizada: recargarAlergias,
+  });
 
   const fecha = fechaDe(formulario.nacimiento);
   const cambios = perfil ? cambiosDelPerfil(perfil, formulario, 'iso' in fecha ? fecha.iso : perfil.fechaNacimiento || null) : {};
@@ -279,14 +363,30 @@ export function useEditarPerfilViewModel(): EditarPerfilViewModel {
     const generacion = generacionActual();
     setGuardando(true);
     try {
-      await actualizarPerfil(cambios);
+      const respuesta = await actualizarPerfil(cambios);
       if (cambios.nombre) {
         actualizarNombre(cambios.nombre, generacion);
       }
-      if (montado.current && generacion === generacionActual()) {
-        dismissTo({ pathname: '/perfil', params: { guardado: 'perfil' } });
+      if (!montado.current || generacion !== generacionActual()) {
+        return;
       }
+      if (alergiasPendientesDelGuardado(respuesta)) {
+        // Lo demás se guardó, pero las alergias no (la autorización ya no está vigente): se queda
+        // aquí, lo explica y vuelve a leer el perfil, que ahora ofrece autorizar.
+        setAvisoAlergias(obtenerTexto('auth.perfil.alergiasPendientes'));
+        setConsienteCrudo(false);
+        cargar();
+        return;
+      }
+      dismissTo({ pathname: '/perfil', params: { guardado: 'perfil' } });
     } catch (error) {
+      // Un 429 deja "Guardar cambios" en espera; el mensaje es el del backend (mensajeParaClienta).
+      espera.esperarSiLimite(error);
+      if (esConsentimientoSaludRequerido(error)) {
+        setErrores((previos) => ({ ...previos, consiente: ERROR_CONSENTIMIENTO_SALUD }));
+        setEnVivo((previos) => ({ ...previos, consiente: true }));
+        pedirEnfoque('consiente');
+      }
       setErrorGeneral(mensajeDeGuardado(error));
     } finally {
       setGuardando(false);
@@ -346,10 +446,23 @@ export function useEditarPerfilViewModel(): EditarPerfilViewModel {
     errorGeneral,
     guardando,
     guardar: () => {
-      if (!guardando) {
+      if (!guardando && !espera.activa) {
         candado(enviar);
       }
     },
+    textoGuardar: espera.texto ?? (guardando ? 'Guardando…' : 'Guardar cambios'),
+    guardarEnEspera: espera.activa,
+    alergiasAutorizadas: perfil?.datosSensiblesAutorizados === true,
+    textoSinAutorizacion: obtenerTexto(
+      perfil?.alergiasOcultas ? 'auth.perfil.alergiasOcultas' : 'auth.perfil.alergiasSinAutorizar',
+    ),
+    textoAutorizar: obtenerTexto('auth.perfil.alergiasAutorizar'),
+    autorizacion,
+    errorAlergias,
+    recargandoAlergias,
+    reintentarAlergias: recargarAlergias,
+    textoReintentar: obtenerTexto('datosSensibles.app.reintentar'),
+    avisoAlergias,
     enfoque,
     ayudaTelefono: AYUDA_TELEFONO,
     tiposCabello: TIPOS_CABELLO,

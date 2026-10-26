@@ -13,9 +13,11 @@ import { StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { HojaBienvenida } from '@/features/auth/components/HojaBienvenida';
+import { OfertaDatosSensibles } from '@/features/auth/components/OfertaDatosSensibles';
 import { sesionCabecera } from '@/features/auth/viewmodels/sesionCabecera';
 import { AuthProvider, useAuth } from '@/features/auth/viewmodels/useAuth';
 import { SesionRequeridaProvider } from '@/features/auth/viewmodels/useRequiereSesion';
+import { DocumentosPendientesView } from '@/features/auth/views/DocumentosPendientesView';
 import { useRegresoReserva } from '@/features/citas/viewmodels/useRegresoReserva';
 import { AvisoEnPantalla } from '@/features/notificaciones/components/AvisoEnPantalla';
 import { useNoLeidos } from '@/features/notificaciones/viewmodels/avisosEstado';
@@ -153,6 +155,8 @@ function Navegacion({ fuentesListas }: { fuentesListas: boolean }) {
             <Stack.Screen name="cambiar-contrasena" />
             {/* Perfil > Mi cuenta (GP-09): desactivar o eliminar la cuenta propia. */}
             <Stack.Screen name="mi-cuenta" />
+            {/* Perfil > Mis datos y privacidad (GP-09): derechos ARCO, solicitudes y permisos. */}
+            <Stack.Screen name="mis-datos" />
             {/* Reserva, anticipo y confirmación (GP-06.2): solo con sesión. */}
             <Stack.Screen name="reservar/[servicioId]" />
             <Stack.Screen name="anticipo/[citaId]" />
@@ -167,6 +171,11 @@ function Navegacion({ fuentesListas }: { fuentesListas: boolean }) {
           </Stack.Protected>
         </Stack>
         <HojaBienvenida introTerminada={introTerminada} />
+        {/* Documentos legales pendientes (GP-09): con sesión, pantalla obligatoria encima de todo
+            hasta aceptarlos o cerrar sesión. Sale cuando la intro ya no cubre la pantalla. */}
+        <DocumentosPendientesView habilitada={introTerminada} />
+        {/* Después de los documentos: si hay alergias guardadas sin autorizar, se ofrece una vez. */}
+        <OfertaDatosSensibles habilitada={introTerminada} />
       </SesionRequeridaProvider>
       {/* Encima del Stack y debajo de la intro de la grieta (que ya es carbón). */}
       <FondoBarraEstado />

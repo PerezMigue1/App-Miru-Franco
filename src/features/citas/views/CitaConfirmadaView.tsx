@@ -4,6 +4,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { BadgeEstado, type TonoBadge } from '@/shared/ui/BadgeEstado';
 import { Button } from '@/shared/ui/Button';
 import { EmptyState } from '@/shared/ui/EmptyState';
 import { useEntradaContenido } from '@/shared/ui/movimiento';
@@ -21,7 +22,6 @@ import {
 } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
-import { BadgeEstado, type TonoBadge } from '../components/BadgeEstado';
 import { ResumenCita } from '../components/ResumenCita';
 import {
   useCitaConfirmadaViewModel,

@@ -1,5 +1,5 @@
 import { apiGet } from '@/shared/api/apiClient';
-import type { TonoBadge } from '@/features/citas/models/citaModel';
+import type { TonoBadge } from '@/shared/ui/tonoBadge';
 import { listaDe, texto, type Crudo } from '@/features/inicio/models/inicioService';
 import { obtenerConfiguracion, type ConfiguracionPublica } from '@/shared/api/configuracionPublica';
 import { obtenerTexto, type ClaveTexto } from '@/shared/api/textosSitio';

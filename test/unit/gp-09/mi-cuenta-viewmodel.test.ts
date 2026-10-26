@@ -385,7 +385,7 @@ describe('paso 3: confirmar con contraseña', () => {
     const bajas = llamadasA(llamadas, 'POST', RUTA_DESACTIVAR);
     expect(bajas).toHaveLength(1);
     expect(bajas[0].cuerpo).toEqual({ password: CLAVE_FICTICIA, confirmacion: true });
-    expect(authSimulada.cerrarTrasBajaDeCuenta).toHaveBeenCalledWith({ mensaje: MENSAJE_DESACTIVADA, folio: null });
+    expect(authSimulada.cerrarTrasBajaDeCuenta).toHaveBeenCalledWith({ mensaje: MENSAJE_DESACTIVADA, folio: null }, 'desactivada');
     // La contraseña no se queda en memoria.
     expect(result.current.confirmacion.password).toBe('');
   });
@@ -395,10 +395,10 @@ describe('paso 3: confirmar con contraseña', () => {
     const result = await montar();
     await hastaConfirmar(result);
     await escribirYConfirmar(result);
-    expect(authSimulada.cerrarTrasBajaDeCuenta).toHaveBeenCalledWith({
-      mensaje: obtenerTexto('cuenta.listo.desactivada'),
-      folio: null,
-    });
+    expect(authSimulada.cerrarTrasBajaDeCuenta).toHaveBeenCalledWith(
+      { mensaje: obtenerTexto('cuenta.listo.desactivada'), folio: null },
+      'desactivada',
+    );
   });
 
   it('volver al paso 2 borra la contraseña y la casilla', async () => {
@@ -473,7 +473,7 @@ describe('paso 3: eliminar con código', () => {
     const bajas = llamadasA(llamadas, 'DELETE', RUTA_ELIMINAR);
     expect(bajas).toHaveLength(1);
     expect(bajas[0].cuerpo).toEqual({ codigo: CODIGO_FICTICIO, confirmacion: true });
-    expect(authSimulada.cerrarTrasBajaDeCuenta).toHaveBeenCalledWith({ mensaje: MENSAJE_ELIMINADA, folio: FOLIO_FICTICIO });
+    expect(authSimulada.cerrarTrasBajaDeCuenta).toHaveBeenCalledWith({ mensaje: MENSAJE_ELIMINADA, folio: FOLIO_FICTICIO }, 'eliminada');
   });
 
   it('sin message usa cuenta.listo.eliminada con el folio', async () => {
@@ -481,10 +481,10 @@ describe('paso 3: eliminar con código', () => {
     const result = await montar();
     await hastaConfirmar(result, 'eliminar');
     await escribirYConfirmar(result);
-    expect(authSimulada.cerrarTrasBajaDeCuenta).toHaveBeenCalledWith({
-      mensaje: obtenerTexto('cuenta.listo.eliminada', { folio: FOLIO_FICTICIO }),
-      folio: FOLIO_FICTICIO,
-    });
+    expect(authSimulada.cerrarTrasBajaDeCuenta).toHaveBeenCalledWith(
+      { mensaje: obtenerTexto('cuenta.listo.eliminada', { folio: FOLIO_FICTICIO }), folio: FOLIO_FICTICIO },
+      'eliminada',
+    );
   });
 
   it('sin message ni folio válido usa el texto sin folio (nunca deja el hueco)', async () => {
@@ -492,20 +492,20 @@ describe('paso 3: eliminar con código', () => {
     const result = await montar();
     await hastaConfirmar(result, 'eliminar');
     await escribirYConfirmar(result);
-    expect(authSimulada.cerrarTrasBajaDeCuenta).toHaveBeenCalledWith({
-      mensaje: obtenerTexto('cuenta.app.eliminadaSinFolio'),
-      folio: null,
-    });
+    expect(authSimulada.cerrarTrasBajaDeCuenta).toHaveBeenCalledWith(
+      { mensaje: obtenerTexto('cuenta.app.eliminadaSinFolio'), folio: null },
+      'eliminada',
+    );
   });
 
-  it('el envío sin message muestra cuenta.app.codigoEnviado', async () => {
+  it('el envío sin message ni vigenciaMinutos muestra cuenta.app.codigoEnviado con los 10 minutos de respaldo', async () => {
     servidorCodigo({ [`POST ${RUTA_CODIGO_CUENTA}`]: () => respuesta({ success: true }) });
     const result = await montar();
     await hastaConfirmar(result, 'eliminar');
     await act(async () => {
       result.current.confirmacion.enviarCodigo();
     });
-    await waitFor(() => expect(result.current.confirmacion.avisoCodigo).toBe(obtenerTexto('cuenta.app.codigoEnviado')));
+    await waitFor(() => expect(result.current.confirmacion.avisoCodigo).toBe(obtenerTexto('cuenta.app.codigoEnviado', { minutos: 10 })));
   });
 
   it('mientras se envía el código dice Enviando… y no se puede confirmar', async () => {
@@ -786,7 +786,7 @@ describe('sesión tras el 200', () => {
       espera.soltar(respuestaBaja(MENSAJE_ELIMINADA, FOLIO_FICTICIO));
     });
     await waitFor(() =>
-      expect(authSimulada.cerrarTrasBajaDeCuenta).toHaveBeenCalledWith({ mensaje: MENSAJE_ELIMINADA, folio: FOLIO_FICTICIO }),
+      expect(authSimulada.cerrarTrasBajaDeCuenta).toHaveBeenCalledWith({ mensaje: MENSAJE_ELIMINADA, folio: FOLIO_FICTICIO }, 'eliminada'),
     );
   });
 
@@ -861,7 +861,7 @@ describe('sesión tras el 200', () => {
       espera.soltar(respuestaBaja(MENSAJE_DESACTIVADA));
     });
     await waitFor(() =>
-      expect(authSimulada.cerrarTrasBajaDeCuenta).toHaveBeenCalledWith({ mensaje: MENSAJE_DESACTIVADA, folio: null }),
+      expect(authSimulada.cerrarTrasBajaDeCuenta).toHaveBeenCalledWith({ mensaje: MENSAJE_DESACTIVADA, folio: null }, 'desactivada'),
     );
   });
 
