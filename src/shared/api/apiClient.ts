@@ -39,14 +39,27 @@ export class ApiError extends Error {
   readonly referencia?: string;
   /** Segundos que pide esperar un 429 o un 503 (entero de 1 o más), si los mandó. */
   readonly retryAfter?: number;
+  /**
+   * Campo `errors` del cuerpo de error, tal como llegó (por ejemplo, los bloqueos del 409
+   * CUENTA_CON_PENDIENTES). Nunca se muestra: quien lo usa lo normaliza antes.
+   */
+  readonly errors?: unknown;
 
-  constructor(status: number, message: string, code?: string, referencia?: string, retryAfter?: number) {
+  constructor(
+    status: number,
+    message: string,
+    code?: string,
+    referencia?: string,
+    retryAfter?: number,
+    errors?: unknown,
+  ) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.code = code;
     this.referencia = referencia;
     this.retryAfter = retryAfter;
+    this.errors = errors;
   }
 }
 
@@ -189,6 +202,11 @@ function getErrorCode(body: unknown): string | undefined {
   return undefined;
 }
 
+/** Campo `errors` del cuerpo de error del backend, si vino (sin normalizar). */
+function getErrorDetalles(body: unknown): unknown {
+  return body && typeof body === 'object' ? (body as { errors?: unknown }).errors : undefined;
+}
+
 /** `referencia` de un 5xx del backend, solo si son 8 caracteres hexadecimales en mayúsculas. */
 function getErrorReferencia(body: unknown, status: number): string | undefined {
   if (status < 500 || !body || typeof body !== 'object') {
@@ -258,8 +276,9 @@ export type DatosErrorApi =
 /**
  * Factory de errores de la API: toda creación de ApiError y ErrorDeRed de este archivo pasa por
  * aquí. 'red': sin red ('sinRed', por omisión) o sin respuesta a tiempo ('tiempoAgotado');
- * 'respuesta': cuerpo de error del backend, con su code, en un 5xx su referencia y, en un 429 o un
- *   503, los segundos de espera (del cuerpo o del encabezado Retry-After, que llega en `retryAfter`);
+ * 'respuesta': cuerpo de error del backend, con su code, su campo `errors`, en un 5xx su referencia
+ *   y, en un 429 o un 503, los segundos de espera (del cuerpo o del encabezado Retry-After, que llega
+ *   en `retryAfter`);
  * 'sesionTerminada': 401 con el mensaje para la clienta y el code del rechazo si es de sesión
  *   terminada (SESION_VENCIDA en otro caso).
  * El message de un ApiError solo sirve para clasificar: a la pantalla llega el texto de
@@ -278,6 +297,7 @@ export function crearErrorApi(datos: DatosErrorApi): ApiError | ErrorDeRed {
         getErrorCode(datos.cuerpo),
         getErrorReferencia(datos.cuerpo, datos.status),
         datos.status === 429 || datos.status === 503 ? leerRetryAfter(datos.cuerpo, datos.retryAfter) : undefined,
+        getErrorDetalles(datos.cuerpo),
       );
     case 'sesionTerminada':
       return new ApiError(
@@ -905,8 +925,9 @@ export function apiPatch<T>(path: string, body?: unknown, opciones: OpcionesSoli
   return request<T>('PATCH', path, body, opciones);
 }
 
-export function apiDelete<T>(path: string, opciones: OpcionesSolicitud = {}): Promise<T> {
-  return request<T>('DELETE', path, undefined, opciones);
+/** DELETE; `body` solo para las rutas que lo piden (por ejemplo, DELETE /api/auth/me). */
+export function apiDelete<T>(path: string, opciones: OpcionesSolicitud = {}, body?: unknown): Promise<T> {
+  return request<T>('DELETE', path, body, opciones);
 }
 
 export async function checkHealth(): Promise<boolean> {

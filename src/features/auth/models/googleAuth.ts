@@ -80,7 +80,10 @@ export function urlInicioGoogle(challenge: string): string {
   return `${getBaseUrl()}/api/auth/google?origen=app&code_challenge=${encodeURIComponent(challenge)}`;
 }
 
-export type RetornoGoogle = { tipo: 'codigo'; code: string } | { tipo: 'error' };
+export type RetornoGoogle = { tipo: 'codigo'; code: string } | { tipo: 'cuentaDesactivada' } | { tipo: 'error' };
+
+/** Único regreso con error que se reconoce aparte: la titular desactivó su cuenta. */
+const REGRESO_CUENTA_DESACTIVADA = `${REDIRECCION_GOOGLE}?error=cuenta_desactivada`;
 
 function esHexadecimal(caracter: string): boolean {
   return (
@@ -107,9 +110,14 @@ function esCodigoValido(code: string): boolean {
  * `?code=<64 hexadecimales>` (o `?error=...`), así que se exige exactamente esa forma: la ruta
  * seguida de '?', un único parámetro `code` y nada más. Un fragmento (aunque sea un '#' vacío),
  * `error`, otro parámetro o un '&' de más es error. La query se parte a mano (el `URL` de React
- * Native no es fiable con esquemas propios ni con `searchParams`).
+ * Native no es fiable con esquemas propios ni con `searchParams`). La única excepción es el regreso
+ * exacto `?error=cuenta_desactivada` (sin nada más), que lleva a Reactivar; cualquier otro `error`
+ * sigue siendo el fallo genérico.
  */
 export function leerRetornoGoogle(url: string): RetornoGoogle {
+  if (url === REGRESO_CUENTA_DESACTIVADA) {
+    return { tipo: 'cuentaDesactivada' };
+  }
   const fallo: RetornoGoogle = { tipo: 'error' };
   const prefijo = `${REDIRECCION_GOOGLE}?code=`;
   if (!url.startsWith(prefijo) || url.includes('#')) {

@@ -496,6 +496,43 @@ export const RESPALDO_TEXTOS = Object.freeze({
   'tienda.carrito.productoRetirado': '{producto} ya no está a la venta y lo quitamos de tu carrito.',
   'tienda.carrito.presentacionRetirada': '{producto} ya no está disponible y lo quitamos de tu carrito.',
   'tienda.carrito.cerrarAviso': 'Cerrar aviso',
+  // Mi cuenta (GP-09): desactivar, eliminar y reactivar la cuenta propia. Copia exacta de los valores
+  // por omisión del catálogo del backend (src/textos-sitio/catalogo.ts), con sus mismas variables.
+  // Los mensajes de cada pendiente (cuenta.revision.*Cancela y cuenta.bloqueo.*) ya llegan llenos en
+  // la revisión; las propias de la app van en textosPropiosApp.json (cuenta.app.*).
+  'cuenta.titulo': 'Tu cuenta',
+  'cuenta.personal': 'Tu cuenta es del personal del salón: solo la administración la puede desactivar o eliminar.',
+  'cuenta.desactivar.titulo': 'Desactivar mi cuenta',
+  'cuenta.desactivar.explicacion':
+    'Es temporal. Mientras esté desactivada no puedes entrar ni te llegan avisos ni correos del salón, y tus datos se conservan. Para volver, reactívala desde el inicio de sesión con un código que te enviamos a tu correo.',
+  'cuenta.eliminar.titulo': 'Eliminar mi cuenta',
+  'cuenta.eliminar.explicacion':
+    'Es definitivo y no se puede deshacer. Borramos o anonimizamos tus datos personales y ya no podrás entrar. Por ley conservamos 5 años tus pedidos, pagos y ventas, sin tu nombre, y tus facturas con sus datos fiscales (nombre o razón social, RFC y correo de facturación). También conservamos tus citas sin tu nombre, la constancia de tus consentimientos y tus solicitudes ARCO. Te enviamos la confirmación con un folio.',
+  'cuenta.revision.seResuelve': 'Al confirmar se cancela, sin costo:',
+  'cuenta.revision.bloquea': 'Antes de continuar tienes que resolver esto:',
+  'cuenta.revision.sinPendientes': 'No tienes citas ni pedidos pendientes. Puedes continuar.',
+  'cuenta.confirmar.desactivar':
+    'Vas a desactivar tu cuenta. No podrás entrar ni recibirás avisos ni correos hasta que la reactives. Tus datos se conservan.',
+  'cuenta.confirmar.eliminar':
+    'Vas a eliminar tu cuenta para siempre y no se puede deshacer. Conservamos solo lo que la ley obliga, sin tu nombre.',
+  'cuenta.confirmar.casillaDesactivar':
+    'Entiendo que no podré entrar hasta que reactive mi cuenta con un código que llega a mi correo.',
+  'cuenta.confirmar.casillaEliminar': 'Entiendo que mi cuenta se elimina para siempre y que esto no se puede deshacer.',
+  'cuenta.confirmar.password': 'Para confirmar que eres tú, escribe tu contraseña actual.',
+  'cuenta.confirmar.codigo':
+    'Tu cuenta entra con Google. Para confirmar que eres tú, te enviamos un código de 6 dígitos a tu correo. Vence en 10 minutos.',
+  'cuenta.listo.desactivada':
+    'Desactivamos tu cuenta y cerramos tus sesiones. Para volver, entra al inicio de sesión y elige «Reactivar mi cuenta».',
+  'cuenta.listo.eliminada': 'Eliminamos tu cuenta. Te enviamos la confirmación con el folio {folio} a tu correo.',
+  'cuenta.login.desactivada':
+    'Desactivaste tu cuenta. Si quieres volver, reactívala con un código que te enviamos a tu correo.',
+  'cuenta.reactivar.boton': 'Reactivar mi cuenta',
+  'cuenta.reactivar.enlaceGoogle': '¿Desactivaste tu cuenta?',
+  'cuenta.reactivar.explicacion':
+    'Escribe el correo de tu cuenta. Si la desactivaste tú, te enviamos un código de 6 dígitos para reactivarla. Vence en 10 minutos.',
+  'cuenta.reactivar.enviado':
+    'Si tu cuenta está desactivada, te enviamos un código. Revisa tu correo, también la carpeta de spam.',
+  'cuenta.reactivar.listo': 'Tu cuenta está activa otra vez. Ya puedes iniciar sesión.',
   // Propias de la app agregadas en GP-07.6 (textosPropiosApp.json): no existen en el catálogo del
   // backend y son respaldos de la app hasta que el backend agregue las claves. Viven en JSON porque
   // son datos, no código. Traen los defectos de citas, los avisos por tipo de falla, los textos que

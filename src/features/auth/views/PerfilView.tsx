@@ -8,6 +8,7 @@ import {
   Palette,
   ShieldCheck,
   Store,
+  UserCog,
   UserPen,
 } from 'lucide-react-native';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -211,6 +212,12 @@ function ContenidoConSesion({ perfil }: { perfil: PerfilViewModel }) {
             onPress={perfil.cambiarContrasena}
           />
         )}
+        <FilaTarjeta
+          icono={UserCog}
+          titulo={perfil.filaMiCuenta.titulo}
+          descripcion={perfil.filaMiCuenta.descripcion}
+          onPress={perfil.abrirMiCuenta}
+        />
       </SeccionFilas>
 
       <SeccionFilas titulo="Tu actividad" estilo={styles.separacionSeccion}>

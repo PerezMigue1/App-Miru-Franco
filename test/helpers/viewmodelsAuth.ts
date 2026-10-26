@@ -49,6 +49,10 @@ export interface AuthSimulada {
   salir: jest.Mock<Promise<boolean>, []>;
   actualizarNombre: jest.Mock<void, [string, number]>;
   cerrarTrasCambioDeContrasena: jest.Mock<Promise<void>, []>;
+  /** GP-09: cierre local tras desactivar o eliminar la cuenta, con su aviso para Acceso. */
+  cerrarTrasBajaDeCuenta: jest.Mock<Promise<void>, [{ mensaje: string; folio: string | null }]>;
+  avisoBaja: { mensaje: string; folio: string | null } | null;
+  descartarAvisoBaja: jest.Mock<void, []>;
 }
 
 /** Lo que devuelve useAuth en cada render; la prueba lo cambia y vuelve a renderizar. */
@@ -58,6 +62,9 @@ export const authSimulada: AuthSimulada = {
   salir: jest.fn(() => Promise.resolve(true)),
   actualizarNombre: jest.fn(),
   cerrarTrasCambioDeContrasena: jest.fn(() => Promise.resolve()),
+  cerrarTrasBajaDeCuenta: jest.fn((_aviso: { mensaje: string; folio: string | null }) => Promise.resolve()),
+  avisoBaja: null,
+  descartarAvisoBaja: jest.fn(),
 };
 
 /** Módulo useAuth simulado. */
@@ -76,6 +83,10 @@ export function reiniciarSimulaciones(): void {
   authSimulada.salir.mockImplementation(() => Promise.resolve(true));
   authSimulada.actualizarNombre.mockClear();
   authSimulada.cerrarTrasCambioDeContrasena.mockClear();
+  authSimulada.cerrarTrasBajaDeCuenta.mockReset();
+  authSimulada.cerrarTrasBajaDeCuenta.mockImplementation(() => Promise.resolve());
+  authSimulada.avisoBaja = null;
+  authSimulada.descartarAvisoBaja.mockClear();
 }
 
 // ── Servidor ─────────────────────────────────────────────────────────────────────────────────

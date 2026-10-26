@@ -11,7 +11,7 @@ import {
 } from 'react';
 
 import { HojaAcceso } from '../components/HojaAcceso';
-import { useAuth } from './useAuth';
+import { useAuth, type AvisoBaja } from './useAuth';
 
 interface ContextoSesionRequerida {
   /** Abre la hoja; la acción (si la hay) se hace en cuanto la clienta inicie sesión. */
@@ -31,7 +31,7 @@ const Contexto = createContext<ContextoSesionRequerida>({
  */
 export function SesionRequeridaProvider({ children }: { children: ReactNode }) {
   const { push } = useRouter();
-  const { estado, avisoAcceso, descartarAvisoAcceso } = useAuth();
+  const { estado, avisoAcceso, descartarAvisoAcceso, avisoBaja } = useAuth();
   const [visible, setVisible] = useState(false);
   const pendiente = useRef<(() => void) | null>(null);
 
@@ -65,6 +65,18 @@ export function SesionRequeridaProvider({ children }: { children: ReactNode }) {
       params: { motivo: 'contrasena', correo, vuelta: String(Date.now()) },
     });
   }, [estado, avisoAcceso, descartarAvisoAcceso, push]);
+
+  // Tras desactivar o eliminar la cuenta: Mi cuenta ya salió de la pila (Stack.Protected) y se abre
+  // Acceso encima de Perfil, que muestra el mensaje con el folio. El aviso vive en memoria en
+  // useAuth, nunca en la ruta; cada aviso abre Acceso una sola vez.
+  const bajaAtendida = useRef<AvisoBaja | null>(null);
+  useEffect(() => {
+    if (estado !== 'anonimo' || !avisoBaja || avisoBaja === bajaAtendida.current) {
+      return;
+    }
+    bajaAtendida.current = avisoBaja;
+    push('/login');
+  }, [estado, avisoBaja, push]);
 
   const descartarPendiente = useCallback(() => {
     pendiente.current = null;

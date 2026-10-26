@@ -1475,13 +1475,13 @@ describe('useRetornoActivacion', () => {
   });
 
   it('sin parámetros no hay aviso ni retorno', async () => {
-    const { result } = await renderHook(() => useRetornoActivacion());
+    const { result } = await renderHook(() => useRetornoActivacion(), { wrapper: AuthProvider });
     expect(result.current).toEqual({ aviso: null, retorno: null });
   });
 
   it('con la cuenta activada avisa y devuelve el correo y la vez', async () => {
     mockNavegacion.params = { activada: '1', correo: CORREO, vuelta: '1700000000000' };
-    const { result } = await renderHook(() => useRetornoActivacion());
+    const { result } = await renderHook(() => useRetornoActivacion(), { wrapper: AuthProvider });
     expect(result.current).toEqual({
       aviso: 'Tu cuenta está activada. Inicia sesión.',
       retorno: { correo: CORREO, vez: '1700000000000' },
@@ -1490,19 +1490,19 @@ describe('useRetornoActivacion', () => {
 
   it('tras cambiar la contraseña avisa que inicie sesión de nuevo', async () => {
     mockNavegacion.params = { motivo: 'contrasena', correo: CORREO, vuelta: '1' };
-    const { result } = await renderHook(() => useRetornoActivacion());
+    const { result } = await renderHook(() => useRetornoActivacion(), { wrapper: AuthProvider });
     expect(result.current.aviso).toBe('Tu contraseña cambió. Inicia sesión de nuevo.');
   });
 
   it('un regreso sin activar no avisa, y un correo que no es texto queda vacío', async () => {
     mockNavegacion.params = { correo: [CORREO, 'otra@ejemplo.test'], vuelta: '2' };
-    const { result } = await renderHook(() => useRetornoActivacion());
+    const { result } = await renderHook(() => useRetornoActivacion(), { wrapper: AuthProvider });
     expect(result.current).toEqual({ aviso: null, retorno: { correo: '', vez: '2' } });
   });
 
   it('sin "vuelta" no hay retorno aunque venga el correo', async () => {
     mockNavegacion.params = { correo: CORREO, vuelta: '' };
-    const { result } = await renderHook(() => useRetornoActivacion());
+    const { result } = await renderHook(() => useRetornoActivacion(), { wrapper: AuthProvider });
     expect(result.current.retorno).toBeNull();
   });
 });
