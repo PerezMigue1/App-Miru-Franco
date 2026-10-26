@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { AppState } from 'react-native';
 
+import { esDocumentoActualizado } from '@/shared/api/documentosActualizados';
 import { abrirRutaEnWeb } from '@/shared/api/documentosLegales';
 import { mensajeParaClienta } from '@/shared/api/mensajesError';
 import { useEsperaLimite } from '@/shared/api/useEsperaLimite';
@@ -138,10 +139,13 @@ export function useDocumentosPendientes(): DocumentosPendientesViewModel {
     listaActual.current = pendientes;
   });
 
-  /** Trae el título y la página de cada documento de `lista` y los pone en la lista a la vista. */
-  const completar = useCallback((lista: DocumentoPendiente[], actual: number) => {
+  /**
+   * Trae el título y la página de cada documento de `lista` y los pone en la lista a la vista. Con
+   * forzarRed (tras un 400 de versión cambiada) los pide a la red aunque la memoria siga vigente.
+   */
+  const completar = useCallback((lista: DocumentoPendiente[], actual: number, forzarRed = false) => {
     setCompletando(true);
-    const promesa = completarDatos(lista);
+    const promesa = completarDatos(lista, { forzarRed });
     completado.current = promesa;
     void promesa.then((completos) => {
       if (turno.current !== actual) {
@@ -179,7 +183,7 @@ export function useDocumentosPendientes(): DocumentosPendientesViewModel {
       setMarcada(false);
       fijarFase(lista.length > 0 ? 'pendientes' : 'listo');
       if (lista.length > 0) {
-        completar(lista, actual);
+        completar(lista, actual, modo === 'reconsulta');
       } else {
         setCompletando(false);
       }
@@ -191,7 +195,7 @@ export function useDocumentosPendientes(): DocumentosPendientesViewModel {
         // Se conserva la lista: si su título y su página no habían llegado (la consulta anterior se
         // descartó), se vuelven a pedir.
         fijarFase('pendientes');
-        completar(listaActual.current, actual);
+        completar(listaActual.current, actual, true);
         return;
       }
       // Sin red, límite, saturación o respuesta ilegible: no bloquea ni cierra la sesión.
@@ -276,8 +280,9 @@ export function useDocumentosPendientes(): DocumentosPendientesViewModel {
           return;
         }
         if (esVersionCambiada(causa)) {
-          // El salón publicó otra versión: se vuelve a pedir la lista y la casilla queda sin marcar.
-          setError(texto('legal.pendientes.cambio'));
+          // El salón publicó otra versión: se vuelve a pedir la lista (y el documento a la red) y la
+          // casilla queda sin marcar. Con el code del backend, el aviso común junto a la casilla.
+          setError(texto(esDocumentoActualizado(causa) ? 'legal.documentoActualizado' : 'legal.pendientes.cambio'));
           void consultar('reconsulta');
           return;
         }

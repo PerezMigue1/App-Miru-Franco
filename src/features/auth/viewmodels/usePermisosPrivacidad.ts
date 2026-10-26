@@ -12,6 +12,7 @@ import {
 } from '../models/datosSensibles';
 import {
   activarPromociones,
+  autorizarFotos,
   estadoFotos,
   leerRecibePromociones,
   misConsentimientos,
@@ -46,12 +47,14 @@ export interface InterruptorVista {
   cambiar: (encendido: boolean) => void;
 }
 
-/** Confirmación antes de retirar un permiso: sin confirmar no se envía nada. */
+/** Confirmación antes de retirar (o volver a autorizar) un permiso: sin confirmar no se envía nada. */
 export interface ConfirmacionRetiro {
   visible: boolean;
   titulo: string;
   texto: string;
   accion: string;
+  /** true: retirar (la acción va en el color de peligro); false: autorizar (la acción principal). */
+  destructiva: boolean;
   cancelar: string;
   confirmar: () => void;
   cerrar: () => void;
@@ -105,6 +108,28 @@ const CLAVES_RETIRO = {
   },
 } as const;
 
+/** Textos de volver a autorizar las fotos del resultado, del catálogo. */
+const CLAVES_AUTORIZAR_FOTOS = {
+  titulo: 'privacidad.app.fotos.autorizarTitulo',
+  texto: 'privacidad.app.fotos.autorizarTexto',
+  accion: 'privacidad.app.fotos.autorizar',
+  listo: 'privacidad.app.fotos.autorizada',
+} as const;
+
+/** Qué se confirma en la hoja: retirar un permiso o volver a autorizar las fotos. */
+interface PorConfirmar {
+  permiso: PermisoPrivacidad;
+  encender: boolean;
+}
+
+/** Aviso de éxito de un cambio confirmado por el backend. */
+function claveListo(permiso: PermisoPrivacidad, encender: boolean): string {
+  if (!encender) {
+    return CLAVES_RETIRO[permiso].listo;
+  }
+  return permiso === 'fotos' ? CLAVES_AUTORIZAR_FOTOS.listo : 'privacidad.app.promociones.activada';
+}
+
 const RETIROS: Record<PermisoPrivacidad, () => Promise<void>> = {
   salud: () => retirarDatosSensibles(RUTA_MIS_DATOS),
   promociones: retirarPromociones,
@@ -125,8 +150,9 @@ async function leerPermisos(): Promise<EstadoPermisos> {
  * retirar desde la cuenta (datos de salud, promociones y fotos del resultado). Cada interruptor
  * muestra el estado real del servidor y nunca cambia antes de que el backend confirme. Retirar pide
  * confirmar en una hoja; encender el de salud abre la autorización expresa completa y encender el de
- * promociones es un opt in directo (PATCH /api/auth/me). Las fotos solo se muestran si están
- * autorizadas: volver a darlas se hace en el salón. Los 429 dejan el interruptor en espera.
+ * promociones es un opt in directo (PATCH /api/auth/me). Las fotos se muestran si alguna vez se
+ * autorizaron: apagadas, se pueden volver a autorizar confirmando en una hoja (POST
+ * /api/consentimientos con accion "aceptado"). Los 429 dejan el interruptor en espera.
  *
  * `alCambiarSalud` avisa a la pantalla cuando la autorización de salud cambió (para ocultar o
  * volver a pedir las alergias de Mis datos).
@@ -140,7 +166,7 @@ export function usePermisosPrivacidad(alCambiarSalud: (autorizada: boolean) => v
   const [permisos, setPermisos] = useState<EstadoPermisos | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [aviso, setAviso] = useState<AvisoPrivacidad | null>(null);
-  const [confirmando, setConfirmando] = useState<PermisoPrivacidad | null>(null);
+  const [confirmando, setConfirmando] = useState<PorConfirmar | null>(null);
   const [enviando, setEnviando] = useState<PermisoPrivacidad | null>(null);
   const candado = useCandado();
   const turno = useRef(0);
@@ -219,7 +245,7 @@ export function usePermisosPrivacidad(alCambiarSalud: (autorizada: boolean) => v
 
   const esperaDe = (permiso: PermisoPrivacidad) => (permiso === 'salud' ? esperaSalud : esperaConsentimientos);
 
-  /** Envía un cambio ya decidido (retiro confirmado o activar promociones). */
+  /** Envía un cambio ya decidido (retiro o autorización de fotos confirmados, o activar promociones). */
   const enviar = async (permiso: PermisoPrivacidad, encender: boolean) => {
     const espera = esperaDe(permiso);
     turno.current++;
@@ -227,7 +253,7 @@ export function usePermisosPrivacidad(alCambiarSalud: (autorizada: boolean) => v
     setAviso(null);
     try {
       if (encender) {
-        await activarPromociones();
+        await (permiso === 'fotos' ? autorizarFotos() : activarPromociones());
       } else {
         await RETIROS[permiso]();
       }
@@ -240,12 +266,9 @@ export function usePermisosPrivacidad(alCambiarSalud: (autorizada: boolean) => v
       } else if (permiso === 'promociones') {
         actualizar({ promociones: encender });
       } else {
-        actualizar({ fotos: 'revocado' });
+        actualizar({ fotos: encender ? 'aceptado' : 'revocado' });
       }
-      setAviso({
-        tono: 'exito',
-        texto: texto(encender ? 'privacidad.app.promociones.activada' : CLAVES_RETIRO[permiso].listo),
-      });
+      setAviso({ tono: 'exito', texto: texto(claveListo(permiso, encender)) });
     } catch (causa) {
       if (montado.current) {
         espera.esperarSiLimite(causa);
@@ -267,8 +290,9 @@ export function usePermisosPrivacidad(alCambiarSalud: (autorizada: boolean) => v
     if (ocupado(permiso) || confirmando !== null) {
       return;
     }
-    if (!encender) {
-      setConfirmando(permiso);
+    if (!encender || permiso === 'fotos') {
+      // Retirar cualquiera, o volver a autorizar las fotos, se confirma antes en una hoja.
+      setConfirmando({ permiso, encender });
       return;
     }
     if (permiso === 'salud') {
@@ -302,13 +326,18 @@ export function usePermisosPrivacidad(alCambiarSalud: (autorizada: boolean) => v
         texto(permisos.promociones ? 'privacidad.app.promociones.encendido' : 'privacidad.app.promociones.apagado'),
       ),
     );
-    // Las fotos solo existen si se autorizaron en una cita; volver a darlas no se hace en la app.
-    if (permisos.fotos === 'aceptado') {
-      interruptores.push(interruptor('fotos', true, texto('privacidad.app.fotos.encendido')));
+    // Las fotos aparecen si alguna vez se autorizaron (en una cita o aquí); apagadas, se pueden volver
+    // a autorizar. Sin ningún registro, el permiso se da en la reserva o en el salón.
+    if (permisos.fotos !== 'sinRegistro') {
+      const fotos = permisos.fotos === 'aceptado';
+      interruptores.push(
+        interruptor('fotos', fotos, texto(fotos ? 'privacidad.app.fotos.encendido' : 'privacidad.app.fotos.apagado')),
+      );
     }
   }
 
-  const claves = CLAVES_RETIRO[confirmando ?? 'salud'];
+  const autorizando = confirmando?.encender === true;
+  const claves = autorizando ? CLAVES_AUTORIZAR_FOTOS : CLAVES_RETIRO[confirmando?.permiso ?? 'salud'];
 
   return {
     titulo: texto('privacidad.app.permisos.titulo'),
@@ -324,12 +353,13 @@ export function usePermisosPrivacidad(alCambiarSalud: (autorizada: boolean) => v
       titulo: texto(claves.titulo),
       texto: texto(claves.texto),
       accion: texto(claves.accion),
+      destructiva: !autorizando,
       cancelar: texto('privacidad.app.cancelar'),
       confirmar: () => {
-        const permiso = confirmando;
+        const elegido = confirmando;
         setConfirmando(null);
-        if (permiso && !ocupado(permiso)) {
-          candado(() => enviar(permiso, false));
+        if (elegido && !ocupado(elegido.permiso)) {
+          candado(() => enviar(elegido.permiso, elegido.encender));
         }
       },
       cerrar: () => setConfirmando(null),

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { ApiError } from '@/shared/api/apiClient';
 import { mensajeParaClienta } from '@/shared/api/mensajesError';
 import { useEsperaLimite } from '@/shared/api/useEsperaLimite';
 import { useTextos, type FuncionTexto } from '@/shared/api/useTextos';
@@ -8,7 +9,9 @@ import type { TonoBadge } from '@/shared/ui/tonoBadge';
 import { useCandado } from '@/shared/ui/useCandado';
 
 import {
+  CODE_CANCELACION_ABIERTA,
   crearSolicitudArco,
+  folioCancelacionAbierta,
   LARGO_DESCRIPCION_ARCO,
   misSolicitudesArco,
   TIPOS_ARCO,
@@ -64,6 +67,11 @@ export interface HojaSolicitudVista {
   enviar: () => void;
   /** Error al enviar (se anuncia), o null. */
   error: string | null;
+  /**
+   * Con el 409 CANCELACION_ABIERTA, "Folio de tu solicitud abierta: ARCO-..." en su propia línea,
+   * aparte del mensaje (el folio llega en errors.folio); null si no hay.
+   */
+  detalleError: string | null;
   textoCancelar: string;
   cerrar: () => void;
 }
@@ -151,7 +159,8 @@ export function filaSolicitud(texto: FuncionTexto, solicitud: SolicitudArco): Fi
  * Mis solicitudes ARCO (GP-09): la lista de GET /api/arco/mias y la hoja para crear una (tipo sin
  * elegir al abrir y descripción opcional de hasta 2000 caracteres). Al crearla se cierra la hoja, se
  * avisa el folio y se recarga la lista. El 409 CANCELACION_ABIERTA y los demás errores se deciden por
- * code y estado en mensajeParaClienta; un 429 deja "Enviar" en espera.
+ * code y estado en mensajeParaClienta; con el 409 el folio de la cancelación abierta sale aparte y la
+ * lista se vuelve a pedir. Un 429 deja "Enviar" en espera.
  */
 export function useSolicitudesArco(): SolicitudesArcoViewModel {
   const texto = useTextos();
@@ -166,6 +175,7 @@ export function useSolicitudesArco(): SolicitudesArcoViewModel {
   const [descripcion, setDescripcionCruda] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [errorHoja, setErrorHoja] = useState<string | null>(null);
+  const [folioAbierta, setFolioAbierta] = useState<string | null>(null);
   const turno = useRef(0);
   const montado = useRef(true);
 
@@ -205,6 +215,7 @@ export function useSolicitudesArco(): SolicitudesArcoViewModel {
     setTipo(null);
     setDescripcionCruda('');
     setErrorHoja(null);
+    setFolioAbierta(null);
     setAviso(null);
     setVisible(true);
   };
@@ -221,6 +232,7 @@ export function useSolicitudesArco(): SolicitudesArcoViewModel {
     }
     setEnviando(true);
     setErrorHoja(null);
+    setFolioAbierta(null);
     try {
       const creada = await crearSolicitudArco({ tipo, descripcion });
       if (!montado.current) {
@@ -233,6 +245,11 @@ export function useSolicitudesArco(): SolicitudesArcoViewModel {
       if (montado.current) {
         espera.esperarSiLimite(causa);
         setErrorHoja(mensajeParaClienta(causa, { respaldo: texto('privacidad.app.hoja.error') }));
+        if (causa instanceof ApiError && causa.code === CODE_CANCELACION_ABIERTA) {
+          // Ya hay una abierta: su folio aparte y la lista al día (puede que no se viera todavía).
+          setFolioAbierta(folioCancelacionAbierta(causa));
+          recargar();
+        }
       }
     } finally {
       if (montado.current) {
@@ -270,6 +287,7 @@ export function useSolicitudesArco(): SolicitudesArcoViewModel {
           if (!enviando) {
             setTipo(opcion);
             setErrorHoja(null);
+            setFolioAbierta(null);
           }
         },
       })),
@@ -288,6 +306,7 @@ export function useSolicitudesArco(): SolicitudesArcoViewModel {
         }
       },
       error: errorHoja,
+      detalleError: folioAbierta ? texto('privacidad.arco.folioAbierta', { folio: folioAbierta }) : null,
       textoCancelar: texto('privacidad.app.cancelar'),
       cerrar,
     },

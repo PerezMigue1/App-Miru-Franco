@@ -3,6 +3,7 @@ import { domicilio, enlaceCorreo, enlaceMapa, enlaceTelefono, horaCorta, NOMBRE_
 import { ApiError, ErrorDeRed } from '@/shared/api/apiClient';
 import type { ConfiguracionPublica, DiaHorario, DiaSemana } from '@/shared/api/configuracionPublica';
 import { aceptacionDeDocumento, registrarConsentimientos, type ItemConsentimiento } from '@/shared/api/consentimientos';
+import { documentosQueCambiaron, textoDocumentoActualizado as textoLegalActualizado } from '@/shared/api/documentosActualizados';
 import {
   obtenerDocumentoVigente,
   type DocumentoLegalVigente,
@@ -358,9 +359,12 @@ export function textoMetodoCambiado(config: ConfiguracionPublica): string {
   return obtenerTexto('tienda.checkout.metodoCambio', {}, config);
 }
 
-/** La versión del documento cambió con la casilla marcada: se desmarcó y hay que revisarlo. */
+/**
+ * La versión del documento cambió con la casilla marcada (o el servidor la rechazó): se desmarcó y hay
+ * que revisarlo. Es el aviso común de los documentos legales (legal.documentoActualizado).
+ */
 export function textoDocumentoActualizado(config: ConfiguracionPublica): string {
-  return obtenerTexto('tienda.checkout.documentoActualizado', {}, config);
+  return textoLegalActualizado(config);
 }
 
 // ── Registro de los consentimientos ──────────────────────────────────────────────────────────
@@ -418,6 +422,15 @@ export async function registrarConsentimientosCompra(vistos: DocumentosVistos): 
   } catch (causa) {
     throw new ErrorConsentimientoCompra('registro', causa);
   }
+}
+
+/**
+ * Tras el 400 de una versión que ya no es la vigente: vuelve a pedir los dos documentos a la red y
+ * devuelve las casillas cuyo documento cambió respecto a lo que la clienta tuvo a la vista (si no se
+ * puede saber cuál, las dos). Nunca rechaza.
+ */
+export function casillasConDocumentoCambiado(vistos: DocumentosVistos): Promise<IdCasillaCompra[]> {
+  return documentosQueCambiaron(CASILLAS_COMPRA.map(({ id, slug }) => ({ clave: id, slug, aceptado: vistos[id] })));
 }
 
 const esSinRed = (error: unknown) => error instanceof ErrorDeRed || (error instanceof ApiError && error.status === 0);

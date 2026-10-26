@@ -19,7 +19,8 @@
       "env": {
         "EXPO_PUBLIC_API_URL": "https://api.mirufranco.com",
         "EXPO_PUBLIC_WEB_URL": "https://www.mirufranco.com",
-        "OFUSCAR_JS": "1"
+        "OFUSCAR_JS": "1",
+        "PINNING": "1"
       }
     },
     "production": {
@@ -30,7 +31,8 @@
       "env": {
         "EXPO_PUBLIC_API_URL": "https://api.mirufranco.com",
         "EXPO_PUBLIC_WEB_URL": "https://www.mirufranco.com",
-        "OFUSCAR_JS": "1"
+        "OFUSCAR_JS": "1",
+        "PINNING": "1"
       }
     }
   }

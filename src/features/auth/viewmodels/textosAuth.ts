@@ -45,6 +45,9 @@ export interface TextosAuth {
     preguntasAyuda: string;
     preguntasCargando: string;
     preguntasVacias: string;
+    /** Casilla de los Términos y Condiciones: "Acepto los" y el enlace al visor. */
+    terminosCasilla: string;
+    terminosEnlace: string;
   };
   apariencia: {
     titulo: string;
@@ -112,6 +115,8 @@ export function useTextosAuth(): TextosAuth {
         preguntasAyuda: texto('auth.registro.preguntasAyuda'),
         preguntasCargando: texto('auth.registro.preguntasCargando'),
         preguntasVacias: texto('auth.registro.preguntasVacias'),
+        terminosCasilla: texto('auth.registro.terminosCasilla'),
+        terminosEnlace: texto('auth.registro.terminosEnlace'),
       },
       apariencia: {
         titulo: texto('perfil.apariencia.titulo'),

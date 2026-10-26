@@ -81,6 +81,12 @@ const CLAVE_POR_CODE: Readonly<Record<string, ClaveTexto>> = {
   CANCELACION_ABIERTA: 'errores.cancelacionAbierta',
   OPERACIONES_EN_CURSO: 'errores.operacionesEnCurso',
   CUENTA_DE_PERSONAL: 'errores.cuentaDePersonal',
+  // Ronda 9: una versión de documento legal o del texto de datos sensibles que ya no es la vigente, y
+  // una preferencia de aviso que no se puede configurar por ese canal.
+  DOCUMENTO_NO_VIGENTE: 'legal.documentoActualizado',
+  DOCUMENTO_NO_COINCIDE: 'legal.documentoActualizado',
+  TEXTO_DATOS_SENSIBLES_NO_VIGENTE: 'datosSensibles.app.textoCambio',
+  PREFERENCIA_NO_DISPONIBLE: 'preferenciasAvisos.errorGuardado',
   INSUFFICIENT_ROLE: 'errores.sinPermiso',
   INSUFFICIENT_PERMISSIONS: 'errores.sinPermiso',
   NO_PERMISSIONS: 'errores.sinPermiso',

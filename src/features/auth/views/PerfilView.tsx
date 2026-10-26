@@ -1,5 +1,6 @@
 import { Image } from 'expo-image';
 import {
+  BellRing,
   CalendarDays,
   Camera,
   KeyRound,
@@ -78,6 +79,15 @@ export default function PerfilView() {
         />
         {/* Avisos internos en vivo (GP-07.6): la preferencia es de cada clienta, solo con sesión. */}
         {perfil.estado === 'sinSesion' ? null : <FilaAvisosEnApp />}
+        {/* Preferencias de avisos de la cuenta (Ronda 9): en la app y por correo, solo con sesión. */}
+        {perfil.estado === 'sinSesion' ? null : (
+          <FilaTarjeta
+            icono={BellRing}
+            titulo={perfil.filaPreferenciasAvisos.titulo}
+            descripcion={perfil.filaPreferenciasAvisos.descripcion}
+            onPress={perfil.abrirPreferenciasAvisos}
+          />
+        )}
         <FilaTarjeta
           icono={ShieldCheck}
           titulo="Aviso de privacidad"

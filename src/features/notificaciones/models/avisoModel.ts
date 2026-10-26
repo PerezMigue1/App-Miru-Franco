@@ -1,5 +1,6 @@
 import { ApiError, apiDelete, apiGet, apiPatch, apiPut } from '@/shared/api/apiClient';
 import { esObjeto, listaDe, texto } from '@/features/inicio/models/inicioService';
+import { idDeCompra, rutaComprobante, tipoComprobante } from '@/shared/api/comprobantesDeCompra';
 import { mensajeSinContexto } from '@/shared/api/mensajesError';
 
 /**
@@ -14,7 +15,10 @@ export interface Aviso {
   /** ISO de creadoEn, o null si no vino o no es fecha válida. */
   fecha: string | null;
   leida: boolean;
-  /** Ruta de la app ('/cita/12', '/pedido/7', '/mis-citas', '/mis-pedidos', '/perfil') o null si no abre nada. */
+  /**
+   * Ruta de la app ('/cita/12', '/pedido/7', '/mis-citas', '/mis-pedidos', '/perfil' o
+   * '/comprobante?tipo=pedido&id=7') o null si no abre nada.
+   */
   destino: string | null;
 }
 
@@ -37,10 +41,7 @@ const SECCIONES_CLIENTE: ReadonlyMap<string, { lista: string; detalle?: string }
 /** Avisos del personal: '/operacion/...' y '/admin/...' (y esas rutas solas). */
 const RUTA_PERSONAL = /^\/(?:operacion|admin)(?:\/|$)/;
 
-/**
- * entidadTipo con detalle en la app; 'venta_local', 'solicitud_arco', 'comprobante' y los demás no
- * abren nada. También traduce el `tipo` de la página de comprobante ('venta' no tiene detalle).
- */
+/** entidadTipo con detalle en la app; 'venta_local', 'solicitud_arco', 'comprobante' y los demás no abren nada. */
 const DETALLE_POR_ENTIDAD: ReadonlyMap<string, string> = new Map([
   ['cita', '/cita'],
   ['pedido', '/pedido'],
@@ -68,8 +69,9 @@ function rutaWeb(urlAccion: unknown): string {
 
 /**
  * Página de la web con el comprobante de una compra (aviso 'comprobante', GP-09): el backend manda
- * '/cliente/comprobante?tipo=pedido|cita|venta&id=<id de la compra>'. Su entidadId es el id del
- * comprobante, no el de la compra, así que el detalle solo sale de esta ruta.
+ * '/cliente/comprobante?tipo=pedido|cita|venta&id=<id de la compra>' y la app abre su propia pantalla
+ * del comprobante con el mismo tipo e id. Su entidadId es el id del comprobante, no el de la compra,
+ * así que el destino solo sale de esta ruta.
  */
 const RUTA_COMPROBANTE = '/cliente/comprobante';
 
@@ -93,12 +95,15 @@ function parametrosDe(urlAccion: unknown): Map<string, string> {
   return parametros;
 }
 
-/** Detalle del pedido o de la cita de la página de comprobante; null si es una venta o no sirve. */
+/**
+ * Pantalla del comprobante de la página de la web ('/comprobante?tipo=venta&id=5'), para un pedido,
+ * una cita o una venta; null si el tipo no es uno de esos o el id no es un entero positivo de dígitos.
+ */
 function destinoDeComprobante(urlAccion: unknown): string | null {
   const parametros = parametrosDe(urlAccion);
-  const detalle = DETALLE_POR_ENTIDAD.get((parametros.get('tipo') ?? '').trim().toLowerCase());
-  const id = idPositivo(parametros.get('id'));
-  return detalle && id ? `${detalle}/${id}` : null;
+  const tipo = tipoComprobante(parametros.get('tipo'));
+  const id = idDeCompra(parametros.get('id'));
+  return tipo && id !== null ? rutaComprobante(tipo, id) : null;
 }
 
 /** Traduce la ruta de la web a la de la app; null si no es de la clienta o el id no sirve. */
@@ -116,7 +121,8 @@ function destinoDeRuta(ruta: string): string | null {
 
 /**
  * Pantalla de la app que abre el aviso. Primero traduce urlAccion (rutas de la web de la clienta,
- * relativas o absolutas, y la página de comprobante con su tipo e id); si no se traduce, usa
+ * relativas o absolutas, y la página de comprobante, que abre la pantalla del comprobante con su tipo
+ * e id); si no se traduce, usa
  * entidadTipo 'cita' o 'pedido' con un entidadId de dígitos. null si nada aplica.
  */
 export function destinoDeAviso(datos: { urlAccion?: unknown; entidadTipo?: unknown; entidadId?: unknown }): string | null {

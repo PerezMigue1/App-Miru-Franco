@@ -1,9 +1,20 @@
 import { usePathname, useRouter } from 'expo-router';
 import { openBrowserAsync } from 'expo-web-browser';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { mensajeParaClienta } from '@/shared/api/mensajesError';
+import {
+  documentosQueCambiaron,
+  esDocumentoActualizado,
+  esTextoDatosSensiblesActualizado,
+} from '@/shared/api/documentosActualizados';
+import {
+  obtenerDocumentoVigente,
+  rutaVisorDocumento,
+  type DocumentoLegalVigente,
+} from '@/shared/api/documentosLegales';
+import { mensajeParaClienta, textoDelServidor } from '@/shared/api/mensajesError';
 import { obtenerTexto } from '@/shared/api/textosSitio';
+import { useDocumentoVisto } from '@/shared/api/useDocumentoVisto';
 import { useEsperaLimite } from '@/shared/api/useEsperaLimite';
 import { useTextos } from '@/shared/api/useTextos';
 import { soloDigitos, telefonoSinLada } from '@/shared/ui/digitos';
@@ -14,6 +25,7 @@ import {
   AVISO_DATOS_PERSONALES_CLAVE,
   AYUDA_TELEFONO,
   ERROR_TELEFONO,
+  RUTA_ORIGEN_REGISTRO,
   TIPOS_CABELLO,
   convertirFechaNacimiento,
   esCorreoValido,
@@ -35,10 +47,10 @@ import {
   requiereConsentimiento,
   requisitosDeClave,
   urlAvisoPrivacidad,
-  urlTerminos,
   type DatosRegistro,
   type PreguntaSeguridad,
   type RequisitoClave,
+  type SlugDocumentoAlta,
   type TipoCabello,
 } from '../models/AuthModel';
 import { obtenerPreguntasSeguridad, registrarUsuario, verificarCorreo } from '../models/authService';
@@ -75,6 +87,7 @@ export interface CamposRegistro {
   autorizacionDatosSensibles: AutorizacionDatosSensibles | null;
   tratamientosQuimicos: boolean | null;
   tratamientos: string;
+  aceptaTerminos: boolean;
   aceptaAviso: boolean;
   recibePromociones: boolean;
 }
@@ -138,7 +151,7 @@ export interface RegistroViewModel {
   /** error: con estado 'error', por qué no se cargaron las preguntas (sin red, servidor...). */
   preguntas: { estado: EstadoPreguntas; error: string | null; lista: PreguntaSeguridad[]; cargar: () => void };
   abrirAviso: () => void;
-  /** Abre los Términos y Condiciones del sitio en el navegador. */
+  /** Abre los Términos y Condiciones en el visor de documentos legales de la app. */
   abrirTerminos: () => void;
   /** Paso 2: "Finalizar registro". */
   crearCuenta: () => void;
@@ -194,6 +207,7 @@ const CAMPOS_INICIALES: CamposRegistro = {
   autorizacionDatosSensibles: null,
   tratamientosQuimicos: null,
   tratamientos: '',
+  aceptaTerminos: false,
   aceptaAviso: false,
   recibePromociones: false,
 };
@@ -222,6 +236,7 @@ const PASO_2: CampoRegistro[] = [
   'alergias',
   'tratamientosQuimicos',
   'tratamientos',
+  'aceptaTerminos',
   'aceptaAviso',
   'recibePromociones',
 ];
@@ -295,6 +310,8 @@ function validarCampo(campo: CampoRegistro, c: CamposRegistro): string | null {
       return problemaDeTieneTratamientos(c.tratamientosQuimicos);
     case 'tratamientos':
       return problemaDeTratamientos(c.tratamientosQuimicos, c.tratamientos);
+    case 'aceptaTerminos':
+      return c.aceptaTerminos ? null : obtenerTexto('auth.registro.faltaTerminos');
     case 'aceptaAviso':
       return c.aceptaAviso ? null : 'Debes aceptar el Aviso de Privacidad';
     default:
@@ -315,6 +332,26 @@ function opcional(texto: string): string | undefined {
 
 type PerfilCapilarRegistro = DatosRegistro['perfilCapilar'];
 
+/** Versión que la clienta tuvo a la vista de cada documento del alta; null si no había ninguna. */
+type DocumentosVistos = Record<SlugDocumentoAlta, DocumentoLegalVigente | null>;
+
+/** Casilla de cada documento del alta, en el orden de la web (Términos y luego Aviso). */
+const CASILLAS_DOCUMENTO: readonly { clave: 'aceptaTerminos' | 'aceptaAviso'; slug: SlugDocumentoAlta }[] = [
+  { clave: 'aceptaTerminos', slug: 'terminos' },
+  { clave: 'aceptaAviso', slug: 'aviso-privacidad' },
+];
+
+type CasillaDocumento = (typeof CASILLAS_DOCUMENTO)[number]['clave'];
+
+/** `documentos` con los que se tenían a la vista; sin ninguno se omite y el backend toma los vigentes. */
+function documentosDelRegistro(vistos: DocumentosVistos): Pick<DatosRegistro, 'documentos'> {
+  const documentos = CASILLAS_DOCUMENTO.flatMap(({ slug }) => {
+    const visto = vistos[slug];
+    return visto ? [{ slug, version: visto.version, hash: visto.hash }] : [];
+  });
+  return documentos.length > 0 ? { documentos } : {};
+}
+
 /**
  * Alergias del perfil capilar (Ronda 5): "No" se manda tal cual; "Sí" solo con la autorización de
  * datos sensibles y junto con su texto. Sin autorizar no se manda nada de alergias.
@@ -329,13 +366,16 @@ function alergiasDelRegistro(c: CamposRegistro): Pick<PerfilCapilarRegistro, 'ti
 /**
  * Cuerpo de POST /api/usuarios/registro como lo arma la web: perfil capilar completo, tratamientos
  * solo si respondió Sí y las alergias solo con la autorización de datos sensibles; entonces van con
- * consienteDatosSensibles y la versión y el hash del texto que autorizó.
+ * consienteDatosSensibles y la versión y el hash del texto que autorizó. Los Términos y el Aviso de
+ * Privacidad van con la versión y el hash que la clienta tuvo a la vista (`documentos`, como la web) y
+ * la ruta de origen.
  */
 function cuerpoDeRegistro(
   c: CamposRegistro,
   email: string,
   tipoCabello: TipoCabello,
   pregunta: PreguntaSeguridad,
+  vistos: DocumentosVistos,
 ): DatosRegistro {
   const tratamientosQuimicos = c.tratamientosQuimicos === true;
   const autorizacion = c.tieneAlergias === true ? c.autorizacionDatosSensibles : null;
@@ -356,8 +396,11 @@ function cuerpoDeRegistro(
       tratamientosQuimicos,
       tratamientos: tratamientosQuimicos ? c.tratamientos.trim() : undefined,
     },
+    aceptaTerminos: true,
     aceptaAvisoPrivacidad: true,
     recibePromociones: c.recibePromociones,
+    ...documentosDelRegistro(vistos),
+    rutaOrigen: RUTA_ORIGEN_REGISTRO,
     ...(conAlergias
       ? {
           consienteDatosSensibles: true,
@@ -367,10 +410,20 @@ function cuerpoDeRegistro(
   };
 }
 
-/** 400 sin code del registro (datos o regla de contraseña): el texto del servidor no se muestra. */
+/** Code del 503 del registro cuando no hay una versión vigente publicada de los Términos o del Aviso. */
+const DOCUMENTO_NO_PUBLICADO = 'DOCUMENTO_NO_PUBLICADO';
+
+/**
+ * 400 sin code del registro (datos o regla de contraseña): el texto del servidor no se muestra. El 503
+ * DOCUMENTO_NO_PUBLICADO no crea la cuenta y su message ya viene para la clienta (contrato de la
+ * Ronda 10, punto 8): se muestra tal cual, o el respaldo de la app si no sirve, con la referencia.
+ */
 function mensajeDeRegistro(error: unknown): string {
   return mensajeParaClienta(error, {
     respaldo: estadoHttp(error) === 400 ? obtenerTexto('auth.registro.revisaDatos') : noPudimosCrear(),
+    porCode: {
+      [DOCUMENTO_NO_PUBLICADO]: textoDelServidor(error) ?? obtenerTexto('auth.registro.sinDocumentosPublicados'),
+    },
   });
 }
 
@@ -759,8 +812,9 @@ export function useRegistroViewModel(): RegistroViewModel {
     abrirPagina(urlAvisoPrivacidad(), obtenerTexto('auth.avisoPrivacidad.noAbre'));
   };
 
+  // El visor de la app, como las demás casillas de documentos: al volver, lo escrito sigue ahí.
   const abrirTerminos = () => {
-    abrirPagina(urlTerminos(), obtenerTexto('auth.terminos.noAbre'));
+    push(rutaVisorDocumento('terminos'));
   };
 
   const avanzar = async () => {
@@ -812,7 +866,7 @@ export function useRegistroViewModel(): RegistroViewModel {
 
   // La autorización del registro no llama al backend: la versión y el hash viajan con la cuenta.
   const autorizacion = useAutorizacionDatosSensibles({
-    ruta: '/registro',
+    ruta: RUTA_ORIGEN_REGISTRO,
     registrarEnServidor: false,
     onAutorizada: (autorizada) => {
       setCampos((previos) => ({ ...previos, autorizacionDatosSensibles: autorizada }));
@@ -820,6 +874,31 @@ export function useRegistroViewModel(): RegistroViewModel {
       pedirEnfoque('alergias');
     },
   });
+
+  // La casilla del documento que cambió vuelve sin marcar y con el aviso de documento actualizado junto
+  // a ella. Al volver a marcarla se revalida y el aviso se va.
+  const desmarcarActualizado = useCallback((clave: CasillaDocumento) => {
+    setCampos((previos) => ({ ...previos, [clave]: false }));
+    setErrores((previos) => ({ ...previos, [clave]: obtenerTexto('legal.documentoActualizado') }));
+    setEnVivo((previos) => ({ ...previos, [clave]: true }));
+  }, []);
+  const desmarcarTerminosActualizados = useCallback(() => desmarcarActualizado('aceptaTerminos'), [desmarcarActualizado]);
+  const desmarcarAvisoActualizado = useCallback(() => desmarcarActualizado('aceptaAviso'), [desmarcarActualizado]);
+  // Versión de los Términos y del Aviso de Privacidad que la clienta tuvo a la vista al marcar cada
+  // casilla: viajan con la cuenta. Si una cambia con su casilla marcada, solo esa se desmarca. Se piden
+  // al marcarlas (si llegan después, cuenta la primera que llega); nunca rechazan.
+  const terminosVistos = useDocumentoVisto('terminos', campos.aceptaTerminos, desmarcarTerminosActualizados);
+  const avisoVisto = useDocumentoVisto('aviso-privacidad', campos.aceptaAviso, desmarcarAvisoActualizado);
+  useEffect(() => {
+    if (campos.aceptaTerminos) {
+      void obtenerDocumentoVigente('terminos');
+    }
+  }, [campos.aceptaTerminos]);
+  useEffect(() => {
+    if (campos.aceptaAviso) {
+      void obtenerDocumentoVigente('aviso-privacidad');
+    }
+  }, [campos.aceptaAviso]);
 
   const enviar = async () => {
     const valores = limpiarTelefono(campos);
@@ -842,9 +921,18 @@ export function useRegistroViewModel(): RegistroViewModel {
     setErrorGeneral(null);
     const email = normalizarCorreo(valores.correo);
     setCargando(true);
+    // Sin versión vista (no había llegado), la vigente de memoria, red o archivo; sin ninguna, el
+    // backend registra la vigente.
+    const vistos: DocumentosVistos = { terminos: null, 'aviso-privacidad': null };
     try {
+      const [terminos, aviso] = await Promise.all([
+        terminosVistos() ?? obtenerDocumentoVigente('terminos').then(({ documento }) => documento),
+        avisoVisto() ?? obtenerDocumentoVigente('aviso-privacidad').then(({ documento }) => documento),
+      ]);
+      vistos.terminos = terminos;
+      vistos['aviso-privacidad'] = aviso;
       const respuesta = await registrarUsuario(
-        cuerpoDeRegistro(valores, email, valores.tipoCabello, valores.pregunta),
+        cuerpoDeRegistro(valores, email, valores.tipoCabello, valores.pregunta, vistos),
       );
       if (respuesta?.success === false) {
         setErrorGeneral(noPudimosCrear());
@@ -878,6 +966,32 @@ export function useRegistroViewModel(): RegistroViewModel {
           // Faltó el consentimiento de las alergias: se vuelve a pedir la autorización.
           setCampos((previos) => ({ ...previos, autorizacionDatosSensibles: null }));
           pedirEnfoque('tieneAlergias');
+        }
+        if (esTextoDatosSensiblesActualizado(error)) {
+          // El texto de la autorización cambió (400 TEXTO_DATOS_SENSIBLES_NO_VIGENTE): se quita la
+          // autorización y la hoja vuelve a pedir el texto vigente. Lo escrito en las alergias se queda.
+          setCampos((previos) => ({ ...previos, autorizacionDatosSensibles: null }));
+          pedirEnfoque('tieneAlergias');
+          autorizacion.abrir();
+        }
+        if (esDocumentoActualizado(error)) {
+          // Los Términos o el Aviso que se mandaron ya no son los vigentes (400 DOCUMENTO_NO_VIGENTE o
+          // DOCUMENTO_NO_COINCIDE): se piden los vigentes a la red y solo se desmarca la casilla del que
+          // cambió, con su aviso al lado. Solo cuentan los que viajaron en `documentos` (el backend no
+          // rechaza uno que no se mandó). Los demás campos se quedan como la clienta los dejó y nada se
+          // reintenta solo.
+          const enviados = CASILLAS_DOCUMENTO.filter(({ slug }) => vistos[slug] !== null);
+          const cambiadas = await documentosQueCambiaron(
+            (enviados.length > 0 ? enviados : CASILLAS_DOCUMENTO).map(({ clave, slug }) => {
+              const visto = vistos[slug];
+              return { clave, slug, aceptado: visto ? { version: visto.version, hash: visto.hash } : null };
+            }),
+          );
+          if (!montado.current) {
+            return;
+          }
+          cambiadas.forEach((clave) => desmarcarActualizado(clave));
+          pedirEnfoque(cambiadas[0]);
         }
         setErrorGeneral(mensajeDeRegistro(error));
       }

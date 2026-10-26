@@ -6,7 +6,10 @@ import { obtenerConfiguracion, suscribir, type DatosTransferencia } from '@/shar
 import { rutaVisorDocumento } from '@/shared/api/documentosLegales';
 import { mensajeParaClienta } from '@/shared/api/mensajesError';
 import { obtenerTexto } from '@/shared/api/textosSitio';
+import { idDeCompra } from '@/shared/api/comprobantesDeCompra';
+import { useComprobantesDeCompra } from '@/shared/api/useComprobantesDeCompra';
 import { useEsperaLimite } from '@/shared/api/useEsperaLimite';
+import type { BotonComprobante } from '@/shared/ui/BotonesComprobante';
 import { useCandado } from '@/shared/ui/useCandado';
 
 import {
@@ -148,6 +151,11 @@ export interface DetalleCitaViewModel {
   errorCancelacion: string | null;
   /** Aviso de la cita recién cancelada en esta pantalla (con o sin reembolso), o null. */
   avisoCancelada: string | null;
+  /**
+   * "Ver comprobante" (GP-09): el del anticipo y el de la venta del salón con que se cobró, si los
+   * hay; vacío si no hay ninguno o la consulta falló.
+   */
+  comprobantes: BotonComprobante[];
 }
 
 /** Qué dice el estado del anticipo sin pagar para la hoja de cancelar. */
@@ -472,6 +480,13 @@ export function useDetalleCitaViewModel(citaId: string | undefined): DetalleCita
     [cita, politica, pagoPorConfirmar, candado, cancelarEnEspera, esperarSiLimite],
   );
 
+  // Comprobantes de la cita cargada; se vuelven a pedir cuando cambia su estado o el de su anticipo.
+  const comprobantes = useComprobantesDeCompra(
+    'cita',
+    cita ? idDeCompra(cita.id) : null,
+    cita ? `${cita.estado}:${estadoAnticipo(cita)}` : '',
+  );
+
   const ahora = new Date();
   const conAnticipoPagado = cita != null && anticipoPagadoAlCancelar(cita) > 0;
   // Pagado, retenido o en revisión: la hoja ofrece la política (solo el pagado espera su consulta).
@@ -508,5 +523,6 @@ export function useDetalleCitaViewModel(citaId: string | undefined): DetalleCita
     puedeReprogramar: cita != null && !dentroDelAviso(cita, ahora),
     errorCancelacion,
     avisoCancelada,
+    comprobantes,
   };
 }

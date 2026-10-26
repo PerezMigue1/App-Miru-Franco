@@ -115,8 +115,10 @@ const DATOS_REGISTRO: DatosRegistro = {
     alergias: 'Amoniaco',
     tratamientosQuimicos: false,
   },
+  aceptaTerminos: true,
   aceptaAvisoPrivacidad: true,
   recibePromociones: false,
+  rutaOrigen: '/registro',
   consienteDatosSensibles: true,
 };
 

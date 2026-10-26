@@ -69,6 +69,7 @@ describe('app.json', () => {
       'expo-secure-store',
       'expo-image-picker',
       'expo-build-properties',
+      './plugins/conPinning.js',
     ]);
   });
 
@@ -108,6 +109,12 @@ describe('eas.json', () => {
 
   it('preview define las variables públicas de la API y la web', () => {
     const claves = Object.keys(build.preview.env ?? {}).sort();
-    expect(claves).toEqual(['EXPO_PUBLIC_API_URL', 'EXPO_PUBLIC_WEB_URL', 'OFUSCAR_JS']);
+    expect(claves).toEqual(['EXPO_PUBLIC_API_URL', 'EXPO_PUBLIC_WEB_URL', 'OFUSCAR_JS', 'PINNING']);
+  });
+
+  it('preview y production fijan los certificados y development no (GP-09)', () => {
+    expect(build.preview.env?.PINNING).toBe('1');
+    expect(build.production.env?.PINNING).toBe('1');
+    expect(build.development.env?.PINNING).toBeUndefined();
   });
 });

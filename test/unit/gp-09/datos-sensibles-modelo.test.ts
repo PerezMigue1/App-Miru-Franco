@@ -131,14 +131,20 @@ describe('llamadas', () => {
     });
   });
 
-  it('el 400 del texto cambiado se reconoce por su estado', async () => {
+  it('el 400 del texto cambiado se reconoce por su code TEXTO_DATOS_SENSIBLES_NO_VIGENTE (Ronda 9)', async () => {
     simular({ [`POST ${RUTA_SENSIBLES}`]: () => textoCambio400() });
 
     const error = await autorizarDatosSensibles({ version: '0.9', hash: HASH_SENSIBLES }, '/inicio').catch((e: unknown) => e);
 
+    expect(error).toMatchObject({ status: 400, code: 'TEXTO_DATOS_SENSIBLES_NO_VIGENTE' });
     expect(esTextoCambiado(error)).toBe(true);
     expect(esTextoCambiado(new ApiError(429, 'x'))).toBe(false);
     expect(esTextoCambiado(new ErrorDeRed())).toBe(false);
+  });
+
+  it('un 400 sin code (backend anterior) también es el texto cambiado; uno con otro code no', () => {
+    expect(esTextoCambiado(new ApiError(400, 'x'))).toBe(true);
+    expect(esTextoCambiado(new ApiError(400, 'x', 'CONSENTIMIENTO_SALUD_REQUERIDO'))).toBe(false);
   });
 
   it('retira con la ruta de origen', async () => {

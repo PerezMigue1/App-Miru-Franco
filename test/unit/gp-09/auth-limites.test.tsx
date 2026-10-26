@@ -248,6 +248,7 @@ describe('Registro con límites', () => {
     tipoCabello: 'ondulado',
     tieneAlergias: false,
     tratamientosQuimicos: false,
+    aceptaTerminos: true,
     aceptaAviso: true,
   };
 

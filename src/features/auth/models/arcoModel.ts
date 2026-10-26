@@ -11,6 +11,12 @@ import { ApiError, apiGet, apiPost } from '@/shared/api/apiClient';
  * Todas responden { success, data }. Los errores llegan como ApiError o ErrorDeRed de apiClient.
  */
 
+/** Code del 409 de POST /api/arco/solicitudes cuando ya hay una cancelación abierta. */
+export const CODE_CANCELACION_ABIERTA = 'CANCELACION_ABIERTA';
+
+/** Folio ARCO como lo escribe el backend (ARCO-2026-000003): letras, dígitos y guiones. */
+const FOLIO = /^[A-Z0-9][A-Z0-9-]{0,39}$/;
+
 export const TIPOS_ARCO = ['acceso', 'rectificacion', 'cancelacion', 'oposicion', 'revocacion'] as const;
 export type TipoArco = (typeof TIPOS_ARCO)[number];
 
@@ -72,6 +78,8 @@ export interface PerfilMisDatos {
   tratamientos: string;
   /** Solo con la autorización de datos sensibles vigente; si no, null (nunca se guarda en memoria). */
   alergias: string | null;
+  /** En su cuenta hay un texto de alergias, con o sin autorización (alergiasGuardadas del backend). */
+  alergiasGuardadas: boolean;
   /** Hay alergias guardadas que no se muestran porque no hay autorización vigente. */
   alergiasOcultas: boolean;
   recibePromociones: boolean;
@@ -150,6 +158,18 @@ export async function misSolicitudesArco(): Promise<SolicitudArco[]> {
   return respuesta.data.map(normalizarSolicitudArco).filter((s): s is SolicitudArco => s !== null);
 }
 
+/**
+ * El folio de la cancelación que ya está abierta, de errors.folio del 409 CANCELACION_ABIERTA (desde la
+ * Ronda 9 viaja aparte del mensaje). null si no es ese 409 o si el folio no tiene la forma esperada.
+ */
+export function folioCancelacionAbierta(error: unknown): string | null {
+  if (!(error instanceof ApiError) || error.status !== 409 || error.code !== CODE_CANCELACION_ABIERTA) {
+    return null;
+  }
+  const folio = esObjeto(error.errors) ? texto(error.errors.folio) : '';
+  return FOLIO.test(folio) ? folio : null;
+}
+
 /** POST /api/arco/oposicion a las promociones: devuelve la solicitud ya atendida. */
 export async function oponerseAPromociones(): Promise<SolicitudArco> {
   return solicitudDe(await apiPost<unknown>('/api/arco/oposicion', { finalidad: 'promociones' }));
@@ -166,14 +186,17 @@ export async function leerMisDatos(): Promise<unknown> {
 }
 
 /**
- * Resumen para la pantalla: el perfil y cuántos registros hay de cada sección. El backend manda las
- * alergias aunque no haya autorización vigente: aquí se descartan si `alergiasAutorizadas` no es true,
- * y solo queda la marca de que están guardadas y ocultas.
+ * Resumen para la pantalla: el perfil y cuántos registros hay de cada sección. Desde la Ronda 9 el
+ * backend decide las alergias: sin autorización vigente `alergias` llega en null y
+ * `alergiasGuardadas` y `alergiasOcultas` dicen si hay un texto guardado. La app solo muestra el
+ * texto con `datosSensiblesAutorizados` en true (un backend anterior, sin esos campos, nunca las
+ * muestra) y ya no calcula el aviso a partir del texto.
  */
-export function resumirMisDatos(crudo: unknown, alergiasAutorizadas: boolean): ResumenMisDatos {
+export function resumirMisDatos(crudo: unknown): ResumenMisDatos {
   const datos = esObjeto(crudo) ? crudo : {};
   const perfil = esObjeto(datos.perfil) ? datos.perfil : {};
-  const alergias = texto(perfil.alergias);
+  const autorizadas = perfil.datosSensiblesAutorizados === true;
+  const guardadas = perfil.alergiasGuardadas === true;
   return {
     generadoEn: texto(datos.generadoEn),
     perfil: {
@@ -187,8 +210,9 @@ export function resumirMisDatos(crudo: unknown, alergiasAutorizadas: boolean): R
       productosUsados: texto(perfil.productosUsados),
       tratamientosQuimicos: typeof perfil.tratamientosQuimicos === 'boolean' ? perfil.tratamientosQuimicos : null,
       tratamientos: texto(perfil.tratamientos),
-      alergias: alergiasAutorizadas ? alergias : null,
-      alergiasOcultas: !alergiasAutorizadas && alergias !== '',
+      alergias: autorizadas ? texto(perfil.alergias) : null,
+      alergiasGuardadas: guardadas,
+      alergiasOcultas: perfil.alergiasOcultas === true || (guardadas && !autorizadas),
       recibePromociones: perfil.recibePromociones === true,
       creadoEn: texto(perfil.creadoEn),
     },

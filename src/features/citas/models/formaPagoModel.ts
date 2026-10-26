@@ -285,11 +285,6 @@ export function textoFaltaPolitica(config: ConfiguracionPublica = obtenerConfigu
   return obtenerTexto('citas.politicaAnticipos.falta', {}, config);
 }
 
-/** La versión vigente de la política cambió con la casilla marcada: se desmarcó y hay que revisarla. */
-export function textoPoliticaActualizada(config: ConfiguracionPublica = obtenerConfiguracion()): string {
-  return obtenerTexto('citas.politicaAnticipos.actualizada', {}, config);
-}
-
 /**
  * "Pagar en el salón" se puede elegir si el anticipo todavía no es del salón y aún cabe su plazo
  * (`minutosAntesPagoSalon` antes del inicio) más MARGEN_MINIMO_ANTICIPO_MS. Por omisión usa los

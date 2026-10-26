@@ -13,7 +13,7 @@ const RAIZ = path.resolve(__dirname, '../../..');
 const SRC = path.join(RAIZ, 'src');
 const FEATURES = path.join(SRC, 'features');
 
-const FEATURES_ESPERADAS = ['auth', 'citas', 'inicio', 'notificaciones', 'salon', 'tienda'];
+const FEATURES_ESPERADAS = ['auth', 'citas', 'comprobantes', 'inicio', 'notificaciones', 'salon', 'tienda'];
 const CAPAS = ['components', 'models', 'viewmodels', 'views'];
 const ARCHIVO_MARCADOR = '.gitkeep';
 
@@ -64,7 +64,7 @@ function carpetasDeCapa(capa: string): string[] {
 }
 
 describe('features en src/features', () => {
-  it('contiene exactamente las features auth, citas, inicio, notificaciones, salon y tienda', () => {
+  it('contiene exactamente las features auth, citas, comprobantes, inicio, notificaciones, salon y tienda', () => {
     expect(featuresActuales()).toEqual(FEATURES_ESPERADAS);
   });
 

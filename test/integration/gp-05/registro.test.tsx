@@ -34,8 +34,10 @@ const CUERPO_ESPERADO = {
     tratamientosQuimicos: true,
     tratamientos: 'Tinte hace seis meses',
   },
+  aceptaTerminos: true,
   aceptaAvisoPrivacidad: true,
   recibePromociones: false,
+  rutaOrigen: '/registro',
 };
 
 describe('Registro de una clienta en dos pasos (GP-05)', () => {

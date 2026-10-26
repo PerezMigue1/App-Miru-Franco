@@ -7,6 +7,12 @@ import { soloDigitos, telefonoSinLada } from '@/shared/ui/digitos';
 /** Único rol que puede usar la app móvil. */
 export const ROL_CLIENTE = 'cliente';
 
+/** Ruta de origen del registro que se guarda con sus consentimientos (la misma de su autorización de datos sensibles). */
+export const RUTA_ORIGEN_REGISTRO = '/registro';
+
+/** Documentos que el registro acepta con sus casillas, en el orden de la web: Términos y Aviso. */
+export type SlugDocumentoAlta = 'terminos' | 'aviso-privacidad';
+
 export interface UsuarioSesion {
   id: string;
   nombre: string;
@@ -81,8 +87,18 @@ export interface DatosRegistro {
   fechaNacimiento: string;
   preguntaSeguridad: { pregunta: string; respuesta: string };
   perfilCapilar: PerfilCapilar;
+  aceptaTerminos: true;
   aceptaAvisoPrivacidad: true;
   recibePromociones: boolean;
+  /**
+   * Versión y hash de los Términos y del Aviso de Privacidad que la clienta tuvo a la vista al marcar
+   * sus casillas (como `documentos` de la web, en ese orden). El backend los valida: si uno ya no es el
+   * vigente responde 400 DOCUMENTO_NO_VIGENTE o DOCUMENTO_NO_COINCIDE. El que no venga lo registra con
+   * su versión vigente.
+   */
+  documentos?: { slug: SlugDocumentoAlta; version: string; hash: string }[];
+  /** Pantalla donde se marcaron las casillas; se guarda en cada consentimiento del alta. */
+  rutaOrigen: typeof RUTA_ORIGEN_REGISTRO;
   /** Obligatorio (true) si perfilCapilar.alergias trae texto; el backend no lo guarda. */
   consienteDatosSensibles?: true;
   /**

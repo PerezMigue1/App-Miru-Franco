@@ -121,7 +121,7 @@ describe('HojaDatosSensibles', () => {
     expect(llamadasA(llamadas, 'POST', RUTA_SENSIBLES)).toHaveLength(0);
   });
 
-  it('si el texto cambió, lo vuelve a pedir, lo muestra y desmarca la casilla', async () => {
+  it('si el texto cambió (TEXTO_DATOS_SENSIBLES_NO_VIGENTE), lo vuelve a pedir, lo muestra y desmarca la casilla', async () => {
     let lecturas = 0;
     await abrir({
       [`GET ${RUTA_TEXTO_SENSIBLES}`]: () => {

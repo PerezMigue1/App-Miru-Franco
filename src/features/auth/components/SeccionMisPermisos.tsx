@@ -20,7 +20,7 @@ const ICONOS: Record<PermisoPrivacidad, LucideIcon> = {
 /**
  * Mis permisos (vista: solo pinta): un interruptor por permiso con el estado que confirmó el
  * backend (FilaInterruptor: role switch, checked y 3:1 o más en claro y oscuro), la confirmación
- * antes de retirar y la hoja de la autorización de datos de salud.
+ * antes de retirar o de volver a autorizar las fotos y la hoja de la autorización de datos de salud.
  */
 export function SeccionMisPermisos({ vm }: { vm: PermisosPrivacidadViewModel }) {
   return (
@@ -70,6 +70,7 @@ export function SeccionMisPermisos({ vm }: { vm: PermisosPrivacidadViewModel }) 
         titulo={vm.confirmacion.titulo}
         texto={vm.confirmacion.texto}
         accion={vm.confirmacion.accion}
+        destructiva={vm.confirmacion.destructiva}
         cancelar={vm.confirmacion.cancelar}
         onConfirmar={vm.confirmacion.confirmar}
         onCancelar={vm.confirmacion.cerrar}

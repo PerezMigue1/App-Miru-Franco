@@ -1,5 +1,9 @@
 import { ApiError, apiGet } from '@/shared/api/apiClient';
-import { registrarConsentimientos, type TipoConsentimiento } from '@/shared/api/consentimientos';
+import {
+  registrarConsentimientos,
+  type AccionConsentimiento,
+  type TipoConsentimiento,
+} from '@/shared/api/consentimientos';
 
 import { actualizarPerfil, obtenerPerfilCompleto } from './authService';
 import { normalizarPerfil } from './PerfilModel';
@@ -14,8 +18,10 @@ import { invalidarPerfil } from './perfilCompartido';
  *   /api/consentimientos (accion "revocado") y se vuelve a dar con PATCH /api/auth/me
  *   { recibePromociones: true }, que deja su fila de consentimiento ligada al aviso vigente.
  * - Fotos del resultado: el estado es la última fila fotos_resultado de GET /api/consentimientos/mios.
- *   Se retira con POST /api/consentimientos (oculta sus fotos de la galería). Volver a autorizarlas
- *   solo se hace en el salón, en una cita: la app no lo ofrece.
+ *   Se retira con POST /api/consentimientos (oculta sus fotos de la galería) y se vuelve a autorizar
+ *   por la misma ruta con accion "aceptado" (Ronda 9: ya lo permite la sesión de la titular). La fila
+ *   nueva queda ligada al aviso de privacidad vigente; las fotos que se ocultaron no vuelven solas:
+ *   el salón las vuelve a ligar desde el panel de la galería.
  */
 
 /** Formulario y ruta con que se registran los retiros desde esta pantalla. */
@@ -86,10 +92,10 @@ export async function leerRecibePromociones(): Promise<boolean> {
   return perfil.recibePromociones;
 }
 
-/** POST /api/consentimientos con un retiro de esta pantalla; el perfil en memoria se olvida. */
-async function revocar(tipo: 'promociones' | 'fotos_resultado'): Promise<void> {
+/** POST /api/consentimientos con un cambio de esta pantalla; el perfil en memoria se olvida. */
+async function registrar(tipo: 'promociones' | 'fotos_resultado', accion: AccionConsentimiento): Promise<void> {
   await registrarConsentimientos({
-    items: [{ tipo, accion: 'revocado' }],
+    items: [{ tipo, accion }],
     formulario: FORMULARIO_PRIVACIDAD,
     rutaOrigen: RUTA_MIS_DATOS,
   });
@@ -98,12 +104,21 @@ async function revocar(tipo: 'promociones' | 'fotos_resultado'): Promise<void> {
 
 /** Retira el permiso de promociones (el backend apaga recibePromociones). */
 export function retirarPromociones(): Promise<void> {
-  return revocar('promociones');
+  return registrar('promociones', 'revocado');
 }
 
 /** Retira el permiso de fotos del resultado (el backend las oculta de la galería). */
 export function retirarFotos(): Promise<void> {
-  return revocar('fotos_resultado');
+  return registrar('fotos_resultado', 'revocado');
+}
+
+/**
+ * Vuelve a autorizar las fotos del resultado (opt in explícito de la titular, tras confirmar):
+ * { items: [{ tipo: 'fotos_resultado', accion: 'aceptado' }], formulario: 'perfil_privacidad',
+ * rutaOrigen: '/mis-datos' }. Límite de la ruta: 30 por minuto.
+ */
+export function autorizarFotos(): Promise<void> {
+  return registrar('fotos_resultado', 'aceptado');
 }
 
 /** Vuelve a dar el permiso de promociones (opt in explícito de la titular). */

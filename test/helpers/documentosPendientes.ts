@@ -49,14 +49,18 @@ export function respuestaConsentimientoGuardado(): Response {
   return respuesta({ success: true, data: [{ id: '1', tipo: 'aviso_privacidad', accion: 'aceptado' }] }, 201);
 }
 
-/** 400 de POST /api/consentimientos: la versión ya no está publicada o su hash no coincide. */
-export function versionNoPublicada400(): Response {
+/**
+ * 400 de POST /api/consentimientos: la versión ya no está publicada o su hash no coincide. Desde la
+ * Ronda 9 trae code (DOCUMENTO_NO_VIGENTE o DOCUMENTO_NO_COINCIDE); sin code, como un backend anterior.
+ */
+export function versionNoPublicada400(code?: string): Response {
   return respuesta(
     {
       success: false,
       statusCode: 400,
       error: 'Bad Request',
       message: 'La versión 2.1 del documento "aviso-privacidad" no está publicada o su hash no coincide.',
+      ...(code ? { code } : {}),
     },
     400,
   );

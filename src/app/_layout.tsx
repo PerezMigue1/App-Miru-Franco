@@ -168,6 +168,10 @@ function Navegacion({ fuentesListas }: { fuentesListas: boolean }) {
             <Stack.Screen name="checkout" />
             <Stack.Screen name="pedido/[id]" />
             <Stack.Screen name="pedido-confirmado/[pedidoId]" options={{ gestureEnabled: false }} />
+            {/* Comprobante de compra de un pedido, una cita o una venta del salón (GP-09). */}
+            <Stack.Screen name="comprobante" />
+            {/* Preferencias de avisos de la cuenta, por tipo y canal (GP-09). */}
+            <Stack.Screen name="preferencias-avisos" />
           </Stack.Protected>
         </Stack>
         <HojaBienvenida introTerminada={introTerminada} />

@@ -71,7 +71,8 @@ jobs:
           node -e '
             const fs = require("fs");
             const perfil = process.env.PERFIL;
-            const env = JSON.parse(fs.readFileSync("eas.json", "utf8")).build?.[perfil]?.env ?? {};
+            const build = JSON.parse(fs.readFileSync("eas.json", "utf8")).build ?? {};
+            const env = build[perfil]?.env ?? {};
             const esperado = {
               EXPO_PUBLIC_API_URL: "https://api.mirufranco.com",
               EXPO_PUBLIC_WEB_URL: "https://www.mirufranco.com",
@@ -81,7 +82,13 @@ jobs:
             for (const clave of fallas) {
               console.log("::error::En el perfil " + perfil + " de eas.json, " + clave + " no tiene el valor esperado.");
             }
-            process.exit(fallas.length > 0 ? 1 : 0);
+            // El certificate pinning de api.mirufranco.com (plugins/conPinning.js) solo se aplica con PINNING=1:
+            // los dos perfiles de publicación lo tienen que llevar, se compile el que se compile.
+            const sinPinning = ["preview", "production"].filter((p) => build[p]?.env?.PINNING !== "1");
+            for (const p of sinPinning) {
+              console.log("::error::En el perfil " + p + " de eas.json falta PINNING con el valor 1: sin él, la app se publica sin certificate pinning.");
+            }
+            process.exit(fallas.length + sinPinning.length > 0 ? 1 : 0);
           '
 
       - name: Preparar Node 22

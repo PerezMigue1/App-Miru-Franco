@@ -20,6 +20,8 @@ import {
 import { MENSAJE_LIMITE, limite429 } from '../../helpers/limitesRed';
 import {
   ALERGIA_FICTICIA,
+  ALERGIAS_AUTORIZADAS,
+  FOLIO_ABIERTA,
   FOTOS_ACEPTADAS,
   FOTOS_REVOCADAS,
   OPOSICION_ATENDIDA,
@@ -31,6 +33,7 @@ import {
   RUTA_MIS_DATOS,
   RUTA_OPOSICION,
   RUTA_SOLICITUDES,
+  SIN_ALERGIAS,
   cancelacionAbierta409,
   error500,
   perfilMisDatos,
@@ -150,6 +153,9 @@ describe('MisDatosView: estructura y enlaces', () => {
     expect(screen.getByRole('header', { name: t('eliminarCuenta.conserva.titulo') })).toBeOnTheScreen();
     expect(screen.getByText(t('eliminarCuenta.conserva.fiscal'))).toBeOnTheScreen();
     expect(screen.getByText(/facturas con sus datos fiscales/)).toBeOnTheScreen();
+    // En Mis datos va la versión de las constancias sin "esta eliminación" (Ronda 9).
+    expect(screen.getByText('La constancia de tus consentimientos y de tus solicitudes ARCO.')).toBeOnTheScreen();
+    expect(screen.queryByText(t('eliminarCuenta.conserva.constancias'))).not.toBeOnTheScreen();
     expect(await screen.findByText(t('privacidad.app.solicitudes.vacia'))).toBeOnTheScreen();
   });
 
@@ -199,6 +205,7 @@ describe('MisDatosView: acceso a mis datos', () => {
   it('con autorización muestra las alergias y al retirarla se ocultan de inmediato', async () => {
     const llamadas = servidor({
       [`GET ${RUTA_SENSIBLES}`]: () => respuestaEstadoSensibles(true),
+      [`GET ${RUTA_MIS_DATOS}`]: () => respuestaMisDatos(perfilMisDatos(ALERGIAS_AUTORIZADAS)),
       [`POST ${RUTA_RETIRAR_SENSIBLES}`]: () => respuestaRetirada(),
     });
     await pintar();
@@ -221,6 +228,7 @@ describe('MisDatosView: acceso a mis datos', () => {
     let autorizada = false;
     const llamadas = servidor({
       [`GET ${RUTA_SENSIBLES}`]: () => respuestaEstadoSensibles(autorizada),
+      [`GET ${RUTA_MIS_DATOS}`]: () => respuestaMisDatos(perfilMisDatos(autorizada ? ALERGIAS_AUTORIZADAS : {})),
       [`POST ${RUTA_SENSIBLES}`]: () => {
         autorizada = true;
         return respuestaAutorizada();
@@ -236,17 +244,18 @@ describe('MisDatosView: acceso a mis datos', () => {
     expect(await interruptor('privacidad.app.salud.titulo')).toBeChecked();
   });
 
-  it('si no se puede leer la autorización, las alergias no se muestran', async () => {
+  it('sin alergias guardadas no hay campo de alergias ni aviso', async () => {
     servidor({
       [`GET ${RUTA_SENSIBLES}`]: () => sinRed(),
       [`GET ${RUTA_MIS_DATOS}`]: () =>
-        respuestaMisDatos({ ...perfilMisDatos(), tratamientosQuimicos: false, tipoCabello: null, telefono: null }),
+        respuestaMisDatos(perfilMisDatos({ ...SIN_ALERGIAS, tratamientosQuimicos: false, tipoCabello: null, telefono: null })),
     });
     await pintar();
     await fireEvent.press(fila('privacidad.app.acceso.titulo'));
     expect(await screen.findByText('Clienta Ficticia')).toBeOnTheScreen();
-    expect(screen.queryByText(ALERGIA_FICTICIA)).not.toBeOnTheScreen();
-    expect(screen.getByText(t('privacidad.app.alergias.ocultas'))).toBeOnTheScreen();
+    expect(screen.queryByText(t('privacidad.app.campo.alergias'))).not.toBeOnTheScreen();
+    expect(screen.queryByText(t('privacidad.app.alergias.ocultas'))).not.toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: t('privacidad.app.alergias.autorizar') })).not.toBeOnTheScreen();
     expect(screen.getByLabelText(`${t('privacidad.app.campo.tratamientos')}: ${t('privacidad.app.valor.no')}`)).toBeOnTheScreen();
     expect(screen.getAllByText(t('privacidad.app.valor.sinDato')).length).toBeGreaterThanOrEqual(2);
   });
@@ -454,15 +463,32 @@ describe('MisDatosView: hoja de solicitud ARCO', () => {
     expect(llamadasA(llamadas, 'POST', RUTA_SOLICITUDES)[0].cuerpo).toEqual({ tipo: 'revocacion', descripcion: 'a'.repeat(2000) });
   });
 
-  it('409 CANCELACION_ABIERTA: su texto en la hoja, que sigue abierta', async () => {
-    servidor({ [`POST ${RUTA_SOLICITUDES}`]: () => cancelacionAbierta409() });
+  it('409 CANCELACION_ABIERTA: su texto, el folio de errors.folio en su propia línea y la lista se recarga', async () => {
+    const llamadas = servidor({ [`POST ${RUTA_SOLICITUDES}`]: () => cancelacionAbierta409() });
+    await pintar();
+    await waitFor(() => expect(llamadasA(llamadas, 'GET', RUTA_MIAS)).toHaveLength(1));
+    await abrirHoja();
+    await fireEvent.press(opcion('cancelacion'));
+    await fireEvent.press(enviar());
+    expect(await screen.findByText(t('errores.cancelacionAbierta'))).toBeOnTheScreen();
+    expect(screen.getByText(t('privacidad.arco.folioAbierta', { folio: FOLIO_ABIERTA }))).toBeOnTheScreen();
+    // El message del servidor (con el folio dentro) nunca se muestra tal cual.
+    expect(screen.queryByText(/con folio ARCO/)).not.toBeOnTheScreen();
+    expect(screen.getByText(t('privacidad.app.hoja.texto'))).toBeOnTheScreen();
+    await waitFor(() => expect(llamadasA(llamadas, 'GET', RUTA_MIAS)).toHaveLength(2));
+    // Al elegir otro tipo el folio se va con el error.
+    await fireEvent.press(opcion('acceso'));
+    expect(screen.queryByText(t('privacidad.arco.folioAbierta', { folio: FOLIO_ABIERTA }))).not.toBeOnTheScreen();
+  });
+
+  it('409 CANCELACION_ABIERTA sin errors.folio (backend anterior): solo su texto', async () => {
+    servidor({ [`POST ${RUTA_SOLICITUDES}`]: () => cancelacionAbierta409(null) });
     await pintar();
     await abrirHoja();
     await fireEvent.press(opcion('cancelacion'));
     await fireEvent.press(enviar());
     expect(await screen.findByText(t('errores.cancelacionAbierta'))).toBeOnTheScreen();
     expect(screen.queryByText(/ARCO-2026-000040/)).not.toBeOnTheScreen();
-    expect(screen.getByText(t('privacidad.app.hoja.texto'))).toBeOnTheScreen();
   });
 
   it('429 con retryAfter: el message del backend y Enviar en espera', async () => {
@@ -501,19 +527,26 @@ describe('MisDatosView: hoja de solicitud ARCO', () => {
 });
 
 describe('MisDatosView: mis permisos', () => {
-  it('cada interruptor con su estado real; las fotos solo si están autorizadas', async () => {
+  it('cada interruptor con su estado real; las fotos autorizadas, encendidas', async () => {
     servidor();
     await pintar();
     expect(await interruptor('privacidad.app.salud.titulo')).not.toBeChecked();
     expect(await interruptor('privacidad.app.promociones.titulo')).toBeChecked();
     expect(await interruptor('privacidad.app.fotos.titulo')).toBeChecked();
+    expect(await interruptor('privacidad.app.fotos.titulo')).toHaveProp('accessibilityHint', t('privacidad.app.fotos.encendido'));
   });
 
-  it.each([
-    ['revocadas', FOTOS_REVOCADAS],
-    ['sin registro', []],
-  ])('fotos %s: no hay interruptor de fotos', async (_caso, filas) => {
-    servidor({ [`GET ${RUTA_MIOS}`]: () => respuestaMios(filas), [`GET ${RUTA_ME}`]: () => respuestaMe(false) });
+  it('fotos retiradas: el interruptor sigue, apagado, con su texto', async () => {
+    servidor({ [`GET ${RUTA_MIOS}`]: () => respuestaMios(FOTOS_REVOCADAS) });
+    await pintar();
+    const fotos = await interruptor('privacidad.app.fotos.titulo');
+    expect(fotos).not.toBeChecked();
+    expect(fotos).toBeEnabled();
+    expect(fotos).toHaveProp('accessibilityHint', t('privacidad.app.fotos.apagado'));
+  });
+
+  it('fotos sin registro: no hay interruptor de fotos', async () => {
+    servidor({ [`GET ${RUTA_MIOS}`]: () => respuestaMios([]), [`GET ${RUTA_ME}`]: () => respuestaMe(false) });
     await pintar();
     expect(await interruptor('privacidad.app.promociones.titulo')).not.toBeChecked();
     expect(screen.queryByRole('switch', { name: t('privacidad.app.fotos.titulo') })).not.toBeOnTheScreen();
@@ -548,12 +581,59 @@ describe('MisDatosView: mis permisos', () => {
       formulario: 'perfil_privacidad',
       rutaOrigen: '/mis-datos',
     });
-    if (tipo === 'promociones') {
-      expect(await interruptor(titulo)).not.toBeChecked();
-    } else {
-      // Volver a autorizar las fotos no existe en la app: el interruptor deja de mostrarse.
-      expect(screen.queryByRole('switch', { name: t(titulo) })).not.toBeOnTheScreen();
-    }
+    // Apagado: las fotos se pueden volver a autorizar desde aquí, así que su interruptor se queda.
+    expect(await interruptor(titulo)).not.toBeChecked();
+  });
+
+  it('volver a autorizar las fotos: confirma en una hoja, manda el cuerpo exacto y cambia al confirmar el backend', async () => {
+    const espera = diferida();
+    const llamadas = servidor({
+      [`GET ${RUTA_MIOS}`]: () => respuestaMios(FOTOS_REVOCADAS),
+      [`POST ${RUTA_CONSENTIMIENTOS}`]: () => espera.promesa,
+    });
+    await pintar();
+    await fireEvent.press(await interruptor('privacidad.app.fotos.titulo'));
+    expect(await screen.findByText(t('privacidad.app.fotos.autorizarTitulo'))).toBeOnTheScreen();
+    expect(screen.getByText(t('privacidad.app.fotos.autorizarTexto'))).toBeOnTheScreen();
+    await fireEvent.press(ultimoBoton(t('privacidad.app.cancelar')));
+    expect(llamadasA(llamadas, 'POST', RUTA_CONSENTIMIENTOS)).toHaveLength(0);
+    expect(await interruptor('privacidad.app.fotos.titulo')).not.toBeChecked();
+
+    await fireEvent.press(await interruptor('privacidad.app.fotos.titulo'));
+    await fireEvent.press(ultimoBoton(t('privacidad.app.fotos.autorizar')));
+    // Autorizando: hasta que el backend confirma, sigue apagado y deshabilitado.
+    await waitFor(() => expect(llamadasA(llamadas, 'POST', RUTA_CONSENTIMIENTOS)).toHaveLength(1));
+    expect(await interruptor('privacidad.app.fotos.titulo')).not.toBeChecked();
+    expect(await interruptor('privacidad.app.fotos.titulo')).toBeDisabled();
+    expect(llamadasA(llamadas, 'POST', RUTA_CONSENTIMIENTOS)[0].cuerpo).toEqual({
+      items: [{ tipo: 'fotos_resultado', accion: 'aceptado' }],
+      formulario: 'perfil_privacidad',
+      rutaOrigen: '/mis-datos',
+    });
+
+    await act(async () => {
+      espera.soltar(respuesta({ success: true, data: [{ id: '79', tipo: 'fotos_resultado', accion: 'aceptado' }] }, 201));
+    });
+    expect(await screen.findByText(t('privacidad.app.fotos.autorizada'))).toBeOnTheScreen();
+    const fotos = await interruptor('privacidad.app.fotos.titulo');
+    expect(fotos).toBeChecked();
+    expect(fotos).toBeEnabled();
+    expect(fotos).toHaveProp('accessibilityHint', t('privacidad.app.fotos.encendido'));
+  });
+
+  it.each<[string, () => Response | Promise<Response>, () => string, boolean]>([
+    ['429', () => limite429(20), () => MENSAJE_LIMITE, true],
+    ['sin red', () => sinRed(), () => MENSAJE_SIN_CONEXION, false],
+    ['5xx', () => error500('FEDCBA98'), () => `${t('privacidad.app.permisos.errorCambio')} ${t('errores.referencia', { referencia: 'FEDCBA98' })}`, false],
+  ])('volver a autorizar las fotos con %s: el aviso claro y el interruptor sigue apagado', async (_caso, falla, mensaje, enEspera) => {
+    servidor({ [`GET ${RUTA_MIOS}`]: () => respuestaMios(FOTOS_REVOCADAS), [`POST ${RUTA_CONSENTIMIENTOS}`]: falla });
+    await pintar();
+    await fireEvent.press(await interruptor('privacidad.app.fotos.titulo'));
+    await fireEvent.press(ultimoBoton(t('privacidad.app.fotos.autorizar')));
+    expect(await screen.findByText(mensaje())).toBeOnTheScreen();
+    const fotos = await interruptor('privacidad.app.fotos.titulo');
+    expect(fotos).not.toBeChecked();
+    expect(fotos.props.accessibilityState.disabled).toBe(enEspera);
   });
 
   it('encender promociones es un opt in con PATCH /api/auth/me y cambia solo al confirmar', async () => {

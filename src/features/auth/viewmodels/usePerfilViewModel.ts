@@ -102,6 +102,8 @@ export interface PerfilViewModel {
   filaMiCuenta: { titulo: string; descripcion: string };
   /** Fila "Mis datos y privacidad" (GP-09): derechos ARCO, solicitudes y permisos, solo con sesión. */
   filaMisDatos: { titulo: string; descripcion: string };
+  /** Fila "Preferencias de avisos" (Ronda 9): qué avisos llegan en la app y por correo, solo con sesión. */
+  filaPreferenciasAvisos: { titulo: string; descripcion: string };
   // Navegación
   editarPerfil: () => void;
   abrirMisCitas: () => void;
@@ -110,6 +112,7 @@ export interface PerfilViewModel {
   cambiarContrasena: () => void;
   abrirMiCuenta: () => void;
   abrirMisDatos: () => void;
+  abrirPreferenciasAvisos: () => void;
   abrirAviso: () => void;
   cerrarSesion: () => void;
 }
@@ -471,6 +474,10 @@ export function usePerfilViewModel(): PerfilViewModel {
     filaSalon: { titulo: texto('salon.titulo'), descripcion: texto('salon.perfil.descripcion') },
     filaMiCuenta: { titulo: texto('cuenta.app.fila'), descripcion: texto('cuenta.app.filaDescripcion') },
     filaMisDatos: { titulo: texto('privacidad.app.fila'), descripcion: texto('privacidad.app.filaDescripcion') },
+    filaPreferenciasAvisos: {
+      titulo: texto('preferenciasAvisos.titulo'),
+      descripcion: texto('preferenciasAvisos.descripcion'),
+    },
     editarPerfil: () => push('/editar-perfil'),
     abrirMisCitas: () => push('/mis-citas' as Href),
     abrirMisPedidos: () => push('/mis-pedidos' as Href),
@@ -478,6 +485,7 @@ export function usePerfilViewModel(): PerfilViewModel {
     cambiarContrasena: () => push('/cambiar-contrasena'),
     abrirMiCuenta: () => push('/mi-cuenta' as Href),
     abrirMisDatos: () => push('/mis-datos' as Href),
+    abrirPreferenciasAvisos: () => push('/preferencias-avisos' as Href),
     abrirAviso,
     // Mientras una foto se sube o se quita, no se cierra la sesión; si no, se confirma antes.
     cerrarSesion: () => {
