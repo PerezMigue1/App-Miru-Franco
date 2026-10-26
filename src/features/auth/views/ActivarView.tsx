@@ -37,9 +37,10 @@ export default function ActivarView() {
         <Text style={[styles.nota, { color: colores.textoSuave }]}>{activar.textos.vigencia}</Text>
         <Aviso tipo="exito" texto={activar.mensaje} />
         <Button
-          titulo={activar.cargando ? activar.textos.verificando : activar.textos.verificar}
+          titulo={activar.textoVerificar}
           onPress={activar.verificar}
           cargando={activar.cargando}
+          deshabilitado={activar.verificacionEnLimite}
         />
         {activar.espera > 0 ? (
           <Text
@@ -50,9 +51,10 @@ export default function ActivarView() {
           </Text>
         ) : (
           <Enlace
-            texto={activar.reenviando ? activar.textos.reenviando : activar.textos.reenviar}
+            texto={activar.textoReenviar}
             onPress={activar.reenviar}
             alinear="centro"
+            deshabilitado={activar.reenvioEnLimite}
           />
         )}
         <Enlace texto={activar.textos.volver} onPress={activar.volver} alinear="centro" />

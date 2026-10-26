@@ -571,7 +571,11 @@ describe.each<[string, string, () => Promise<unknown>]>([
     ['500', ERRORES.interno],
     ['503', ERRORES_PAGO_PEDIDO.noDisponible],
   ])('un %s llega como ApiError con su status y mensaje', async (_caso, cuerpo) => {
-    const error = await errorAl(ruta, conError(cuerpo), llamar);
+    simularServidor({ [ruta]: conError(cuerpo) });
+    const promesa = errorDe(llamar());
+    // Una lectura con 503 se repite una sola vez tras su espera (GP-09): se adelanta el reloj falso.
+    await jest.advanceTimersByTimeAsync(10_000);
+    const error = await promesa;
     expect(error).toBeInstanceOf(ApiError);
     expect(error).toEqual(apiErrorDe(cuerpo));
     expect(error).toMatchObject({ status: cuerpo.statusCode });

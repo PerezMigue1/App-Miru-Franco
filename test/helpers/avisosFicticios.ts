@@ -81,6 +81,30 @@ export const AVISO_PEDIDO = avisoCrudo({
   urlAccion: '/cliente/tienda-online/mis-pedidos/7',
 });
 
+/** Id ficticio del aviso de comprobante y del comprobante (no es el id de la compra). */
+export const ID_AVISO_COMPROBANTE = '00000000-0000-4000-8000-000000000005';
+export const ID_COMPROBANTE = 3;
+
+/**
+ * Aviso "Te enviamos tu comprobante" (GP-09) como lo arma onComprobanteEnviado del backend: tipo y
+ * entidadTipo 'comprobante', entidadId el id del comprobante y urlAccion la página del comprobante
+ * con el tipo de compra y su id. Por omisión, del pedido 7.
+ */
+export function avisoComprobante(tipo: 'pedido' | 'cita' | 'venta' = 'pedido', compraId = 7, parcial: Record<string, unknown> = {}) {
+  return avisoCrudo({
+    id: ID_AVISO_COMPROBANTE,
+    tipo: 'comprobante',
+    titulo: 'Te enviamos tu comprobante',
+    mensaje: 'Enviamos a tu correo el comprobante P-000010 por $450.00.',
+    creadoEn: '2026-10-19T16:30:00.000Z',
+    metadata: { folio: 'P-000010', envio: 1 },
+    entidadTipo: 'comprobante',
+    entidadId: String(ID_COMPROBANTE),
+    urlAccion: `/cliente/comprobante?tipo=${tipo}&id=${compraId}`,
+    ...parcial,
+  });
+}
+
 /** Aviso general sin ruta ni entidad: no abre nada. */
 export const AVISO_SIN_DESTINO = avisoCrudo({ tipo: 'general', titulo: 'Horario de fin de año' });
 

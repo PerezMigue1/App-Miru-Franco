@@ -1,7 +1,7 @@
 import {
+  ApiError,
   crearErrorApi,
   renovarTrasRechazo,
-  type ApiError,
   type ErrorDeRed,
   type ResultadoRenovacion,
 } from '@/shared/api/apiClient';
@@ -22,6 +22,12 @@ import { crearLectorSse, type EventoSse } from './lectorSse';
  * - Corte del flujo o error de red: reconecta con espera creciente (1 s, 2 s, 4 s... tope 30 s),
  *   máximo MAX_REINTENTOS seguidos. Desde FALLOS_PARA_RESPALDO fallos seguidos consulta la lista
  *   cada INTERVALO_RESPALDO_MS hasta que el flujo vuelve a abrir.
+ * - 429 (más de 5 conexiones por usuaria o 20 por IP) o 503 al abrir: el siguiente intento espera
+ *   lo que sea mayor entre la espera creciente y el Retry-After de la respuesta (GP-09).
+ * - Evento 'cierre' (el servidor cierra tras 30 minutos sin avisos, GP-09): la conexión queda en
+ *   pausa, sin reintentos ni consulta de respaldo, hasta que la clienta vuelve a usar la app
+ *   (reanudar(), que llama la raíz con un toque o un cambio de pantalla, o iniciar() de nuevo al
+ *   volver a primer plano). Al reabrir, una consulta pone al día la lista.
  * - 401 al abrir: una sola renovación (renovarTrasRechazo, vuelo único de apiClient) y se reabre
  *   con el token nuevo. Si la sesión fue rechazada, o el token nuevo también recibe 401, se corta
  *   del todo: apiClient ya avisó de la sesión vencida.
@@ -35,10 +41,23 @@ export const ESPERA_MAX_MS = 30_000;
 export const MAX_REINTENTOS = 8;
 export const FALLOS_PARA_RESPALDO = 3;
 export const INTERVALO_RESPALDO_MS = 30_000;
+/** Evento con que el servidor avisa que cierra el flujo por inactividad. */
+export const EVENTO_CIERRE = 'cierre';
+/** Lo más que acepta setTimeout (unos 24.8 días); un valor mayor se dispararía al instante. */
+const ESPERA_MAXIMA_TEMPORIZADOR_MS = 2_147_483_647;
 
 /** Espera antes del reintento número `fallos` (1, 2, 3...): 1 s, 2 s, 4 s... hasta 30 s. */
 export function esperaReconexion(fallos: number): number {
   return Math.min(ESPERA_BASE_MS * 2 ** (Math.max(fallos, 1) - 1), ESPERA_MAX_MS);
+}
+
+/**
+ * Espera antes del siguiente intento tras un fallo: la creciente o, si el servidor pidió esperar
+ * más (retryAfter en segundos de un 429 o un 503), esa.
+ */
+export function esperaTrasFallo(fallos: number, retryAfter?: number): number {
+  const pedida = retryAfter === undefined ? 0 : retryAfter * 1000;
+  return Math.min(Math.max(esperaReconexion(fallos), pedida), ESPERA_MAXIMA_TEMPORIZADOR_MS);
 }
 
 /** Lo que la conexión lee de la respuesta de expo/fetch; también lo cumple una respuesta simulada. */
@@ -85,8 +104,16 @@ export interface ConexionAvisos {
   iniciar(): void;
   /** Aborta el flujo y cancela reintentos y consultas de respaldo. */
   detener(): void;
-  /** true entre iniciar() y detener() (o un corte definitivo). */
+  /** true entre iniciar() y detener() (o un corte definitivo), también en pausa. */
   activa(): boolean;
+  /** El servidor cerró el flujo por inactividad ('cierre'): no hay flujo ni reintentos ni respaldo. */
+  enPausa(): boolean;
+  /**
+   * La clienta volvió a usar la app: si está en pausa, reabre el flujo (una sola vez aunque se
+   * llame muchas veces seguidas) y devuelve true. Si no está en pausa (sana, reintentando o
+   * detenida) no hace nada y devuelve false.
+   */
+  reanudar(): boolean;
   /** Clasificación del último fallo (solo diagnóstico, nunca se muestra); null si no hubo. */
   ultimoError(): ApiError | ErrorDeRed | null;
 }
@@ -132,6 +159,9 @@ export function crearConexionAvisos(deps: DepsConexionAvisos): ConexionAvisos {
   let reintento: unknown = null;
   let respaldo: unknown = null;
   let fallos = 0;
+  let pausada = false;
+  /** Tras una pausa, al abrir se consulta la lista: lo que llegó sin flujo no se repite. */
+  let ponerAlDia = false;
   let error: ApiError | ErrorDeRed | null = null;
 
   const vigente = (gen: number) => encendida && gen === generacion;
@@ -150,8 +180,8 @@ export function crearConexionAvisos(deps: DepsConexionAvisos): ConexionAvisos {
     }
   }
 
-  function apagar(): void {
-    encendida = false;
+  /** Descarta lo de la generación actual: reintento, respaldo y flujo (o la petición en camino). */
+  function cortar(): void {
     generacion += 1;
     if (reintento !== null) {
       t.clearTimeout(reintento);
@@ -160,6 +190,19 @@ export function crearConexionAvisos(deps: DepsConexionAvisos): ConexionAvisos {
     detenerRespaldo();
     controlador?.abort();
     controlador = null;
+  }
+
+  function apagar(): void {
+    encendida = false;
+    pausada = false;
+    cortar();
+  }
+
+  /** 'cierre' del servidor: sin flujo, sin reintentos y sin respaldo hasta reanudar(). */
+  function pausar(): void {
+    pausada = true;
+    fallos = 0;
+    cortar();
   }
 
   function fallar(gen: number, causa: ApiError | ErrorDeRed): void {
@@ -177,11 +220,15 @@ export function crearConexionAvisos(deps: DepsConexionAvisos): ConexionAvisos {
       if (vigente(gen)) {
         void conectar(gen, false);
       }
-    }, esperaReconexion(fallos));
+    }, esperaTrasFallo(fallos, causa instanceof ApiError ? causa.retryAfter : undefined));
   }
 
   function alEvento(gen: number, evento: EventoSse): void {
     if (!vigente(gen)) {
+      return;
+    }
+    if (evento.evento === EVENTO_CIERRE) {
+      pausar();
       return;
     }
     const aviso = avisoDeEvento(evento);
@@ -270,13 +317,16 @@ export function crearConexionAvisos(deps: DepsConexionAvisos): ConexionAvisos {
       return;
     }
     if (!esFlujoSse(respuesta)) {
-      fallar(gen, crearErrorApi({ tipo: 'respuesta', status: respuesta.status, cuerpo: null }));
+      // Un 429 o un 503 traen en Retry-After cuánto esperar (crearErrorApi lo lee con leerRetryAfter).
+      const retryAfter = respuesta.headers.get('retry-after');
+      fallar(gen, crearErrorApi({ tipo: 'respuesta', status: respuesta.status, cuerpo: null, retryAfter }));
       return;
     }
-    const huboFallos = fallos > 0;
+    const huboHueco = fallos > 0 || ponerAlDia;
     fallos = 0;
+    ponerAlDia = false;
     detenerRespaldo();
-    if (huboFallos) {
+    if (huboHueco) {
       // Lo que llegó mientras no había flujo no se repite: una consulta pone al día la lista.
       consultarSinFallar();
     }
@@ -286,14 +336,29 @@ export function crearConexionAvisos(deps: DepsConexionAvisos): ConexionAvisos {
     }
   }
 
+  function reanudar(): boolean {
+    if (!encendida || !pausada) {
+      return false;
+    }
+    pausada = false;
+    ponerAlDia = true;
+    fallos = 0;
+    // pausar() ya cambió la generación: nada del flujo anterior escribe en esta.
+    void conectar(generacion, false);
+    return true;
+  }
+
   return {
     iniciar() {
       if (encendida) {
+        // En pausa, iniciar otra vez (por ejemplo, al volver a primer plano) también la reanuda.
+        reanudar();
         return;
       }
       apagar();
       encendida = true;
       fallos = 0;
+      ponerAlDia = false;
       void conectar(generacion, false);
     },
     detener() {
@@ -302,6 +367,10 @@ export function crearConexionAvisos(deps: DepsConexionAvisos): ConexionAvisos {
     activa() {
       return encendida;
     },
+    enPausa() {
+      return pausada;
+    },
+    reanudar,
     ultimoError() {
       return error;
     },

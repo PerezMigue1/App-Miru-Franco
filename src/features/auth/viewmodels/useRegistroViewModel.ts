@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 
 import { mensajeParaClienta } from '@/shared/api/mensajesError';
 import { obtenerTexto } from '@/shared/api/textosSitio';
+import { useEsperaLimite } from '@/shared/api/useEsperaLimite';
+import { useTextos } from '@/shared/api/useTextos';
 import { soloDigitos, telefonoSinLada } from '@/shared/ui/digitos';
 import { duracion, reintentosCorreo } from '@/shared/ui/tokens';
 import { useCandado } from '@/shared/ui/useCandado';
@@ -130,6 +132,10 @@ export interface RegistroViewModel {
   abrirTerminos: () => void;
   /** Paso 2: "Finalizar registro". */
   crearCuenta: () => void;
+  /** Tras un 429 del registro: "Finalizar registro" queda deshabilitado hasta que pase la espera. */
+  enEspera: boolean;
+  /** Texto de "Finalizar registro": "Registrando…" o, tras un 429, "Intenta de nuevo en N s". */
+  textoFinalizar: string;
   /**
    * Registro desde cero (al regresar de la activación): paso 1, campos vacíos, datos de salud y
    * consentimiento borrados, y la verificación del correo cancelada.
@@ -336,7 +342,8 @@ type Temporizador = ReturnType<typeof setTimeout>;
  * Registro en dos pasos, como la web: "Tu cuenta" y "Tu cabello". Cada campo se valida al salir de
  * él y, desde su primer error, en cada cambio. El correo se verifica 600 ms después de dejar de
  * escribir y al salir del campo; sin respuesta o sin red se reintenta (5, 10 y 20 s) mientras no
- * cambie. Con éxito, se pasa a la activación por código.
+ * cambie. Con éxito, se pasa a la activación por código. Un 429 del registro (5 por minuto) muestra
+ * el message del servidor y deja "Finalizar registro" en espera (useEsperaLimite).
  */
 export function useRegistroViewModel(): RegistroViewModel {
   const { push } = useRouter();
@@ -362,6 +369,8 @@ export function useRegistroViewModel(): RegistroViewModel {
   const [estadoPreguntas, setEstadoPreguntas] = useState<EstadoPreguntas>('inactivo');
   const [errorPreguntas, setErrorPreguntas] = useState<string | null>(null);
   const [listaPreguntas, setListaPreguntas] = useState<PreguntaSeguridad[]>([]);
+  const limite = useEsperaLimite();
+  const texto = useTextos();
 
   // Verificación del correo por rondas: una ronda es un correo; cambia al escribir otro (o con el
   // 409) y descarta todo lo que siga en curso de la anterior. En refs: no provocan renders.
@@ -786,6 +795,7 @@ export function useRegistroViewModel(): RegistroViewModel {
           pedirEnfoque('correo');
         }
       } else {
+        limite.esperarSiLimite(error);
         setErrorGeneral(mensajeDeRegistro(error));
       }
     } finally {
@@ -828,7 +838,7 @@ export function useRegistroViewModel(): RegistroViewModel {
 
   const candado = useCandado();
   const crearCuenta = () => {
-    if (cargando) {
+    if (cargando || limite.activa) {
       return;
     }
     // Candado inmediato además de cargando: enviar() ya muestra cualquier error en pantalla.
@@ -857,6 +867,8 @@ export function useRegistroViewModel(): RegistroViewModel {
     abrirAviso,
     abrirTerminos,
     crearCuenta,
+    enEspera: limite.activa,
+    textoFinalizar: limite.texto ?? texto(cargando ? 'auth.registro.registrando' : 'auth.registro.finalizar'),
     reiniciar,
   };
 }

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { BackHandler } from 'react-native';
 
 import { mensajeParaClienta, tipoDeError } from '@/shared/api/mensajesError';
+import { useEsperaLimite } from '@/shared/api/useEsperaLimite';
 import { useTextos, type FuncionTexto } from '@/shared/api/useTextos';
 import { useCandado } from '@/shared/ui/useCandado';
 
@@ -22,6 +23,7 @@ import {
 } from '../models/pedidoModel';
 import { formatoPrecio } from '../models/productoModel';
 import { abrirPagoEnNavegador } from './pagoPedido';
+import { releerCarrito } from './usePiezasCarrito';
 import {
   estadoPagoConocido,
   mantenerVerificacion,
@@ -73,9 +75,15 @@ export interface TextosConfirmacion {
   noEncontradoTitulo: string;
   noEncontradoTexto: string;
   botonReintentarCarga: string;
-  /** El botón primario de pago: 'Pagar con Mercado Pago' o 'Reintentar pago'. */
+  /**
+   * El botón primario de pago: 'Pagar con Mercado Pago' o 'Reintentar pago'; tras un 429 al pedir el
+   * pago, 'Intenta de nuevo en N s' mientras dura la espera (también botonPagarDeNuevo).
+   */
   botonPagar: string;
   botonPagarDeNuevo: string;
+  /** Reemplaza a pagar tras un 409 de piezas agotadas: 'Volver al carrito'. */
+  botonVolverCarrito: string;
+  pistaVolverCarrito: string;
   botonRevisarMiPago: string;
   botonRevisarDeNuevo: string;
   botonMisPedidos: string;
@@ -99,10 +107,21 @@ export interface PedidoConfirmadoViewModel {
   consultando: boolean;
   /** Se pide la preferencia o el navegador está abierto. */
   abriendo: boolean;
+  /**
+   * El servidor pidió esperar antes de volver a pedir el pago (429, GP-09): los botones de pagar
+   * quedan deshabilitados con la cuenta en su texto hasta que termina.
+   */
+  pagoEnEspera: boolean;
   /** 'sábado 18 de octubre, 6:30 p. m.' mientras se puede pagar en línea; si no, null. */
   limite: string | null;
   /** Se puede ofrecer el botón para pagar en línea. */
   puedePagar: boolean;
+  /**
+   * Pedir el pago respondió 409 de piezas agotadas (GP-09): cada intento daría el mismo 409, así que
+   * donde iba "Pagar" va "Volver al carrito" (y puedePagar es false). Dura mientras la pantalla está
+   * montada: al volver a entrar al pedido se ofrece pagar otra vez, porque el stock pudo cambiar.
+   */
+  volverAlCarrito: boolean;
   /**
    * Volvió de Mercado Pago y la verificación terminó sin ver el pago: puede tardar en reflejarse,
    * así que lo primero es revisar de nuevo y pagar otra vez queda en segundo plano (evita doble cobro).
@@ -118,6 +137,8 @@ export interface PedidoConfirmadoViewModel {
   revisarDeNuevo: () => void;
   verMisPedidos: () => void;
   seguirComprando: () => void;
+  /** Abre la pestaña Carrito, que ya muestra las piezas actuales. */
+  irAlCarrito: () => void;
 }
 
 /** Estados del pedido que ya implican el pago en línea aprobado. */
@@ -209,7 +230,7 @@ function textosEstado(texto: FuncionTexto, entrada: EntradaTextos): { titulo: st
   }
 }
 
-function armarTextos(texto: FuncionTexto, entrada: EntradaTextos): TextosConfirmacion {
+function armarTextos(texto: FuncionTexto, entrada: EntradaTextos, textoEspera: string | null): TextosConfirmacion {
   const { pedido, limite, vista } = entrada;
   const apartadoPendiente = pedido !== null && esPagoEnSalon(pedido) && pedido.estado === 'pendiente_pago';
   return {
@@ -228,8 +249,10 @@ function armarTextos(texto: FuncionTexto, entrada: EntradaTextos): TextosConfirm
     noEncontradoTitulo: texto('tienda.pago.noEncontradoTitulo'),
     noEncontradoTexto: texto('tienda.pago.noEncontradoTexto'),
     botonReintentarCarga: texto('tienda.pago.botonReintentarCarga'),
-    botonPagar: texto(vista === 'porPagar' ? 'tienda.pago.botonPagar' : 'tienda.pago.botonReintentar'),
-    botonPagarDeNuevo: texto('tienda.pago.botonPagarDeNuevo'),
+    botonPagar: textoEspera ?? texto(vista === 'porPagar' ? 'tienda.pago.botonPagar' : 'tienda.pago.botonReintentar'),
+    botonPagarDeNuevo: textoEspera ?? texto('tienda.pago.botonPagarDeNuevo'),
+    botonVolverCarrito: texto('tienda.pago.botonVolverCarrito'),
+    pistaVolverCarrito: texto('tienda.pago.pistaVolverCarrito'),
     botonRevisarMiPago: texto('tienda.pago.botonRevisarMiPago'),
     botonRevisarDeNuevo: texto('tienda.pago.botonRevisarDeNuevo'),
     botonMisPedidos: texto('tienda.pago.botonMisPedidos'),
@@ -287,7 +310,13 @@ function idDeRuta(idLimpio: string): number | null {
  *
  * Nunca abre un segundo pago: antes de pedir otra preferencia revisa el estado y, si está
  * pendiente, en revisión o aprobado, no abre Mercado Pago; mientras el navegador está abierto o
- * una verificación va en curso, pagar no hace nada.
+ * una verificación va en curso, pagar no hace nada. Un reintento solo vuelve a pedir la preferencia
+ * del mismo pedido: nunca crea otro (eso solo pasa en el checkout).
+ *
+ * GP-09: si pedir el pago responde 409 de piezas agotadas, se muestra el texto del backend y se relee
+ * el carrito y "Pagar" se cambia por "Volver al carrito" mientras la clienta siga en la pantalla; con
+ * un 429 se muestra su texto y pagar queda en espera (useEsperaLimite) hasta que pase el tiempo que
+ * pidió el servidor.
  */
 export function usePedidoConfirmadoViewModel(
   pedidoId: string | undefined,
@@ -298,6 +327,7 @@ export function usePedidoConfirmadoViewModel(
   const router = useRouter();
   const candado = useCandado();
   const texto = useTextos();
+  const { activa: pagoEnEspera, texto: textoEspera, esperarSiLimite } = useEsperaLimite();
 
   const [estado, setEstado] = useState<EstadoCargaPedido>('cargando');
   const [errorCarga, setErrorCarga] = useState<unknown>(null);
@@ -316,6 +346,8 @@ export function usePedidoConfirmadoViewModel(
   const [errorPago, setErrorPago] = useState<string | null>(null);
   // El plazo terminó: ya no se ofrece pagar.
   const [pagoCerrado, setPagoCerrado] = useState(false);
+  // 409 de piezas agotadas al pedir el pago: solo vive con esta pantalla (no se guarda en ningún lado).
+  const [sinPiezas, setSinPiezas] = useState(false);
 
   const idLimpio = pedidoId?.trim() ?? '';
   const idRuta = idDeRuta(idLimpio);
@@ -436,11 +468,19 @@ export function usePedidoConfirmadoViewModel(
         if (motivo === 'vencido') {
           setPagoCerrado(true);
         }
+        if (motivo === 'sinPiezas') {
+          // El carrito de la clienta pudo cambiar con las existencias: se vuelve a leer (nunca lanza).
+          // Pagar de nuevo daría el mismo 409: la acción pasa a volver al carrito.
+          setSinPiezas(true);
+          void releerCarrito();
+        }
+        // Un 429 deja pagar en espera los segundos que pidió el servidor.
+        esperarSiLimite(error);
         setErrorPago(mensajePreferenciaPedido(error, pedidoVisto.current ?? {}));
         return null;
       }
     },
-    [recargar],
+    [recargar, esperarSiLimite],
   );
 
   const pagarPedido = useCallback(
@@ -521,6 +561,11 @@ export function usePedidoConfirmadoViewModel(
     router.dismissTo('/tienda');
   }, [router]);
 
+  const irAlCarrito = useCallback(() => {
+    // Saca de la pila la compra (o el detalle) y deja a la vista la pestaña Carrito.
+    router.dismissTo('/carrito');
+  }, [router]);
+
   // Atrás de Android no vuelve al checkout: regresa a la tienda sacando de la pila la compra.
   // Si se abrió desde el detalle del pedido, regresa a ese detalle.
   useFocusEffect(
@@ -538,12 +583,12 @@ export function usePedidoConfirmadoViewModel(
   );
 
   const pagar = useCallback(() => {
-    if (!pedido) {
+    if (!pedido || pagoEnEspera || sinPiezas) {
       return;
     }
     const id = pedido.id;
     candado(() => pagarPedido(id));
-  }, [pedido, candado, pagarPedido]);
+  }, [pedido, pagoEnEspera, sinPiezas, candado, pagarPedido]);
 
   const revisarDeNuevo = useCallback(() => {
     if (!pedido || abriendo) {
@@ -577,8 +622,10 @@ export function usePedidoConfirmadoViewModel(
   const fallo = conocido?.error ?? null;
   const errorConsulta = fallo === null ? null : (mensajeComunTienda(fallo) ?? texto('tienda.pago.noSePudoRevisar'));
   const sePuedePagar = pedido !== null && pidePagoEnLinea(pedido) && !pagoCerrado;
-  const puedePagar =
+  const ofrecePagar =
     sePuedePagar && !consultaVisible && errorConsulta === null && (vista === 'porPagar' || vista === 'noCompletado');
+  const volverAlCarrito = ofrecePagar && sinPiezas;
+  const puedePagar = ofrecePagar && !sinPiezas;
   const pagoPorConfirmar = vista === 'noCompletado' && estadoPago === 'sin_pago' && trasRegreso && !consultaVisible;
   const pagoEnProceso = vista === 'pendiente' || vista === 'revision';
   // Con el pago en proceso no se pide pagar antes de un plazo: ya pagó o está pagando.
@@ -591,13 +638,15 @@ export function usePedidoConfirmadoViewModel(
     estado,
     pedido,
     vista,
-    textos: armarTextos(texto, { vista, pedido, rechazado, pagoPorConfirmar, limite }),
+    textos: armarTextos(texto, { vista, pedido, rechazado, pagoPorConfirmar, limite }, textoEspera),
     rechazado,
     pagoEnProceso,
     consultando: consultaVisible,
     abriendo,
+    pagoEnEspera,
     limite,
     puedePagar,
+    volverAlCarrito,
     pagoPorConfirmar,
     errorPago,
     errorConsulta,
@@ -606,5 +655,6 @@ export function usePedidoConfirmadoViewModel(
     revisarDeNuevo,
     verMisPedidos,
     seguirComprando,
+    irAlCarrito,
   };
 }

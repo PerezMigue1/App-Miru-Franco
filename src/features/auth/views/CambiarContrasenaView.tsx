@@ -132,9 +132,10 @@ export default function CambiarContrasenaView() {
                 />
                 <Aviso tipo="error" texto={vm.aviso} />
                 <Button
-                  titulo={tituloEnvio(vm.enviando, vm.codigoVigente)}
+                  titulo={vm.tituloEnvio}
                   onPress={vm.enviarCodigo}
                   cargando={vm.enviando}
+                  deshabilitado={vm.enEspera}
                 />
                 <Enlace
                   texto="¿Olvidaste tu contraseña?"
@@ -161,16 +162,16 @@ export default function CambiarContrasenaView() {
                   contraseña nueva.
                 </Text>
                 <Button
-                  titulo={vm.cambiando ? 'Cambiando…' : 'Cambiar contraseña'}
+                  titulo={vm.tituloCambiar}
                   onPress={vm.cambiarContrasena}
-                  deshabilitado={vm.reenviando}
+                  deshabilitado={vm.reenviando || vm.cambioEnEspera}
                   cargando={vm.cambiando}
                 />
                 <Button
-                  titulo={vm.reenviando ? 'Reenviando…' : 'Reenviar código'}
+                  titulo={vm.tituloReenviar}
                   variante="secundario"
                   onPress={vm.reenviar}
-                  deshabilitado={vm.espera > 0 || vm.cambiando}
+                  deshabilitado={vm.espera > 0 || vm.cambiando || vm.enEspera}
                   cargando={vm.reenviando}
                 />
                 {/* La espera va como texto legible (el botón deshabilitado se atenúa); no se anuncia
@@ -191,14 +192,6 @@ export default function CambiarContrasenaView() {
       ) : null}
     </KeyboardAvoidingView>
   );
-}
-
-/** "Continuar" si ya hay un código vigente para la contraseña actual; si no, se pide uno. */
-function tituloEnvio(enviando: boolean, codigoVigente: boolean): string {
-  if (enviando) {
-    return 'Enviando código…';
-  }
-  return codigoVigente ? 'Continuar' : 'Enviar código';
 }
 
 const styles = StyleSheet.create({

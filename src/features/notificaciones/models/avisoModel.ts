@@ -37,7 +37,10 @@ const SECCIONES_CLIENTE: ReadonlyMap<string, { lista: string; detalle?: string }
 /** Avisos del personal: '/operacion/...' y '/admin/...' (y esas rutas solas). */
 const RUTA_PERSONAL = /^\/(?:operacion|admin)(?:\/|$)/;
 
-/** entidadTipo con detalle en la app; 'venta_local', 'solicitud_arco' y los demás no abren nada. */
+/**
+ * entidadTipo con detalle en la app; 'venta_local', 'solicitud_arco', 'comprobante' y los demás no
+ * abren nada. También traduce el `tipo` de la página de comprobante ('venta' no tiene detalle).
+ */
 const DETALLE_POR_ENTIDAD: ReadonlyMap<string, string> = new Map([
   ['cita', '/cita'],
   ['pedido', '/pedido'],
@@ -63,6 +66,41 @@ function rutaWeb(urlAccion: unknown): string {
   return sinOrigen.split(/[?#]/)[0].replace(/\/+$/, '').toLowerCase();
 }
 
+/**
+ * Página de la web con el comprobante de una compra (aviso 'comprobante', GP-09): el backend manda
+ * '/cliente/comprobante?tipo=pedido|cita|venta&id=<id de la compra>'. Su entidadId es el id del
+ * comprobante, no el de la compra, así que el detalle solo sale de esta ruta.
+ */
+const RUTA_COMPROBANTE = '/cliente/comprobante';
+
+/** Valores de la query de una urlAccion (sin el hash), con las claves en minúsculas. */
+function parametrosDe(urlAccion: unknown): Map<string, string> {
+  const url = typeof urlAccion === 'string' ? urlAccion.trim() : '';
+  const inicio = url.indexOf('?');
+  const parametros = new Map<string, string>();
+  if (inicio === -1) {
+    return parametros;
+  }
+  for (const par of url.slice(inicio + 1).split('#')[0].split('&')) {
+    const igual = par.indexOf('=');
+    const clave = (igual === -1 ? par : par.slice(0, igual)).toLowerCase();
+    try {
+      parametros.set(clave, decodeURIComponent(igual === -1 ? '' : par.slice(igual + 1)));
+    } catch {
+      // Un valor mal codificado no sirve: se ignora.
+    }
+  }
+  return parametros;
+}
+
+/** Detalle del pedido o de la cita de la página de comprobante; null si es una venta o no sirve. */
+function destinoDeComprobante(urlAccion: unknown): string | null {
+  const parametros = parametrosDe(urlAccion);
+  const detalle = DETALLE_POR_ENTIDAD.get((parametros.get('tipo') ?? '').trim().toLowerCase());
+  const id = idPositivo(parametros.get('id'));
+  return detalle && id ? `${detalle}/${id}` : null;
+}
+
 /** Traduce la ruta de la web a la de la app; null si no es de la clienta o el id no sirve. */
 function destinoDeRuta(ruta: string): string | null {
   const seccion = SECCIONES_CLIENTE.get(ruta);
@@ -78,8 +116,8 @@ function destinoDeRuta(ruta: string): string | null {
 
 /**
  * Pantalla de la app que abre el aviso. Primero traduce urlAccion (rutas de la web de la clienta,
- * relativas o absolutas); si no se traduce, usa entidadTipo 'cita' o 'pedido' con un entidadId de
- * dígitos. null si nada aplica.
+ * relativas o absolutas, y la página de comprobante con su tipo e id); si no se traduce, usa
+ * entidadTipo 'cita' o 'pedido' con un entidadId de dígitos. null si nada aplica.
  */
 export function destinoDeAviso(datos: { urlAccion?: unknown; entidadTipo?: unknown; entidadId?: unknown }): string | null {
   const ruta = rutaWeb(datos.urlAccion);
@@ -88,7 +126,7 @@ export function destinoDeAviso(datos: { urlAccion?: unknown; entidadTipo?: unkno
   if (RUTA_PERSONAL.test(ruta)) {
     return null;
   }
-  const deRuta = destinoDeRuta(ruta);
+  const deRuta = ruta === RUTA_COMPROBANTE ? destinoDeComprobante(datos.urlAccion) : destinoDeRuta(ruta);
   if (deRuta) {
     return deRuta;
   }

@@ -4,11 +4,12 @@ import { BackHandler } from 'react-native';
 
 import { mensajeParaClienta } from '@/shared/api/mensajesError';
 import { obtenerTexto } from '@/shared/api/textosSitio';
+import { useEsperaLimite } from '@/shared/api/useEsperaLimite';
 import { useTextos } from '@/shared/api/useTextos';
 import { soloDigitos } from '@/shared/ui/digitos';
 import { useCandado } from '@/shared/ui/useCandado';
 
-import { esCodigoValido, esCuentaYaActivada, estadoHttp } from '../models/AuthModel';
+import { esCodigoValido, estadoHttp, mensajeDelReenvio } from '../models/AuthModel';
 import { reenviarCodigo, verificarCodigo } from '../models/authService';
 import type { RutaAcceso } from './useRetornoActivacion';
 
@@ -44,8 +45,16 @@ export interface ActivarViewModel {
   mensaje: string | null;
   cargando: boolean;
   reenviando: boolean;
-  /** Segundos que faltan para poder pedir otro código (0 = ya se puede). */
+  /** Segundos que faltan para poder pedir otro código tras un envío correcto (0 = ya se puede). */
   espera: number;
+  /** Tras un 429: "Reenviar código" queda deshabilitado hasta que pasen los segundos del servidor. */
+  reenvioEnLimite: boolean;
+  /** Texto de "Reenviar código": "Enviando código…" o, tras un 429, "Intenta de nuevo en N s". */
+  textoReenviar: string;
+  /** Tras un 429 al verificar: "Verificar código" queda deshabilitado hasta que pase la espera. */
+  verificacionEnLimite: boolean;
+  /** Texto de "Verificar código": "Verificando…" o, tras un 429, "Intenta de nuevo en N s". */
+  textoVerificar: string;
   verificar: () => void;
   reenviar: () => void;
   volver: () => void;
@@ -60,15 +69,18 @@ function mensajeDeVerificacion(error: unknown): string {
   return mensajeParaClienta(error, { respaldo: obtenerTexto('auth.activar.noSeVerifico') });
 }
 
+/**
+ * El reenvío ya no responde 404 ni 400 (Ronda 7): si llega uno, es una falla más y nunca dice si la
+ * cuenta existe o ya está activada. Un 429 trae su message en español (mensajeParaClienta).
+ */
 function mensajeDeReenvio(error: unknown): string {
-  return esCuentaYaActivada(error)
-    ? obtenerTexto('auth.activar.yaActivada')
-    : mensajeParaClienta(error, { respaldo: obtenerTexto('auth.activar.noSeReenvio') });
+  return mensajeParaClienta(error, { respaldo: obtenerTexto('auth.activar.noSeReenvio') });
 }
 
 /**
  * Activación de la cuenta con el código de 6 dígitos (vence en 2 minutos). Entre reenvíos hay una
- * espera visible de 60 segundos; si se llega justo después del registro, la espera ya corre.
+ * espera visible de 60 segundos; si se llega justo después del registro, la espera ya corre. Un 429
+ * del reenvío usa la espera compartida con los segundos del servidor (useEsperaLimite).
  * Toda salida (éxito, "Volver" o Atrás de Android) regresa a la pantalla de acceso que la abrió,
  * con el correo, para que muestre Acceso y reinicie el registro.
  */
@@ -85,6 +97,9 @@ export function useActivarViewModel(
   const [cargando, setCargando] = useState(false);
   const [reenviando, setReenviando] = useState(false);
   const [espera, setEspera] = useState(recienEnviado ? ESPERA_REENVIO_S : 0);
+  const limite = useEsperaLimite();
+  // Verificar y reenviar tienen límites distintos en el backend: cada uno lleva su propia espera.
+  const limiteVerificar = useEsperaLimite();
 
   /**
    * Regresa a la pantalla de acceso que abrió la activación (sin crear otra si ya está en la pila;
@@ -148,6 +163,7 @@ export function useActivarViewModel(
       }
       regresar(true);
     } catch (fallo) {
+      limiteVerificar.esperarSiLimite(fallo);
       setError(mensajeDeVerificacion(fallo));
     } finally {
       setCargando(false);
@@ -159,14 +175,13 @@ export function useActivarViewModel(
     setMensaje(null);
     setReenviando(true);
     try {
-      await reenviarCodigo(email);
+      const respuesta = await reenviarCodigo(email);
       setCodigoCrudo('');
-      setMensaje(obtenerTexto('auth.codigo.reenviado'));
+      // El mensaje neutro del servidor: es el mismo exista o no la cuenta.
+      setMensaje(mensajeDelReenvio(respuesta) ?? obtenerTexto('auth.codigo.reenviado'));
       setEspera(ESPERA_REENVIO_S);
     } catch (fallo) {
-      if (estadoHttp(fallo) === 429) {
-        setEspera(ESPERA_REENVIO_S);
-      }
+      limite.esperarSiLimite(fallo);
       setError(mensajeDeReenvio(fallo));
     } finally {
       setReenviando(false);
@@ -176,7 +191,7 @@ export function useActivarViewModel(
   const candadoVerificar = useCandado();
   const candadoReenvio = useCandado();
   const verificar = () => {
-    if (cargando) {
+    if (cargando || limiteVerificar.activa) {
       return;
     }
     // Candado inmediato además de cargando: enviarVerificacion() ya muestra cualquier error en pantalla.
@@ -184,7 +199,7 @@ export function useActivarViewModel(
   };
 
   const reenviar = () => {
-    if (reenviando || espera > 0 || !email) {
+    if (reenviando || espera > 0 || limite.activa || !email) {
       return;
     }
     // Candado inmediato además de cargando: enviarReenvio() ya muestra cualquier error en pantalla.
@@ -219,6 +234,10 @@ export function useActivarViewModel(
     cargando,
     reenviando,
     espera,
+    reenvioEnLimite: limite.activa,
+    textoReenviar: limite.texto ?? (reenviando ? textos.reenviando : textos.reenviar),
+    verificacionEnLimite: limiteVerificar.activa,
+    textoVerificar: limiteVerificar.texto ?? (cargando ? textos.verificando : textos.verificar),
     verificar,
     reenviar,
     volver,

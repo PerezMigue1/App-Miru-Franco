@@ -23,6 +23,8 @@ const MENSAJE_CODIGO_INCORRECTO =
   'El código es incorrecto o ha expirado. Solicita uno nuevo con «Reenviar código».';
 const MENSAJE_NEUTRO =
   'Si el correo está registrado, recibirás un enlace para restablecer tu contraseña';
+/** Mensaje neutro ficticio del 200 del reenvío (Ronda 7): igual exista o no la cuenta. */
+const NEUTRO_REENVIO = 'Si la cuenta existe y falta activarla, te enviamos un código nuevo.';
 
 const simularServidor = servidorConRutas(RUTAS_DE_FONDO);
 
@@ -110,7 +112,7 @@ describe('Activar la cuenta y recuperar la contraseña (GP-05)', () => {
         'POST /api/auth/verificar-otp': () =>
           respuesta({ statusCode: 400, message: 'Invalid or expired OTP' }, 400),
         'POST /api/auth/reenviar-codigo': () =>
-          respuesta({ success: true, message: 'Código reenviado' }),
+          respuesta({ success: true, message: NEUTRO_REENVIO }),
       });
       const app = await abrirAcceso();
       await llegarAActivar(app);
@@ -130,11 +132,10 @@ describe('Activar la cuenta y recuperar la contraseña (GP-05)', () => {
       expect(screen.getByRole('button', { name: 'Verificar código' })).toBeOnTheScreen();
       expect(leerSecureStore().auth_sesion).toBeUndefined();
 
-      // "Reenviar código" pide otro al servidor, limpia el campo y arranca la espera.
+      // "Reenviar código" pide otro al servidor, muestra su mensaje neutro, limpia el campo y arranca
+      // la espera.
       await fireEvent.press(screen.getByRole('link', { name: 'Reenviar código' }));
-      expect(
-        await screen.findByText('Te enviamos un código nuevo. Revisa tu correo.'),
-      ).toBeOnTheScreen();
+      expect(await screen.findByText(NEUTRO_REENVIO)).toBeOnTheScreen();
       const reenvios = llamadasA(llamadas, 'POST', '/api/auth/reenviar-codigo');
       expect(reenvios).toHaveLength(1);
       expect(reenvios[0].cuerpo).toEqual({ email: CORREO });
