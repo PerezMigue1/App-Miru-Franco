@@ -74,6 +74,9 @@ const VARIABLES_CONTEXTO = [
   'digitos', 'minutos', 'segundos', 'megas', 'numero', 'paso', 'piezas', 'formaPago',
   // GP-09: {folio} de cuenta.listo.eliminada del catálogo del backend y de cuenta.app.folio.
   'folio',
+  // GP-09 (privacidad): {titulo}, {version} y {versionAceptada} de los documentos pendientes y de la
+  // autorización de datos sensibles (legal.pendientes.*, datosSensibles.app.*).
+  'titulo', 'version', 'versionAceptada',
 ];
 
 describe('RESPALDO_TEXTOS', () => {

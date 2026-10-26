@@ -22,9 +22,10 @@ import {
   estadoHttp,
   normalizarCorreo,
   normalizarTelefono,
+  alergiasPendientesDelRegistro,
+  esConsentimientoSaludRequerido,
   problemaDeAlergias,
   problemaDeClave,
-  problemaDeConsentimiento,
   problemaDeCorreo,
   problemaDeNombre,
   problemaDeRespuesta,
@@ -41,6 +42,11 @@ import {
   type TipoCabello,
 } from '../models/AuthModel';
 import { obtenerPreguntasSeguridad, registrarUsuario, verificarCorreo } from '../models/authService';
+import type { AutorizacionDatosSensibles } from '../models/datosSensibles';
+import {
+  useAutorizacionDatosSensibles,
+  type AutorizacionDatosSensiblesViewModel,
+} from './useAutorizacionDatosSensibles';
 import { rutaAcceso } from './useRetornoActivacion';
 
 export type { PreguntaSeguridad, RequisitoClave } from '../models/AuthModel';
@@ -60,9 +66,13 @@ export interface CamposRegistro {
   productosUsados: string;
   /** null: todavía sin responder. */
   tieneAlergias: boolean | null;
-  /** Dato de salud: solo en memoria y solo se envía en el registro. */
+  /** Dato de salud: solo en memoria y solo se envía en el registro, con la autorización. */
   alergias: string;
-  consienteDatosSensibles: boolean;
+  /**
+   * Versión y hash del texto de la autorización de datos sensibles que la clienta autorizó en la
+   * hoja (Ronda 5); null sin autorizar. Sin ella el campo de alergias no se muestra ni se envía.
+   */
+  autorizacionDatosSensibles: AutorizacionDatosSensibles | null;
   tratamientosQuimicos: boolean | null;
   tratamientos: string;
   aceptaAviso: boolean;
@@ -136,11 +146,34 @@ export interface RegistroViewModel {
   enEspera: boolean;
   /** Texto de "Finalizar registro": "Registrando…" o, tras un 429, "Intenta de nuevo en N s". */
   textoFinalizar: string;
+  /** Hoja de la autorización de datos sensibles (sin sesión: solo devuelve la versión y el hash). */
+  autorizacion: AutorizacionDatosSensiblesViewModel;
+  /**
+   * La cuenta se creó, pero el backend no guardó las alergias (alergiasPendientesDeAutorizacion): una
+   * hoja lo explica antes de pasar a la activación.
+   */
+  alergiasNoGuardadas: boolean;
+  /** Cierra esa explicación y abre la activación con el código ya enviado. */
+  continuarAActivar: () => void;
+  /** Textos del bloque de alergias y de esa explicación, del catálogo. */
+  textosAlergias: TextosAlergiasRegistro;
   /**
    * Registro desde cero (al regresar de la activación): paso 1, campos vacíos, datos de salud y
-   * consentimiento borrados, y la verificación del correo cancelada.
+   * autorización borrados, y la verificación del correo cancelada.
    */
   reiniciar: () => void;
+}
+
+export interface TextosAlergiasRegistro {
+  /** Sin autorizar: por qué hace falta la autorización y que sin ella no se guardan. */
+  pide: string;
+  /** "Leer y autorizar". */
+  boton: string;
+  /** Ayuda del campo una vez autorizado. */
+  autorizada: string;
+  noGuardadasTitulo: string;
+  noGuardadasTexto: string;
+  continuar: string;
 }
 
 const CAMPOS_INICIALES: CamposRegistro = {
@@ -158,7 +191,7 @@ const CAMPOS_INICIALES: CamposRegistro = {
   productosUsados: '',
   tieneAlergias: null,
   alergias: '',
-  consienteDatosSensibles: false,
+  autorizacionDatosSensibles: null,
   tratamientosQuimicos: null,
   tratamientos: '',
   aceptaAviso: false,
@@ -187,7 +220,6 @@ const PASO_2: CampoRegistro[] = [
   'productosUsados',
   'tieneAlergias',
   'alergias',
-  'consienteDatosSensibles',
   'tratamientosQuimicos',
   'tratamientos',
   'aceptaAviso',
@@ -257,9 +289,8 @@ function validarCampo(campo: CampoRegistro, c: CamposRegistro): string | null {
     case 'tieneAlergias':
       return problemaDeTieneAlergias(c.tieneAlergias);
     case 'alergias':
-      return problemaDeAlergias(c.tieneAlergias, c.alergias);
-    case 'consienteDatosSensibles':
-      return problemaDeConsentimiento(c.tieneAlergias, c.alergias, c.consienteDatosSensibles);
+      // Sin la autorización el campo no se muestra: no hay nada que revisar.
+      return c.autorizacionDatosSensibles ? problemaDeAlergias(c.tieneAlergias, c.alergias) : null;
     case 'tratamientosQuimicos':
       return problemaDeTieneTratamientos(c.tratamientosQuimicos);
     case 'tratamientos':
@@ -282,9 +313,23 @@ function opcional(texto: string): string | undefined {
   return recortado || undefined;
 }
 
+type PerfilCapilarRegistro = DatosRegistro['perfilCapilar'];
+
 /**
- * Cuerpo de POST /api/usuarios/registro como lo arma la web: perfil capilar completo, alergias y
- * tratamientos solo si respondió Sí, consentimiento solo si hay texto de alergias.
+ * Alergias del perfil capilar (Ronda 5): "No" se manda tal cual; "Sí" solo con la autorización de
+ * datos sensibles y junto con su texto. Sin autorizar no se manda nada de alergias.
+ */
+function alergiasDelRegistro(c: CamposRegistro): Pick<PerfilCapilarRegistro, 'tieneAlergias' | 'alergias'> {
+  if (c.tieneAlergias !== true) {
+    return { tieneAlergias: false };
+  }
+  return c.autorizacionDatosSensibles ? { tieneAlergias: true, alergias: c.alergias.trim() } : {};
+}
+
+/**
+ * Cuerpo de POST /api/usuarios/registro como lo arma la web: perfil capilar completo, tratamientos
+ * solo si respondió Sí y las alergias solo con la autorización de datos sensibles; entonces van con
+ * consienteDatosSensibles y la versión y el hash del texto que autorizó.
  */
 function cuerpoDeRegistro(
   c: CamposRegistro,
@@ -292,8 +337,9 @@ function cuerpoDeRegistro(
   tipoCabello: TipoCabello,
   pregunta: PreguntaSeguridad,
 ): DatosRegistro {
-  const tieneAlergias = c.tieneAlergias === true;
   const tratamientosQuimicos = c.tratamientosQuimicos === true;
+  const autorizacion = c.tieneAlergias === true ? c.autorizacionDatosSensibles : null;
+  const conAlergias = autorizacion !== null && requiereConsentimiento(c.tieneAlergias, c.alergias);
   return {
     nombre: c.nombre.trim(),
     email,
@@ -306,14 +352,18 @@ function cuerpoDeRegistro(
       colorNatural: opcional(c.colorNatural),
       colorActual: opcional(c.colorActual),
       productosUsados: opcional(c.productosUsados),
-      tieneAlergias,
-      alergias: tieneAlergias ? c.alergias.trim() : undefined,
+      ...alergiasDelRegistro(c),
       tratamientosQuimicos,
       tratamientos: tratamientosQuimicos ? c.tratamientos.trim() : undefined,
     },
     aceptaAvisoPrivacidad: true,
     recibePromociones: c.recibePromociones,
-    ...(requiereConsentimiento(c.tieneAlergias, c.alergias) ? { consienteDatosSensibles: true } : {}),
+    ...(conAlergias
+      ? {
+          consienteDatosSensibles: true,
+          autorizacionDatosSensibles: { version: autorizacion.version, hash: autorizacion.hash },
+        }
+      : {}),
   };
 }
 
@@ -371,6 +421,8 @@ export function useRegistroViewModel(): RegistroViewModel {
   const [listaPreguntas, setListaPreguntas] = useState<PreguntaSeguridad[]>([]);
   const limite = useEsperaLimite();
   const texto = useTextos();
+  // Correo con el que se pasa a la activación cuando antes hay que explicar que las alergias no se guardaron.
+  const [activacionPendiente, setActivacionPendiente] = useState<string | null>(null);
 
   // Verificación del correo por rondas: una ronda es un correo; cambia al escribir otro (o con el
   // 409) y descarta todo lo que siga en curso de la anterior. En refs: no provocan renders.
@@ -576,9 +628,9 @@ export function useRegistroViewModel(): RegistroViewModel {
       ultimoCorreo.current = nuevos.correo;
     }
     if (campo === 'tieneAlergias' && valor !== true) {
-      // Sin alergias, el detalle y el consentimiento desaparecen y no se envían.
+      // Sin alergias, el detalle y la autorización desaparecen y no se envían.
       nuevos.alergias = '';
-      nuevos.consienteDatosSensibles = false;
+      nuevos.autorizacionDatosSensibles = null;
     }
     if (campo === 'tratamientosQuimicos' && valor !== true) {
       nuevos.tratamientos = '';
@@ -597,9 +649,6 @@ export function useRegistroViewModel(): RegistroViewModel {
     }
     if (campo === 'tieneAlergias' || campo === 'alergias') {
       siguientes.alergias = enVivo.alergias ? validarCampo('alergias', nuevos) : null;
-      siguientes.consienteDatosSensibles = enVivo.consienteDatosSensibles
-        ? validarCampo('consienteDatosSensibles', nuevos)
-        : null;
     }
     if (campo === 'tratamientosQuimicos') {
       siguientes.tratamientos = enVivo.tratamientos ? validarCampo('tratamientos', nuevos) : null;
@@ -747,6 +796,31 @@ export function useRegistroViewModel(): RegistroViewModel {
     irAPaso(2);
   };
 
+  /** La activación regresa a esta misma pantalla de acceso. */
+  const irAActivar = (email: string) => {
+    push({ pathname: '/activar', params: { email, enviado: '1', volverA: rutaAcceso(ruta) } });
+  };
+
+  const continuarAActivar = () => {
+    if (activacionPendiente === null) {
+      return;
+    }
+    const email = activacionPendiente;
+    setActivacionPendiente(null);
+    irAActivar(email);
+  };
+
+  // La autorización del registro no llama al backend: la versión y el hash viajan con la cuenta.
+  const autorizacion = useAutorizacionDatosSensibles({
+    ruta: '/registro',
+    registrarEnServidor: false,
+    onAutorizada: (autorizada) => {
+      setCampos((previos) => ({ ...previos, autorizacionDatosSensibles: autorizada }));
+      // Aparece el campo de las alergias: el foco va a él.
+      pedirEnfoque('alergias');
+    },
+  });
+
   const enviar = async () => {
     const valores = limpiarTelefono(campos);
     const primeroCuenta =
@@ -777,9 +851,13 @@ export function useRegistroViewModel(): RegistroViewModel {
         return;
       }
       // Los datos de salud ya viajaron: no se conservan ni en memoria.
-      setCampos((previos) => ({ ...previos, alergias: '', consienteDatosSensibles: false }));
-      // La activación regresa a esta misma pantalla de acceso.
-      push({ pathname: '/activar', params: { email, enviado: '1', volverA: rutaAcceso(ruta) } });
+      setCampos((previos) => ({ ...previos, alergias: '', autorizacionDatosSensibles: null }));
+      if (alergiasPendientesDelRegistro(respuesta)) {
+        // El backend no guardó las alergias (la autorización ya no era la vigente): primero se explica.
+        setActivacionPendiente(email);
+        return;
+      }
+      irAActivar(email);
     } catch (error) {
       if (estadoHttp(error) === 409) {
         // El correo ya tiene cuenta: se muestra en el propio campo, en el paso 1, con "Iniciar
@@ -796,6 +874,11 @@ export function useRegistroViewModel(): RegistroViewModel {
         }
       } else {
         limite.esperarSiLimite(error);
+        if (esConsentimientoSaludRequerido(error)) {
+          // Faltó el consentimiento de las alergias: se vuelve a pedir la autorización.
+          setCampos((previos) => ({ ...previos, autorizacionDatosSensibles: null }));
+          pedirEnfoque('tieneAlergias');
+        }
         setErrorGeneral(mensajeDeRegistro(error));
       }
     } finally {
@@ -834,6 +917,8 @@ export function useRegistroViewModel(): RegistroViewModel {
     setVerificandoCorreo(false);
     setEstadoCorreo('inactivo');
     setEnfoque(null);
+    setActivacionPendiente(null);
+    autorizacion.descartar();
   };
 
   const candado = useCandado();
@@ -870,5 +955,16 @@ export function useRegistroViewModel(): RegistroViewModel {
     enEspera: limite.activa,
     textoFinalizar: limite.texto ?? texto(cargando ? 'auth.registro.registrando' : 'auth.registro.finalizar'),
     reiniciar,
+    autorizacion,
+    alergiasNoGuardadas: activacionPendiente !== null,
+    continuarAActivar,
+    textosAlergias: {
+      pide: texto('auth.registro.alergiasPide'),
+      boton: texto('auth.registro.alergiasBoton'),
+      autorizada: texto('auth.registro.alergiasAutorizada'),
+      noGuardadasTitulo: texto('auth.registro.alergiasNoGuardadasTitulo'),
+      noGuardadasTexto: texto('auth.registro.alergiasNoGuardadas'),
+      continuar: texto('auth.registro.alergiasContinuar'),
+    },
   };
 }

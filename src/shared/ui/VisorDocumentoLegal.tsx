@@ -1,4 +1,5 @@
 import { ArrowLeft, ExternalLink, Info } from 'lucide-react-native';
+import type { ReactNode } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -27,7 +28,10 @@ export interface VisorDocumentoLegalProps {
   avisoAbrir: string | null;
   reintentar: () => void;
   abrirCompleto: () => void;
-  onVolver: () => void;
+  /** Sin él no hay botón Volver (por ejemplo, en la aceptación obligatoria de un documento). */
+  onVolver?: () => void;
+  /** Lo que va debajo del documento (por ejemplo, la casilla y el botón para aceptarlo). */
+  children?: ReactNode;
 }
 
 const EXPLICACION =
@@ -43,15 +47,18 @@ const SIN_RED_GUARDADA = 'Sin conexión. Te mostramos la versión que guardamos 
 export function VisorDocumentoLegal(props: VisorDocumentoLegalProps) {
   const { colores } = useTheme();
   const { bottom } = useSafeAreaInsets();
-  const { titulo, desconocido, onVolver } = props;
+  const { titulo, desconocido, onVolver, children } = props;
 
   return (
     <View style={[styles.raiz, { backgroundColor: colores.fondo }]}>
-      <CabeceraCompacta izquierda={<BotonCromo icono={ArrowLeft} etiqueta="Volver" onPress={onVolver} />} />
+      <CabeceraCompacta
+        izquierda={onVolver ? <BotonCromo icono={ArrowLeft} etiqueta="Volver" onPress={onVolver} /> : undefined}
+      />
       <ScrollView contentContainerStyle={[styles.contenido, { paddingBottom: bottom + espacio.x3 }]}>
         <TituloPagina titulo={desconocido ? 'Documento legal' : titulo} />
         <View style={styles.cuerpo}>
           <Contenido {...props} />
+          {children ? <View style={styles.pie}>{children}</View> : null}
         </View>
       </ScrollView>
     </View>
@@ -76,7 +83,7 @@ function Contenido({
       <EmptyState
         titulo="Este documento no existe"
         mensaje="Revisa el enlace o vuelve a la pantalla anterior."
-        accion={{ titulo: 'Volver', onPress: onVolver }}
+        accion={onVolver ? { titulo: 'Volver', onPress: onVolver } : undefined}
       />
     );
   }
@@ -170,6 +177,10 @@ const styles = StyleSheet.create({
   },
   cuerpo: {
     paddingHorizontal: pantalla.margen,
+  },
+  pie: {
+    gap: espacio.l,
+    marginTop: espacio.xl,
   },
   bloque: {
     gap: espacio.l,

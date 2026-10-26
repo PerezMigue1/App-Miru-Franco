@@ -2,7 +2,7 @@ import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter, type Hr
 import * as ImagePicker from 'expo-image-picker';
 import { openBrowserAsync } from 'expo-web-browser';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Linking } from 'react-native';
+import { Linking, Platform } from 'react-native';
 
 import { mensajeParaClienta } from '@/shared/api/mensajesError';
 import { obtenerTexto, type ClaveTextoSitio } from '@/shared/api/textosSitio';
@@ -15,6 +15,7 @@ import { useCandado } from '@/shared/ui/useCandado';
 import { estadoHttp, urlAvisoPrivacidad } from '../models/AuthModel';
 import { actualizarPerfil, obtenerPerfilCompleto, pedirFirmaFoto, subirFoto } from '../models/authService';
 import { borrarFotoTemporal, prepararFoto } from '../models/fotoPerfil';
+import { galeriaSinPermiso, resultadoPermisoGaleria } from '../models/permisoGaleria';
 import {
   MENSAJE_ESPERA_UN_MOMENTO,
   MENSAJE_FOTO_FALLIDA,
@@ -65,6 +66,8 @@ export interface PerfilViewModel {
   // Foto
   opcionesFoto: boolean;
   abrirOpcionesFoto: () => void;
+  /** La hoja de opciones terminó de irse (alCerrarse de Hoja): ya puede salir la explicación. */
+  alCerrarseOpciones: () => void;
   cerrarOpcionesFoto: () => void;
   elegirFoto: () => void;
   quitarFoto: () => void;
@@ -73,6 +76,20 @@ export interface PerfilViewModel {
   /** La clienta negó el acceso a sus fotos: se explica y se ofrece abrir los ajustes. */
   permisoDenegado: boolean;
   abrirAjustes: () => void;
+  /**
+   * Android 12 o anterior: hoja que explica para qué se piden las fotos antes de que el teléfono
+   * pregunte. No aparece si el permiso ya estaba concedido, ni en Android 13 o más nuevo: el
+   * selector del sistema no pide permiso.
+   */
+  explicacionGaleria: boolean;
+  /** "Continuar" de la explicación: pide el permiso y, si se concede, abre la galería. */
+  continuarGaleria: () => void;
+  /** "Ahora no", el velo o Atrás: cierra la explicación sin pedir nada. */
+  cerrarExplicacionGaleria: () => void;
+  /** La clienta negó el permiso esta vez (se puede volver a pedir): aviso sin "Abrir ajustes". */
+  avisoPermisoGaleria: string | null;
+  /** Textos de la explicación (catálogo, claves perfil.galeria.*). */
+  textosGaleria: { titulo: string; texto: string; continuar: string; ahoraNo: string };
   // Apariencia
   apariencia: PreferenciaApariencia;
   hojaApariencia: boolean;
@@ -83,6 +100,8 @@ export interface PerfilViewModel {
   filaSalon: { titulo: string; descripcion: string };
   /** Fila "Mi cuenta" (GP-09): desactivar o eliminar la cuenta, solo con sesión. */
   filaMiCuenta: { titulo: string; descripcion: string };
+  /** Fila "Mis datos y privacidad" (GP-09): derechos ARCO, solicitudes y permisos, solo con sesión. */
+  filaMisDatos: { titulo: string; descripcion: string };
   // Navegación
   editarPerfil: () => void;
   abrirMisCitas: () => void;
@@ -90,6 +109,7 @@ export interface PerfilViewModel {
   abrirSalon: () => void;
   cambiarContrasena: () => void;
   abrirMiCuenta: () => void;
+  abrirMisDatos: () => void;
   abrirAviso: () => void;
   cerrarSesion: () => void;
 }
@@ -133,6 +153,11 @@ export function usePerfilViewModel(): PerfilViewModel {
   const [fotoOcupada, setFotoOcupada] = useState(false);
   const [errorFoto, setErrorFoto] = useState<string | null>(null);
   const [permisoDenegado, setPermisoDenegado] = useState(false);
+  const [explicacionGaleria, setExplicacionGaleria] = useState(false);
+  // La hoja de opciones de la foto ya terminó de irse: hasta entonces la explicación espera, para que
+  // las dos hojas no se crucen (alCerrarse de Hoja).
+  const [opcionesSalidas, setOpcionesSalidas] = useState(true);
+  const [avisoPermisoGaleria, setAvisoPermisoGaleria] = useState<string | null>(null);
   const [hojaApariencia, setHojaApariencia] = useState(false);
   const [avisoGuardado, setAvisoGuardado] = useState<string | null>(null);
   const [confirmarQuitarFoto, setConfirmarQuitarFoto] = useState(false);
@@ -189,6 +214,8 @@ export function usePerfilViewModel(): PerfilViewModel {
     setEstado(conSesion ? 'cargando' : 'sinSesion');
     setErrorFoto(null);
     setPermisoDenegado(false);
+    setExplicacionGaleria(false);
+    setAvisoPermisoGaleria(null);
     setOpcionesFoto(false);
     setErrorCierre(null);
     setAvisoGuardado(null);
@@ -213,7 +240,12 @@ export function usePerfilViewModel(): PerfilViewModel {
   // El aviso se ve mientras la clienta sigue en Perfil.
   useFocusEffect(useCallback(() => () => setAvisoGuardado(null), []));
 
-  const subirNuevaFoto = async () => {
+  /**
+   * Abre la galería y sube la foto elegida. Con pedirPermiso (Android 12 o anterior, después de la
+   * explicación) primero pide el permiso; en Android 13 o más nuevo el selector del sistema no lo
+   * necesita y se abre directo.
+   */
+  const subirNuevaFoto = async (pedirPermiso: boolean) => {
     // Toda la subida pertenece a la sesión que la empezó: si se cierra o cambia, se abandona sin
     // pedir firma, sin guardar y sin tocar la pantalla.
     const generacion = generacionActual();
@@ -221,13 +253,19 @@ export function usePerfilViewModel(): PerfilViewModel {
     let etapa: EtapaFoto = 'preparar';
     const temporales: string[] = [];
     try {
-      const permiso = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!vigente()) {
-        return;
-      }
-      if (!permiso.granted) {
-        setPermisoDenegado(true);
-        return;
+      setAvisoPermisoGaleria(null);
+      if (pedirPermiso) {
+        const resultado = resultadoPermisoGaleria(await ImagePicker.requestMediaLibraryPermissionsAsync());
+        if (!vigente()) {
+          return;
+        }
+        // Negado para siempre: solo queda abrir los ajustes. Negado esta vez: se explica sin
+        // mandarla a los ajustes, porque al volver a tocar su foto el teléfono le pregunta otra vez.
+        if (resultado !== 'concedido') {
+          setPermisoDenegado(resultado === 'negadoParaSiempre');
+          setAvisoPermisoGaleria(resultado === 'negado' ? obtenerTexto('perfil.galeria.negado') : null);
+          return;
+        }
       }
       setPermisoDenegado(false);
       const eleccion = await ImagePicker.launchImageLibraryAsync({
@@ -293,6 +331,30 @@ export function usePerfilViewModel(): PerfilViewModel {
     }
   };
 
+  /**
+   * Android 12 o anterior (y fuera de Android): si el permiso de fotos ya está concedido, la galería
+   * se abre directo, sin explicación y sin volver a pedirlo; si no, sale la explicación. Si la consulta
+   * falla se sigue por el camino seguro (la explicación). Si la sesión cambia mientras se consulta, se
+   * abandona en silencio.
+   */
+  const revisarPermisoGaleria = async () => {
+    const generacion = generacionActual();
+    let concedido = false;
+    try {
+      concedido = resultadoPermisoGaleria(await ImagePicker.getMediaLibraryPermissionsAsync()) === 'concedido';
+    } catch {
+      // Sin respuesta del teléfono: la explicación y después la pregunta, como si no estuviera concedido.
+    }
+    if (generacion !== generacionActual()) {
+      return;
+    }
+    if (concedido) {
+      await subirNuevaFoto(false);
+      return;
+    }
+    setExplicacionGaleria(true);
+  };
+
   const quitarFotoActual = async () => {
     const generacion = generacionActual();
     setErrorFoto(null);
@@ -342,11 +404,21 @@ export function usePerfilViewModel(): PerfilViewModel {
     avisoGuardado,
     errorCierre,
     opcionesFoto,
-    abrirOpcionesFoto: () => setOpcionesFoto(true),
+    abrirOpcionesFoto: () => {
+      setOpcionesSalidas(false);
+      setOpcionesFoto(true);
+    },
+    alCerrarseOpciones: () => setOpcionesSalidas(true),
     cerrarOpcionesFoto: () => setOpcionesFoto(false),
+    // La hoja de opciones se cierra antes de abrir la galería o la explicación (nunca dos hojas). La
+    // consulta del permiso va bajo el candado de la foto: dos toques no abren dos selectores.
     elegirFoto: () => {
       setOpcionesFoto(false);
-      candadoFoto(subirNuevaFoto);
+      if (galeriaSinPermiso(Platform.OS, Platform.Version)) {
+        candadoFoto(() => subirNuevaFoto(false));
+        return;
+      }
+      candadoFoto(revisarPermisoGaleria);
     },
     // Quitar la foto se confirma antes.
     quitarFoto: () => {
@@ -375,6 +447,19 @@ export function usePerfilViewModel(): PerfilViewModel {
         // Sin acceso a los ajustes, el mensaje ya explica qué hacer.
       });
     },
+    explicacionGaleria: explicacionGaleria && opcionesSalidas,
+    continuarGaleria: () => {
+      setExplicacionGaleria(false);
+      candadoFoto(() => subirNuevaFoto(true));
+    },
+    cerrarExplicacionGaleria: () => setExplicacionGaleria(false),
+    avisoPermisoGaleria,
+    textosGaleria: {
+      titulo: texto('perfil.galeria.titulo'),
+      texto: texto('perfil.galeria.texto'),
+      continuar: texto('perfil.galeria.continuar'),
+      ahoraNo: texto('perfil.galeria.ahoraNo'),
+    },
     apariencia: preferencia,
     hojaApariencia,
     abrirApariencia: () => setHojaApariencia(true),
@@ -385,12 +470,14 @@ export function usePerfilViewModel(): PerfilViewModel {
     },
     filaSalon: { titulo: texto('salon.titulo'), descripcion: texto('salon.perfil.descripcion') },
     filaMiCuenta: { titulo: texto('cuenta.app.fila'), descripcion: texto('cuenta.app.filaDescripcion') },
+    filaMisDatos: { titulo: texto('privacidad.app.fila'), descripcion: texto('privacidad.app.filaDescripcion') },
     editarPerfil: () => push('/editar-perfil'),
     abrirMisCitas: () => push('/mis-citas' as Href),
     abrirMisPedidos: () => push('/mis-pedidos' as Href),
     abrirSalon: () => push('/salon' as Href),
     cambiarContrasena: () => push('/cambiar-contrasena'),
     abrirMiCuenta: () => push('/mi-cuenta' as Href),
+    abrirMisDatos: () => push('/mis-datos' as Href),
     abrirAviso,
     // Mientras una foto se sube o se quita, no se cierra la sesión; si no, se confirma antes.
     cerrarSesion: () => {

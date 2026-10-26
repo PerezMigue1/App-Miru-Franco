@@ -10,6 +10,7 @@ import { obtenerDocumentoVigente, rutaVisorDocumento, type SlugDocumentoLegal } 
 import { mensajeParaClienta } from '@/shared/api/mensajesError';
 import { obtenerTexto } from '@/shared/api/textosSitio';
 import { useConfiguracionPublica } from '@/shared/api/useConfiguracionPublica';
+import { useEsperaLimite } from '@/shared/api/useEsperaLimite';
 import { useCandado } from '@/shared/ui/useCandado';
 
 import {
@@ -111,8 +112,10 @@ export interface CheckoutViewModel {
   transferencia: DatosTransferencia | null;
   /** "Nombre, dirección, ciudad" del salón. */
   recogesEn: string;
-  /** Texto del botón final ('' sin forma de pago). */
+  /** Texto del botón final ('' sin forma de pago); tras un 429, "Intenta de nuevo en N s" mientras dura la espera. */
   botonFinal: string;
+  /** Tras un 429 al confirmar: el botón final queda deshabilitado hasta que pase la espera. */
+  enEspera: boolean;
   /** Pasos 1 y 2: al siguiente (en el 2, solo con una forma de pago). */
   continuar: () => void;
   /** En el paso 2 no se avanza sin forma de pago. */
@@ -159,6 +162,8 @@ export function useCheckoutViewModel(): CheckoutViewModel {
   const router = useRouter();
   const candado = useCandado();
   const { configuracion } = useConfiguracionPublica();
+  // Un 429 al crear el pedido (o al registrar sus casillas) deja el botón final en espera.
+  const { activa: enEspera, texto: textoEspera, esperarSiLimite } = useEsperaLimite();
 
   const [estado, setEstado] = useState<EstadoCheckout>('cargando');
   const [errorCarga, setErrorCarga] = useState<unknown>(null);
@@ -347,7 +352,8 @@ export function useCheckoutViewModel(): CheckoutViewModel {
   );
 
   const confirmar = useCallback(() => {
-    if (items.length === 0 || metodo === null || revisarMisPedidos) {
+    // Durante la espera de un 429 tampoco se envía otra vez.
+    if (items.length === 0 || metodo === null || revisarMisPedidos || enEspera) {
       return;
     }
     const faltan = erroresCasillasCompra(casillas, configuracion);
@@ -377,7 +383,13 @@ export function useCheckoutViewModel(): CheckoutViewModel {
       } catch (error) {
         if (montada.current) {
           // registrarConsentimientosCompra solo lanza ErrorConsentimientoCompra.
-          mostrarFallaConsentimiento(error as ErrorConsentimientoCompra);
+          const falla = error as ErrorConsentimientoCompra;
+          // Un 429 al registrar las casillas: el message del backend y la espera.
+          if (esperarSiLimite(falla.causa)) {
+            setErrorEnvio(mensajeParaClienta(falla.causa));
+          } else {
+            mostrarFallaConsentimiento(falla);
+          }
           setEnviando(false);
         }
         return;
@@ -434,6 +446,8 @@ export function useCheckoutViewModel(): CheckoutViewModel {
         if (!montada.current) {
           return;
         }
+        // Un 429 no es "sin respuesta": el servidor respondió y no creó el pedido. Queda en espera.
+        esperarSiLimite(error);
         // El 409 de piezas agotadas muestra el texto del backend (dice qué producto) y relee el carrito.
         setErrorEnvio(mensajeCrearPedido(error));
         setRevisarCarrito(pideRevisarCarrito(error));
@@ -447,6 +461,8 @@ export function useCheckoutViewModel(): CheckoutViewModel {
     items,
     metodo,
     revisarMisPedidos,
+    enEspera,
+    esperarSiLimite,
     casillas,
     configuracion,
     terminosVisto,
@@ -488,7 +504,8 @@ export function useCheckoutViewModel(): CheckoutViewModel {
     textos: textosCheckout(configuracion),
     transferencia: conTransferencia ? configuracion.reglas.pagos.transferencia : null,
     recogesEn: textoRecogesEn(configuracion),
-    botonFinal: metodo ? botonFinal(metodo, configuracion) : '',
+    botonFinal: textoEspera ?? (metodo ? botonFinal(metodo, configuracion) : ''),
+    enEspera,
     continuar,
     puedeContinuar,
     casillas: etiquetasCasillas(configuracion).map((etiqueta) => ({

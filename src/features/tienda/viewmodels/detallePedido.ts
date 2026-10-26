@@ -1,4 +1,4 @@
-import type { EtiquetaEstado, TonoBadge } from '@/features/citas/models/citaModel';
+import type { EtiquetaEstado, TonoBadge } from '@/shared/ui/tonoBadge';
 import { transferenciaEnSalon } from '@/features/citas/viewmodels/formaPagoReserva';
 import type { ConfiguracionPublica, DatosTransferencia } from '@/shared/api/configuracionPublica';
 import { obtenerTexto } from '@/shared/api/textosSitio';

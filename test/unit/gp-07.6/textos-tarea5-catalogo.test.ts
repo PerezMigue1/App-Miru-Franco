@@ -49,7 +49,7 @@ const CLAVES_NUEVAS = [
   'auth.terminos.noAbre',
   ...conPrefijo('auth.activar', [
     'titulo', 'instrucciones', 'instruccionesSinCorreo', 'vigencia', 'verificar', 'verificando', 'espera',
-    'reenviar', 'reenviando', 'volver', 'codigoInvalido', 'noSeVerifico', 'noSeReenvio', 'yaActivada', 'sinCorreo',
+    'reenviar', 'reenviando', 'volver', 'codigoInvalido', 'noSeVerifico', 'noSeReenvio', 'sinCorreo',
   ]),
   'auth.codigo.reenviado',
   'auth.recuperar.neutro',
@@ -103,6 +103,11 @@ beforeEach(() => {
 describe('claves nuevas del catálogo (respaldo)', () => {
   it('no hay claves repetidas en la lista', () => {
     expect(new Set(CLAVES_NUEVAS).size).toBe(CLAVES_NUEVAS.length);
+  });
+
+  it('auth.activar.yaActivada ya no existe: ningún error de Activar puede decir que la cuenta ya está activada', () => {
+    expect(Object.prototype.hasOwnProperty.call(RESPALDO_TEXTOS, 'auth.activar.yaActivada')).toBe(false);
+    expect(Object.values(RESPALDO_TEXTOS).some((texto) => /ya está activad/i.test(texto))).toBe(false);
   });
 
   it.each(CLAVES_NUEVAS)('%s existe en el respaldo y se llena sin llaves', (clave) => {

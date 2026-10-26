@@ -12,11 +12,28 @@ import {
 import type { ConfiguracionPublica, DiaSemana } from '@/shared/api/configuracionPublica';
 import { esSinRespuesta, mensajeParaClienta, mensajeSinContexto } from '@/shared/api/mensajesError';
 import { obtenerTexto, obtenerTextoConReglas } from '@/shared/api/textosSitio';
+import {
+  aFecha,
+  fechaHoraLegible,
+  fechaLargaLegible,
+  fechaLegible,
+  fechaLocal,
+  horaLegible,
+  NOMBRES_DIAS,
+  NOMBRES_MESES,
+} from '@/shared/ui/fechasLegibles';
+import type { EtiquetaEstado, TonoBadge } from '@/shared/ui/tonoBadge';
 import { reglasDeCita, type ReglasCita } from './reglasCitaModel';
 import { especialistaOculta, type Especialista as EspecialistaDeServicio } from './servicioModel';
 
-/** Tono de una insignia (BadgeEstado); vive aquí para que el model no importe componentes. */
-export type TonoBadge = 'aviso' | 'exito' | 'neutro' | 'peligro' | 'info';
+/**
+ * El tono y la etiqueta (texto y tono) de una insignia (BadgeEstado). Viven en
+ * src/shared/ui/tonoBadge.ts y se vuelven a exportar aquí para lo que ya los tomaba de citaModel.
+ */
+export type { EtiquetaEstado, TonoBadge };
+
+/** Fechas locales de src/shared/ui/fechasLegibles.ts, vueltas a exportar para las features que ya las usaban de aquí. */
+export { fechaHoraLegible, fechaLargaLegible, fechaLegible, fechaLocal, horaLegible };
 
 /** Especialista para agendar: la del servicio más su puesto y especialidades (GET /api/citas/especialistas). */
 export interface Especialista extends EspecialistaDeServicio {
@@ -726,11 +743,6 @@ export type EstadoAnticipoCita =
   | 'pendiente'
   | 'vencido';
 
-/** Texto y tono de una insignia (BadgeEstado). */
-export interface EtiquetaEstado {
-  texto: string;
-  tono: TonoBadge;
-}
 
 function pagosAprobados(cita: Cita): PagoCita[] {
   return cita.pagos.filter((pago) => pago.estado === 'aprobado');
@@ -1047,14 +1059,10 @@ export function mensajeCancelacion(error: unknown): string {
   return mensajeParaClienta(error, { respaldo: obtenerTexto('citas.errores.cancelar') });
 }
 
-// ── Fechas locales (México, UTC-6) ─────────────────────────────────────────────────────────
+// ── Calendario con fechas locales (México, UTC-6) ──────────────────────────────────────────
+// aFecha, fechaLocal, fechaLegible y demás viven en src/shared/ui/fechasLegibles.ts.
 
-const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 const DIAS_CORTOS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
-const MESES = [
-  'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
-  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
-];
 
 /** Mes de calendario con año y mes locales (0 = enero). */
 export interface MesCalendario {
@@ -1073,28 +1081,6 @@ export interface DiaCalendario {
 /** Encabezados del calendario, de domingo a sábado: 'Dom', 'Lun', ... 'Sáb'. */
 export const ENCABEZADOS_SEMANA = DIAS_CORTOS.map((dia) => dia.charAt(0).toUpperCase() + dia.slice(1));
 
-function dosDigitos(n: number): string {
-  return String(n).padStart(2, '0');
-}
-
-/** Date o texto a Date. Un 'YYYY-MM-DD' suelto se arma en hora local (no en UTC). */
-function aFecha(valor: string | Date): Date {
-  if (valor instanceof Date) {
-    return valor;
-  }
-  const partes = valor.trim().split('-');
-  if (partes.length === 3 && partes[0].length === 4 && partes[1].length === 2 && partes[2].length === 2) {
-    const [anio, mes, dia] = partes.map(Number);
-    return new Date(anio, mes - 1, dia);
-  }
-  return new Date(valor);
-}
-
-/** 'YYYY-MM-DD' con el año, mes y día locales del teléfono (sin pasar a UTC). */
-export function fechaLocal(fecha: Date): string {
-  return `${fecha.getFullYear()}-${dosDigitos(fecha.getMonth() + 1)}-${dosDigitos(fecha.getDate())}`;
-}
-
 /** Mes local de una fecha (por omisión, el de hoy). */
 export function mesDe(fecha: Date = new Date()): MesCalendario {
   return { anio: fecha.getFullYear(), mes: fecha.getMonth() };
@@ -1112,7 +1098,7 @@ export function compararMeses(a: MesCalendario, b: MesCalendario): number {
 
 /** 'Octubre 2026'. */
 export function tituloMes(mes: MesCalendario): string {
-  const nombre = MESES[mes.mes] ?? '';
+  const nombre = NOMBRES_MESES[mes.mes] ?? '';
   return `${nombre.charAt(0).toUpperCase()}${nombre.slice(1)} ${mes.anio}`;
 }
 
@@ -1130,12 +1116,12 @@ export function semanasDelMes(mes: MesCalendario): (DiaCalendario | null)[][] {
   for (let dia = 1; dia <= diasDelMes; dia++) {
     celdas.push({ fecha: fechaLocal(new Date(mes.anio, mes.mes, dia)), dia });
   }
-  while (celdas.length % DIAS.length !== 0) {
+  while (celdas.length % NOMBRES_DIAS.length !== 0) {
     celdas.push(null);
   }
   const semanas: (DiaCalendario | null)[][] = [];
-  for (let i = 0; i < celdas.length; i += DIAS.length) {
-    semanas.push(celdas.slice(i, i + DIAS.length));
+  for (let i = 0; i < celdas.length; i += NOMBRES_DIAS.length) {
+    semanas.push(celdas.slice(i, i + NOMBRES_DIAS.length));
   }
   return semanas;
 }
@@ -1226,46 +1212,6 @@ export function primerDiaLibre(desde: string, calendario: CalendarioSalon): stri
 /** Mes local de un 'YYYY-MM-DD' (sin pasar por UTC). */
 export function mesDeFecha(fecha: string): MesCalendario {
   return mesDe(aFecha(fecha));
-}
-
-/** 'sábado 18 de octubre'; '' si la fecha no es válida. */
-export function fechaLegible(valor: string | Date): string {
-  const fecha = aFecha(valor);
-  if (Number.isNaN(fecha.getTime())) {
-    return '';
-  }
-  return `${DIAS[fecha.getDay()]} ${fecha.getDate()} de ${MESES[fecha.getMonth()]}`;
-}
-
-/** '6:30 p. m.' (12 horas, hora local); '' si la fecha no es válida. */
-export function horaLegible(valor: string | Date): string {
-  const fecha = aFecha(valor);
-  if (Number.isNaN(fecha.getTime())) {
-    return '';
-  }
-  const horas = fecha.getHours();
-  const hora12 = horas % 12 === 0 ? 12 : horas % 12;
-  return `${hora12}:${dosDigitos(fecha.getMinutes())} ${horas < 12 ? 'a. m.' : 'p. m.'}`;
-}
-
-/** 'jueves 29 de octubre de 2026' (año, mes y día locales); '' si la fecha no es válida. */
-export function fechaLargaLegible(valor: string | Date): string {
-  const fecha = aFecha(valor);
-  const dia = fechaLegible(fecha);
-  return dia ? `${dia} de ${fecha.getFullYear()}` : '';
-}
-
-/**
- * 'Sábado 18 de octubre, 6:30 p. m.' con los componentes locales de la fecha ISO. Es la única forma
- * de escribir un día y hora completos (por ejemplo, el "De" y el "A" al reprogramar), así los dos
- * salen en la misma zona horaria. '' si la fecha no es válida.
- */
-export function fechaHoraLegible(valor: string | Date): string {
-  const dia = fechaLegible(valor);
-  if (!dia) {
-    return '';
-  }
-  return `${dia.charAt(0).toUpperCase()}${dia.slice(1)}, ${horaLegible(valor)}`;
 }
 
 /**

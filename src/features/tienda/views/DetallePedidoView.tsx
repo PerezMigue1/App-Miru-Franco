@@ -6,7 +6,7 @@ import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EncabezadoVolver } from '@/features/auth/components/EncabezadoVolver';
-import { BadgeEstado } from '@/features/citas/components/BadgeEstado';
+import { BadgeEstado } from '@/shared/ui/BadgeEstado';
 import { Button } from '@/shared/ui/Button';
 import { DatosTransferencia } from '@/shared/ui/DatosTransferencia';
 import { EmptyState } from '@/shared/ui/EmptyState';
@@ -96,8 +96,9 @@ export default function DetallePedidoView() {
         numero={numero ?? ''}
         texto={vm.detalle?.textoCancelar ?? ''}
         cancelando={vm.cancelando}
+        textoEspera={vm.textoEsperaCancelar}
         error={vm.errorCancelacion}
-        puedeConfirmar={vm.detalle?.puedeCancelar ?? false}
+        puedeConfirmar={(vm.detalle?.puedeCancelar ?? false) && !vm.cancelarEnEspera}
         onCancelar={vm.cancelar}
       />
 

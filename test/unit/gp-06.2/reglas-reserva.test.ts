@@ -50,7 +50,9 @@ const VM_CONFIRMADA = citas('viewmodels', 'useCitaConfirmadaViewModel.ts');
 const VIEWMODELS = [VM_RESERVA, VM_ANTICIPO, VM_CONFIRMADA];
 const CITA_MODEL = citas('models', 'citaModel.ts');
 const MODELOS = [CITA_MODEL, citas('models', 'servicioModel.ts')];
-const BADGE = citas('components', 'BadgeEstado.tsx');
+// Corrección de GP-09: BadgeEstado y TonoBadge se movieron a src/shared/ui (auth y tienda los usan).
+const BADGE = src('shared', 'ui', 'BadgeEstado.tsx');
+const TONO_BADGE = src('shared', 'ui', 'tonoBadge.ts');
 const COMPONENTES = [
   citas('components', 'IndicadorPasos.tsx'),
   citas('components', 'CalendarioMensual.tsx'),
@@ -111,12 +113,14 @@ describe('Regla 2: los models de la reserva no dependen de la interfaz', () => {
     expect(importacionesProhibidas(ruta, ({ modulo }) => prohibidoEnModels(modulo))).toEqual([]);
   });
 
-  it('corrección GP-06.2: TonoBadge vive en citaModel y BadgeEstado lo importa solo como tipo', () => {
-    expect(sinComentarios(leer(CITA_MODEL))).toMatch(/export\s+type\s+TonoBadge\s*=/);
-    expect(importaciones(leer(CITA_MODEL)).filter(({ modulo }) => /components\/BadgeEstado/.test(modulo))).toEqual([]);
-    expect(importaciones(leer(BADGE))).toContainEqual(
-      expect.objectContaining({ modulo: MODULO_MODELO_CITA, soloTipos: true }),
+  it('corrección GP-06.2 y GP-09: TonoBadge vive en shared/ui/tonoBadge y citaModel y BadgeEstado lo importan solo como tipo', () => {
+    expect(sinComentarios(leer(TONO_BADGE))).toMatch(/export\s+type\s+TonoBadge\s*=/);
+    expect(importaciones(leer(CITA_MODEL)).filter(({ modulo }) => /BadgeEstado/.test(modulo))).toEqual([]);
+    expect(importaciones(leer(CITA_MODEL))).toContainEqual(
+      expect.objectContaining({ modulo: '@/shared/ui/tonoBadge', soloTipos: true }),
     );
+    expect(importaciones(leer(BADGE))).toContainEqual(expect.objectContaining({ modulo: './tonoBadge', soloTipos: true }));
+    expect(sinComentarios(leer(CITA_MODEL))).not.toMatch(/export\s+type\s+TonoBadge\s*=/);
     expect(sinComentarios(leer(BADGE))).not.toMatch(/export\s+type\s+TonoBadge\s*=/);
   });
 });

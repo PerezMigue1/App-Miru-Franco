@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { borde, fuente, insignia, radio, tipo } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
-import type { TonoBadge } from '../models/citaModel';
+import type { TonoBadge } from './tonoBadge';
 
 export type { TonoBadge };
 

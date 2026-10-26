@@ -8,6 +8,7 @@ import { obtenerConfiguracion, suscribir as suscribirConfiguracion } from '@/sha
 import { obtenerDocumentoVigente } from '@/shared/api/documentosLegales';
 import { mensajeParaClienta } from '@/shared/api/mensajesError';
 import { obtenerTexto } from '@/shared/api/textosSitio';
+import { useEsperaLimite } from '@/shared/api/useEsperaLimite';
 import { useCandado } from '@/shared/ui/useCandado';
 
 import {
@@ -142,8 +143,13 @@ export interface ReservarCitaViewModel {
   cambiarAutorizaFotos: (marcada: boolean) => void;
   /** Texto de la casilla de fotos del resultado. */
   textoFotos: string;
-  /** Texto del botón final según el anticipo y la opción (con su texto de espera). */
+  /**
+   * Texto del botón final según el anticipo y la opción (con su texto de espera); tras un 429, "Intenta
+   * de nuevo en N s" mientras dura la espera.
+   */
   textoBoton: string;
+  /** Tras un 429 al reservar: el botón final queda deshabilitado hasta que pase la espera. */
+  enEspera: boolean;
   /** Lo elegido se recuperó después de que la sesión terminó. */
   recuperada: boolean;
 
@@ -196,6 +202,8 @@ export function useReservarCitaViewModel(
   const router = useRouter();
   const { usuario } = useAuth();
   const candado = useCandado();
+  // Un 429 al reservar (o al registrar sus casillas) deja el botón en espera: el servidor sí respondió.
+  const { activa: enEspera, texto: textoEspera, esperarSiLimite } = useEsperaLimite();
 
   const [estado, setEstado] = useState<EstadoReserva>('cargando');
   const [errorCarga, setErrorCarga] = useState<unknown>(null);
@@ -597,7 +605,8 @@ export function useReservarCitaViewModel(
     candado(async () => {
       // Sin sesión la ruta no existe; aun así, sin clienta no se envía nada.
       // Sin saber si la cita anterior quedó registrada no se envía otra: primero se revisa Mis citas.
-      if (!usuario || !servicio || !especialista || !slot || !fecha || revisarMisCitas) {
+      // Durante la espera de un 429 tampoco se envía otra vez.
+      if (!usuario || !servicio || !especialista || !slot || !fecha || revisarMisCitas || enEspera) {
         return;
       }
       const conAnticipo = anticipo !== null;
@@ -665,6 +674,11 @@ export function useReservarCitaViewModel(
           setErrorEnvio(MENSAJE_SESION_RESERVA);
           return;
         }
+        // Límite (429) al crear la cita o al registrar sus casillas: el message del backend y la espera.
+        if (esperarSiLimite(causa)) {
+          setErrorEnvio(mensajeParaClienta(causa));
+          return;
+        }
         if (error instanceof ReservaSinConfirmar) {
           setErrorEnvio(obtenerTexto('citas.reserva.sinConfirmar', {}, configuracion));
           setRevisarMisCitas(true);
@@ -715,6 +729,8 @@ export function useReservarCitaViewModel(
     irAPaso,
     cargarHorarios,
     revisarMisCitas,
+    enEspera,
+    esperarSiLimite,
   ]);
 
   const verMisCitas = useCallback(() => {
@@ -765,7 +781,8 @@ export function useReservarCitaViewModel(
     autorizaFotos,
     cambiarAutorizaFotos,
     textoFotos: obtenerTexto('citas.reserva.fotosResultado', {}, configuracion),
-    textoBoton: botonConfirmar(anticipo, opcionPago, enviando, configuracion),
+    textoBoton: textoEspera ?? botonConfirmar(anticipo, opcionPago, enviando, configuracion),
+    enEspera,
     recuperada,
     enviando,
     modoEnvio,

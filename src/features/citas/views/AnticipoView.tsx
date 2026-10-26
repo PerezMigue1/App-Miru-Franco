@@ -4,6 +4,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EncabezadoVolver } from '@/features/auth/components/EncabezadoVolver';
+import { BadgeEstado } from '@/shared/ui/BadgeEstado';
 import { Button } from '@/shared/ui/Button';
 import { Skeleton } from '@/shared/ui/Skeleton';
 import {
@@ -19,7 +20,6 @@ import {
 } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
-import { BadgeEstado } from '../components/BadgeEstado';
 import { CasillaPoliticaAnticipos } from '../components/CasillaPoliticaAnticipos';
 import { EnlacePolitica } from '../components/EnlacePolitica';
 import { EstadoCargaCita } from '../components/EstadoCargaCita';

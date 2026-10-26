@@ -1,6 +1,6 @@
 import { useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Circle, CircleAlert, CircleCheck, Check, ChevronDown, X } from 'lucide-react-native';
+import { Circle, CircleCheck, Check, ChevronDown, X } from 'lucide-react-native';
 import {
   Fragment,
   useCallback,
@@ -77,6 +77,8 @@ import { useMovimientoReducido } from '@/shared/ui/useMovimientoReducido';
 import { useTheme } from '@/shared/ui/useTheme';
 
 import { useTextosAuth, type TextosAuth } from '../viewmodels/textosAuth';
+import { Aviso } from './AvisoAuth';
+import { HojaDatosSensibles } from './HojaDatosSensibles';
 import type { GoogleViewModel } from '../viewmodels/useGoogleViewModel';
 import type { LoginViewModel } from '../viewmodels/useLoginViewModel';
 import type { RetornoActivacion } from '../viewmodels/useRetornoActivacion';
@@ -89,6 +91,9 @@ import type {
   RegistroViewModel,
   RequisitoClave,
 } from '../viewmodels/useRegistroViewModel';
+
+// El aviso vive en su propio archivo (lo usa también HojaDatosSensibles sin importar este).
+export { Aviso };
 
 export type VistaAcceso = 'acceso' | 'registro';
 
@@ -548,7 +553,7 @@ function FormularioAcceso({
         cargando={cargando}
         deshabilitado={google.abriendo || login.enEspera}
       />
-      <AccesoGoogle google={google} ocupado={cargando} />
+      <AccesoGoogle google={google} ocupado={cargando} conReactivar />
       {ofreceReactivar ? null : (
         <Enlace
           texto={cuenta.enlace}
@@ -564,9 +569,19 @@ function FormularioAcceso({
 /**
  * Separador "o", botón "Continuar con Google" y su error, debajo del botón principal de cada
  * formulario. "ocupado": hay otro inicio en curso en ese formulario y Google queda deshabilitado.
- * Si Google regresó con la cuenta desactivada, debajo del aviso va "Reactivar mi cuenta".
+ * Si Google regresó con la cuenta desactivada, debajo del aviso va "Reactivar mi cuenta", solo en
+ * Acceso (`conReactivar`); en Registro y en Recuperar queda únicamente el aviso.
  */
-export function AccesoGoogle({ google, ocupado }: { google: GoogleViewModel; ocupado: boolean }) {
+export function AccesoGoogle({
+  google,
+  ocupado,
+  conReactivar = false,
+}: {
+  google: GoogleViewModel;
+  ocupado: boolean;
+  /** Solo el formulario de Acceso ofrece "Reactivar mi cuenta" tras el aviso de Google. */
+  conReactivar?: boolean;
+}) {
   const { abriendo, error, entrar, cuentaDesactivada, reactivar } = google;
   const { google: textos, cuenta } = useTextosAuth();
   return (
@@ -584,7 +599,7 @@ export function AccesoGoogle({ google, ocupado }: { google: GoogleViewModel; ocu
       />
       <Aviso tipo="error" texto={error} />
       {/* Google regresó con la cuenta desactivada por su titular: se ofrece reactivarla. */}
-      {cuentaDesactivada ? (
+      {conReactivar && cuentaDesactivada ? (
         <Button titulo={cuenta.reactivar} variante="secundario" onPress={reactivar} deshabilitado={ocupado} />
       ) : null}
     </>
@@ -702,6 +717,15 @@ function FormularioRegistro({
           <PasoCabello registro={registro} refs={ref} />
         )}
       </Animated.View>
+      {/* La cuenta se creó sin las alergias: se explica antes de pasar a la activación. */}
+      <Hoja
+        visible={registro.alergiasNoGuardadas}
+        onCerrar={registro.continuarAActivar}
+        titulo={registro.textosAlergias.noGuardadasTitulo}
+        texto={registro.textosAlergias.noGuardadasTexto}
+      >
+        <Button titulo={registro.textosAlergias.continuar} onPress={registro.continuarAActivar} />
+      </Hoja>
     </>
   );
 }
@@ -949,8 +973,8 @@ function PasoCuenta({
 }
 
 /**
- * Paso 2, "Tu cabello": perfil capilar, alergias (con consentimiento de datos de salud),
- * tratamientos, aviso de privacidad y promociones. Textos de la web.
+ * Paso 2, "Tu cabello": perfil capilar, alergias (solo con la autorización expresa de datos
+ * sensibles), tratamientos, aviso de privacidad y promociones. Textos de la web.
  */
 function PasoCabello({ registro, refs }: { registro: RegistroViewModel; refs: RefsRegistro }) {
   const { colores } = useTheme();
@@ -966,6 +990,7 @@ function PasoCabello({ registro, refs }: { registro: RegistroViewModel; refs: Re
     abrirAviso,
     abrirTerminos,
     crearCuenta,
+    textosAlergias,
   } = registro;
   const enlaceAviso = {
     texto: 'Aviso de Privacidad',
@@ -1018,29 +1043,33 @@ function PasoCabello({ registro, refs }: { registro: RegistroViewModel; refs: Re
         onElegir={(v) => cambiar('tieneAlergias', v === 'si')}
         error={errores.tieneAlergias ?? null}
       />
-      {campos.tieneAlergias ? (
-        <>
-          <Input
-            ref={refs.texto('alergias')}
-            etiqueta="Especifica tus alergias"
-            tipo="sensible"
-            valor={campos.alergias}
-            onCambiar={(t) => cambiar('alergias', t)}
-            onSalir={() => salir('alergias')}
-            siguiente={refs.irABloque('consienteDatosSensibles')}
-            error={errores.alergias}
-          />
-          <View ref={refs.bloqueDe('consienteDatosSensibles')}>
-            <Casilla
-              marcada={campos.consienteDatosSensibles}
-              onCambiar={(v) => cambiar('consienteDatosSensibles', v)}
-              texto={TEXTO_CONSENTIMIENTO_SALUD}
-              enlace={enlaceAviso}
-              error={errores.consienteDatosSensibles ?? null}
-            />
-          </View>
-        </>
+      {/* Ronda 5: las alergias se piden solo después de la autorización expresa con el texto del
+          backend; sin ella el campo no aparece y no se envía nada de alergias. */}
+      {campos.tieneAlergias && campos.autorizacionDatosSensibles ? (
+        <Input
+          ref={refs.texto('alergias')}
+          etiqueta="Especifica tus alergias"
+          tipo="sensible"
+          valor={campos.alergias}
+          onCambiar={(t) => cambiar('alergias', t)}
+          onSalir={() => salir('alergias')}
+          siguiente={refs.irABloque('tratamientosQuimicos')}
+          ayuda={textosAlergias.autorizada}
+          error={errores.alergias}
+        />
       ) : null}
+      {campos.tieneAlergias && !campos.autorizacionDatosSensibles ? (
+        <View ref={refs.bloqueDe('autorizacionDatosSensibles')} style={styles.botonesPaso}>
+          <Text style={[styles.parrafo, { color: colores.textoSuave }]}>{textosAlergias.pide}</Text>
+          <Button
+            titulo={textosAlergias.boton}
+            variante="secundario"
+            onPress={registro.autorizacion.abrir}
+            deshabilitado={cargando}
+          />
+        </View>
+      ) : null}
+      <HojaDatosSensibles vm={registro.autorizacion} />
       <Opciones
         refContenedor={refs.bloqueDe('tratamientosQuimicos')}
         etiqueta="¿Tratamientos químicos previos?"
@@ -1322,49 +1351,6 @@ function MensajeCampo({ error }: { error: string | null }) {
       style={error ? null : styles.fueraDeFlujo}
     >
       {error ? <Text style={[styles.nota, { color: colores.peligro }]}>{error}</Text> : null}
-    </View>
-  );
-}
-
-/**
- * Mensaje de error o de éxito de un formulario. La región en vivo queda siempre montada para que
- * TalkBack anuncie el texto cuando aparece; vacía, queda fuera del flujo y no suma espacio.
- */
-export function Aviso({
-  tipo: tipoAviso,
-  texto,
-  estilo,
-  cortes = false,
-}: {
-  tipo: 'error' | 'exito';
-  texto: string | null;
-  /** Estilo del contenedor cuando hay mensaje (por ejemplo, márgenes). */
-  estilo?: StyleProp<ViewStyle>;
-  /** El error se anuncia sin interrumpir (polite), como en Reactivar. */
-  cortes?: boolean;
-}) {
-  const { colores } = useTheme();
-  const entrada = useEntradaContenido();
-  const esError = tipoAviso === 'error';
-  const Icono = esError ? CircleAlert : CircleCheck;
-  const color = esError ? colores.peligro : colores.texto;
-  return (
-    <View
-      collapsable={false}
-      accessibilityLiveRegion={esError && !cortes ? 'assertive' : 'polite'}
-      style={texto ? estilo : styles.fueraDeFlujo}
-    >
-      {/* El mensaje aparece en 220 ms (reducido: solo se funde) en lugar de saltar a la vista. */}
-      {texto ? (
-        <Animated.View
-          accessible
-          entering={entrada}
-          style={[styles.aviso, { borderColor: esError ? colores.peligro : colores.hairline }]}
-        >
-          <Icono color={esError ? colores.peligro : colores.foco} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
-          <Text style={[styles.parrafo, styles.textoAviso, { color }]}>{texto}</Text>
-        </Animated.View>
-      ) : null}
     </View>
   );
 }
@@ -1738,17 +1724,6 @@ const styles = StyleSheet.create({
     fontSize: tipo.pequeno.tamano,
     lineHeight: tipo.pequeno.linea,
     textDecorationLine: 'underline',
-  },
-  aviso: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: espacio.m,
-    padding: espacio.l,
-    borderRadius: radio.campo,
-    borderWidth: borde.hairline,
-  },
-  textoAviso: {
-    flex: 1,
   },
   separador: {
     flexDirection: 'row',

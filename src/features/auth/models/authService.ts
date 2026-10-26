@@ -11,6 +11,7 @@ import type {
   RespuestaLogin,
   RespuestaPerfil,
   RespuestaPreguntas,
+  RespuestaRegistro,
   RespuestaSimple,
   RespuestaVerificarCorreo,
   UsuarioSesion,
@@ -100,6 +101,15 @@ export function obtenerPerfilCompleto(opciones: { reciente?: boolean } = {}): Pr
   return leerPerfil({ reciente: opciones.reciente });
 }
 
+/**
+ * GET /api/auth/me de nuevo desde la red, sin unirse a una lectura anterior: tras autorizar los datos
+ * sensibles, la respuesta vieja todavía tendría las alergias ocultas.
+ */
+export function releerPerfilCompleto(): Promise<unknown> {
+  invalidarPerfil();
+  return leerPerfil();
+}
+
 /** PATCH /api/auth/me: solo los campos que cambiaron. Al guardar, el perfil en memoria se olvida. */
 export function actualizarPerfil(cambios: CambiosPerfil | { foto: string | null }): Promise<unknown> {
   return apiPatch<unknown>('/api/auth/me', cambios).then((respuesta) => {
@@ -156,8 +166,8 @@ export function verificarCorreo(correo: string): Promise<RespuestaVerificarCorre
 }
 
 /** POST /api/usuarios/registro (público). Crea la cuenta sin activar y envía un código por correo. */
-export function registrarUsuario(datos: DatosRegistro): Promise<RespuestaSimple> {
-  return apiPost<RespuestaSimple>('/api/usuarios/registro', datos, { publica: true });
+export function registrarUsuario(datos: DatosRegistro): Promise<RespuestaRegistro> {
+  return apiPost<RespuestaRegistro>('/api/usuarios/registro', datos, { publica: true });
 }
 
 /** POST /api/auth/verificar-otp (público). */

@@ -117,8 +117,12 @@ export function esSlugDocumentoLegal(valor: unknown): valor is SlugDocumentoLega
   return typeof valor === 'string' && (SLUGS_DOCUMENTO_LEGAL as readonly string[]).includes(valor);
 }
 
+/** Versión "X.Y" y hash SHA-256 en hexadecimal con el formato del backend. */
+export const esVersionDocumento = (valor: string): boolean => VERSION.test(valor);
+export const esHashDocumento = (valor: string): boolean => HASH.test(valor);
+
 /** 'YYYY-MM-DD' que es un día real del calendario (sin 31 de febrero ni mes 13). */
-function esFechaDeCalendario(fecha: string): boolean {
+export function esFechaDeCalendario(fecha: string): boolean {
   if (!FECHA.test(fecha)) {
     return false;
   }
@@ -128,7 +132,7 @@ function esFechaDeCalendario(fecha: string): boolean {
 }
 
 /** Ruta del sitio: empieza con "/" y no trae "//" (no puede apuntar a otro dominio). */
-const esRutaDelSitio = (ruta: string): boolean => ruta.startsWith('/') && !ruta.includes('//') && !/\s/.test(ruta);
+export const esRutaDelSitio = (ruta: string): boolean => ruta.startsWith('/') && !ruta.includes('//') && !/\s/.test(ruta);
 
 /**
  * El documento del servidor (o del archivo) validado para `slug`: versión "X.Y", hash SHA-256 en
@@ -338,20 +342,42 @@ export function suscribir(oyente: () => void): () => void {
 }
 
 /**
- * Página del documento en el sitio: EXPO_PUBLIC_WEB_URL (sin "/" final) más la ruta del documento
- * (o la de respaldo). null si no hay URL de la web o no es https (en desarrollo se permite http).
+ * Una ruta del sitio ("/aviso-de-privacidad") como URL completa: EXPO_PUBLIC_WEB_URL (sin "/" final)
+ * más la ruta. null si no hay URL de la web, no es https (en desarrollo se permite http) o la ruta no
+ * es del sitio (no empieza con "/" o trae "//" o espacios: no puede apuntar a otro dominio).
  */
-export function urlDocumentoEnWeb(slug: SlugDocumentoLegal, documento?: DocumentoLegalVigente | null): string | null {
+export function urlDeRutaEnWeb(ruta: string): string | null {
   const base = process.env.EXPO_PUBLIC_WEB_URL?.trim() ?? '';
-  if (!base || !esUrlPermitida(base)) {
+  if (!base || !esUrlPermitida(base) || !esRutaDelSitio(ruta)) {
     return null;
   }
   let fin = base.length;
   while (fin > 0 && base[fin - 1] === '/') {
     fin--;
   }
-  const ruta = documento?.slug === slug ? documento.ruta : RUTA_DOCUMENTO_LEGAL[slug];
   return `${base.slice(0, fin)}${ruta}`;
+}
+
+/**
+ * Página del documento en el sitio: la ruta del documento (o la de respaldo) en la web (ver
+ * urlDeRutaEnWeb). null si no hay URL de la web o no es https (en desarrollo se permite http).
+ */
+export function urlDocumentoEnWeb(slug: SlugDocumentoLegal, documento?: DocumentoLegalVigente | null): string | null {
+  return urlDeRutaEnWeb(documento?.slug === slug ? documento.ruta : RUTA_DOCUMENTO_LEGAL[slug]);
+}
+
+/** Abre una página del sitio en el navegador de la app. true si se abrió; false si no. Nunca rechaza. */
+export async function abrirRutaEnWeb(ruta: string): Promise<boolean> {
+  const url = urlDeRutaEnWeb(ruta);
+  if (!url) {
+    return false;
+  }
+  try {
+    await openBrowserAsync(url);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -362,16 +388,7 @@ export async function abrirDocumentoEnWeb(
   slug: SlugDocumentoLegal,
   documento: DocumentoLegalVigente | null = documentoEnMemoria(slug),
 ): Promise<boolean> {
-  const url = urlDocumentoEnWeb(slug, documento);
-  if (!url) {
-    return false;
-  }
-  try {
-    await openBrowserAsync(url);
-    return true;
-  } catch {
-    return false;
-  }
+  return abrirRutaEnWeb(documento?.slug === slug ? documento.ruta : RUTA_DOCUMENTO_LEGAL[slug]);
 }
 
 /** Ruta del visor del documento en la app, para router.push. */

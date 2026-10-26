@@ -69,7 +69,10 @@ export interface RevisionVista {
   puedeContinuar: boolean;
   textoContinuar: string;
   continuar: () => void;
+  /** "Revisar de nuevo", o "Intenta de nuevo en N s" mientras dura la espera de un 429 de la revisión. */
   textoRevisarDeNuevo: string;
+  /** Tras un 429 de la revisión: "Revisar de nuevo" queda deshabilitado hasta que pase la espera. */
+  revisarEnEspera: boolean;
   revisarDeNuevo: () => void;
   textoVolver: string;
   volverAElegir: () => void;
@@ -130,6 +133,8 @@ export interface MiCuentaViewModel {
 
 const TOTAL_PASOS = 3;
 const LARGO_CODIGO = 6;
+/** Minutos que dura el código si la respuesta no trae vigenciaMinutos (los del contrato del backend). */
+export const VIGENCIA_CODIGO_RESPALDO_MIN = 10;
 const NUMERO_PASO: Record<PasoMiCuenta, number> = { elegir: 1, revision: 2, confirmar: 3 };
 const CLAVE_PASO = {
   elegir: 'cuenta.app.pasoElegir',
@@ -211,9 +216,10 @@ export function useMiCuentaViewModel(): MiCuentaViewModel {
   const [codigoPedido, setCodigoPedido] = useState(false);
   const [enviandoCodigo, setEnviandoCodigo] = useState(false);
   const [enviando, setEnviando] = useState(false);
-  // Desactivar y eliminar comparten un límite de 5 por minuto; pedir el código tiene el suyo.
+  // Desactivar y eliminar comparten un límite de 5 por minuto; pedir el código y revisar tienen el suyo.
   const limiteBaja = useEsperaLimite();
   const limiteCodigo = useEsperaLimite();
+  const limiteRevision = useEsperaLimite();
   const candadoBaja = useCandado();
   const candadoCodigo = useCandado();
   const solicitud = useRef(0);
@@ -247,6 +253,8 @@ export function useMiCuentaViewModel(): MiCuentaViewModel {
         if (id !== solicitud.current) {
           return;
         }
+        // Un 429 deja "Revisar de nuevo" en espera; el message del backend queda como error.
+        limiteRevision.esperarSiLimite(error);
         if (esCuentaDePersonal(error)) {
           marcarPersonal(error);
         }
@@ -305,6 +313,10 @@ export function useMiCuentaViewModel(): MiCuentaViewModel {
   };
 
   const revisarDeNuevo = () => {
+    // Durante la espera de un 429 no se pide otra revisión.
+    if (limiteRevision.activa) {
+      return;
+    }
     setAvisoRevision(null);
     cargarRevision();
   };
@@ -384,7 +396,8 @@ export function useMiCuentaViewModel(): MiCuentaViewModel {
     try {
       if (await sesionDeLaBaja(generacion)) {
         // Borra la sesión local, corta los avisos en vivo y deja el aviso con el folio para Acceso.
-        await cerrarTrasBajaDeCuenta({ mensaje, folio: resultado.folio });
+        // Al eliminar, también se borra lo que el teléfono guarda de la clienta (Avisos en la app).
+        await cerrarTrasBajaDeCuenta({ mensaje, folio: resultado.folio }, eliminar ? 'eliminada' : 'desactivada');
       } else if (montado.current) {
         // Ya hay otra sesión guardada: no se toca, pero la clienta ve el resultado (y el folio).
         setAviso(textoAvisoBaja({ mensaje, folio: resultado.folio }, (folio) => texto('cuenta.app.folio', { folio })));
@@ -407,7 +420,10 @@ export function useMiCuentaViewModel(): MiCuentaViewModel {
       }
       setCodigoCrudo('');
       setCodigoPedido(true);
-      setAvisoCodigo(enviado.mensaje ?? texto('cuenta.app.codigoEnviado'));
+      setAvisoCodigo(
+        enviado.mensaje ??
+          texto('cuenta.app.codigoEnviado', { minutos: enviado.vigenciaMinutos ?? VIGENCIA_CODIGO_RESPALDO_MIN }),
+      );
     } catch (error) {
       if (!montado.current) {
         return;
@@ -512,7 +528,8 @@ export function useMiCuentaViewModel(): MiCuentaViewModel {
       puedeContinuar,
       textoContinuar: texto('cuenta.app.continuar'),
       continuar,
-      textoRevisarDeNuevo: texto('cuenta.app.revisarDeNuevo'),
+      textoRevisarDeNuevo: limiteRevision.texto ?? texto('cuenta.app.revisarDeNuevo'),
+      revisarEnEspera: limiteRevision.activa,
       revisarDeNuevo,
       textoVolver: texto('cuenta.app.volver'),
       volverAElegir,

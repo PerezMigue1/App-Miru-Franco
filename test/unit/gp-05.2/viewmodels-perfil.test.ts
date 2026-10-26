@@ -36,6 +36,7 @@ import { generacionActual, nuevaGeneracion } from '@/shared/api/tokenStorage';
 import { AparienciaProvider } from '@/shared/ui/apariencia';
 
 import { espiarConsola } from '../../helpers/consola';
+import { permisoGaleria, simularAndroid } from '../../helpers/galeriaAndroid';
 import { CLIENTA, PERFIL_COMPLETO, respuestaPerfil } from '../../helpers/perfilClienta';
 import { llamadasA, respuesta } from '../../helpers/servidorSimulado';
 import {
@@ -73,6 +74,7 @@ jest.mock('expo-web-browser', () => ({
 }));
 
 jest.mock('expo-image-picker', () => ({
+  getMediaLibraryPermissionsAsync: jest.fn(),
   requestMediaLibraryPermissionsAsync: jest.fn(),
   launchImageLibraryAsync: jest.fn(),
 }));
@@ -191,6 +193,9 @@ beforeEach(() => {
   mockArchivos.tamano = 200_000;
   mockArchivos.borrados = [];
   jest.mocked(openBrowserAsync).mockClear();
+  // El permiso aún no está concedido: en Android 12 la explicación sale antes de pedirlo.
+  jest.mocked(ImagePicker.getMediaLibraryPermissionsAsync).mockReset();
+  jest.mocked(ImagePicker.getMediaLibraryPermissionsAsync).mockResolvedValue(permisoGaleria('negado'));
   jest.mocked(ImagePicker.requestMediaLibraryPermissionsAsync).mockReset();
   jest.mocked(ImagePicker.requestMediaLibraryPermissionsAsync).mockResolvedValue({ granted: true } as never);
   jest.mocked(ImagePicker.launchImageLibraryAsync).mockReset();
@@ -404,6 +409,14 @@ describe('usePerfilViewModel', () => {
   });
 
   describe('foto', () => {
+    // GP-09: en Android 13 o más nuevo la galería se abre directo, sin permiso (así corren estas
+    // pruebas); el permiso con su explicación de Android 12 se prueba en test/unit/gp-09/perfil-galeria.
+    let restaurarPlataforma: () => void = () => undefined;
+    beforeEach(() => {
+      restaurarPlataforma = simularAndroid(34);
+    });
+    afterEach(() => restaurarPlataforma());
+
     async function elegirFoto(result: { current: ReturnType<typeof usePerfilViewModel> }): Promise<void> {
       await act(async () => {
         result.current.abrirOpcionesFoto();
@@ -413,14 +426,29 @@ describe('usePerfilViewModel', () => {
         result.current.elegirFoto();
       });
       expect(result.current.opcionesFoto).toBe(false);
+      // La hoja de opciones terminó de irse (alCerrarse de Hoja).
+      await act(async () => {
+        result.current.alCerrarseOpciones();
+      });
     }
 
-    it('sin permiso lo explica, no abre el selector y ofrece los ajustes', async () => {
-      jest.mocked(ImagePicker.requestMediaLibraryPermissionsAsync).mockResolvedValue({ granted: false } as never);
+    it('Android 12: negado para siempre lo explica, no abre el selector y ofrece los ajustes', async () => {
+      restaurarPlataforma();
+      restaurarPlataforma = simularAndroid(32);
+      jest
+        .mocked(ImagePicker.requestMediaLibraryPermissionsAsync)
+        .mockResolvedValue(permisoGaleria('negadoParaSiempre'));
       const ajustes = jest.spyOn(Linking, 'openSettings').mockRejectedValue(new Error('sin ajustes'));
       const { result, llamadas } = await montarPerfil(RUTAS_FOTO);
 
       await elegirFoto(result);
+      // Sin el permiso concedido, primero la explicación; el permiso se pide con "Continuar".
+      await waitFor(() => expect(result.current.explicacionGaleria).toBe(true));
+      expect(ImagePicker.getMediaLibraryPermissionsAsync).toHaveBeenCalledTimes(1);
+      expect(ImagePicker.requestMediaLibraryPermissionsAsync).not.toHaveBeenCalled();
+      await act(async () => {
+        result.current.continuarGaleria();
+      });
       await waitFor(() => expect(result.current.permisoDenegado).toBe(true));
       expect(ImagePicker.launchImageLibraryAsync).not.toHaveBeenCalled();
       expect(veces(llamadas, RUTA_FIRMA)).toBe(0);
@@ -438,6 +466,9 @@ describe('usePerfilViewModel', () => {
 
       await elegirFoto(result);
       await waitFor(() => expect(ImagePicker.launchImageLibraryAsync).toHaveBeenCalled());
+      // Android 13 o más nuevo: el selector del sistema no pide ni consulta el permiso.
+      expect(ImagePicker.getMediaLibraryPermissionsAsync).not.toHaveBeenCalled();
+      expect(ImagePicker.requestMediaLibraryPermissionsAsync).not.toHaveBeenCalled();
       await asentar();
       expect(veces(llamadas, RUTA_FIRMA)).toBe(0);
       expect(result.current.fotoOcupada).toBe(false);
@@ -840,7 +871,8 @@ describe('useEditarPerfilViewModel', () => {
 
   describe('consentimiento de alergias', () => {
     it('alergias nuevas piden la autorización; con ella se envía consienteDatosSensibles', async () => {
-      const { result, llamadas } = await montarEdicion();
+      // GP-09 (Ronda 5): con la autorización de datos sensibles vigente el campo funciona como antes.
+      const { result, llamadas } = await montarEdicion({}, { datosSensiblesAutorizados: true });
 
       await escribir(result, { alergias: 'Polvo ficticio' });
       expect(result.current.pideConsentimiento).toBe(true);
@@ -867,7 +899,7 @@ describe('useEditarPerfilViewModel', () => {
     });
 
     it('borrar las alergias no pide autorización y las envía como null', async () => {
-      const { result, llamadas } = await montarEdicion({}, { alergias: 'Polvo ficticio' });
+      const { result, llamadas } = await montarEdicion({}, { alergias: 'Polvo ficticio', datosSensiblesAutorizados: true });
 
       await escribir(result, { alergias: '' });
       expect(result.current.pideConsentimiento).toBe(false);

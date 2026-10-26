@@ -10,6 +10,7 @@ import { OtpInput } from '@/shared/ui/OtpInput';
 import { espacio, fuente, pantalla, tipo } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
+import { AccionesCodigo } from '../components/AccionesCodigo';
 import { Aviso, Encabezado, Enlace, PantallaAuth } from '../components/AuthContainer';
 import { useReactivarViewModel, type ReactivarViewModel } from '../viewmodels/useReactivarViewModel';
 import { rutaAcceso } from '../viewmodels/useRetornoActivacion';
@@ -89,7 +90,6 @@ function PasoCorreo({ vm }: { vm: ReactivarViewModel }) {
 
 /** Paso 2: el código de 6 dígitos, "Reactivar mi cuenta", otro código tras 60 s y cambiar el correo. */
 function PasoCodigo({ vm }: { vm: ReactivarViewModel }) {
-  const { colores } = useTheme();
   return (
     <>
       <Aviso tipo="exito" texto={vm.mensaje} />
@@ -100,27 +100,17 @@ function PasoCodigo({ vm }: { vm: ReactivarViewModel }) {
         error={vm.errorCodigo}
       />
       <Aviso tipo="error" texto={vm.error} cortes />
-      <Button
-        titulo={vm.textoReactivar}
-        onPress={vm.reactivar}
-        cargando={vm.reactivando}
-        deshabilitado={vm.reactivacionEnLimite}
+      <AccionesCodigo
+        tituloAccion={vm.textoReactivar}
+        onAccion={vm.reactivar}
+        cargandoAccion={vm.reactivando}
+        accionDeshabilitada={vm.reactivacionEnLimite}
+        esperaOtroCodigo={vm.esperaOtroCodigo}
+        textoEspera={vm.textos.espera}
+        textoOtroCodigo={vm.textoOtroCodigo}
+        onOtroCodigo={vm.pedirOtroCodigo}
+        otroCodigoDeshabilitado={vm.envioEnLimite || vm.reactivando}
       />
-      {vm.esperaOtroCodigo > 0 ? (
-        <Text
-          accessibilityLiveRegion="polite"
-          style={[styles.nota, styles.espera, { color: colores.textoSuave }]}
-        >
-          {vm.textos.espera}
-        </Text>
-      ) : (
-        <Enlace
-          texto={vm.textoOtroCodigo}
-          onPress={vm.pedirOtroCodigo}
-          alinear="centro"
-          deshabilitado={vm.envioEnLimite || vm.reactivando}
-        />
-      )}
       <Enlace
         texto={vm.textos.cambiarCorreo}
         onPress={vm.cambiarCorreo}
@@ -144,14 +134,5 @@ const styles = StyleSheet.create({
     fontFamily: fuente.textoMedio,
     fontSize: tipo.etiquetaCampo.tamano,
     lineHeight: tipo.etiquetaCampo.linea,
-  },
-  nota: {
-    fontFamily: fuente.texto,
-    fontSize: tipo.pequeno.tamano,
-    lineHeight: tipo.pequeno.linea,
-  },
-  espera: {
-    textAlign: 'center',
-    fontVariant: ['tabular-nums'],
   },
 });

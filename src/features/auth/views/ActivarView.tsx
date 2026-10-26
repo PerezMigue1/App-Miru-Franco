@@ -1,11 +1,11 @@
 import { useLocalSearchParams } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { Button } from '@/shared/ui/Button';
 import { OtpInput } from '@/shared/ui/OtpInput';
 import { espacio, fuente, pantalla, tipo } from '@/shared/ui/tokens';
 import { useTheme } from '@/shared/ui/useTheme';
 
+import { AccionesCodigo } from '../components/AccionesCodigo';
 import { Aviso, Encabezado, Enlace, PantallaAuth } from '../components/AuthContainer';
 import { useActivarViewModel } from '../viewmodels/useActivarViewModel';
 import { rutaAcceso } from '../viewmodels/useRetornoActivacion';
@@ -36,27 +36,17 @@ export default function ActivarView() {
         />
         <Text style={[styles.nota, { color: colores.textoSuave }]}>{activar.textos.vigencia}</Text>
         <Aviso tipo="exito" texto={activar.mensaje} />
-        <Button
-          titulo={activar.textoVerificar}
-          onPress={activar.verificar}
-          cargando={activar.cargando}
-          deshabilitado={activar.verificacionEnLimite}
+        <AccionesCodigo
+          tituloAccion={activar.textoVerificar}
+          onAccion={activar.verificar}
+          cargandoAccion={activar.cargando}
+          accionDeshabilitada={activar.verificacionEnLimite}
+          esperaOtroCodigo={activar.espera}
+          textoEspera={activar.textos.espera}
+          textoOtroCodigo={activar.textoReenviar}
+          onOtroCodigo={activar.reenviar}
+          otroCodigoDeshabilitado={activar.reenvioEnLimite}
         />
-        {activar.espera > 0 ? (
-          <Text
-            accessibilityLiveRegion="polite"
-            style={[styles.nota, styles.espera, { color: colores.textoSuave }]}
-          >
-            {activar.textos.espera}
-          </Text>
-        ) : (
-          <Enlace
-            texto={activar.textoReenviar}
-            onPress={activar.reenviar}
-            alinear="centro"
-            deshabilitado={activar.reenvioEnLimite}
-          />
-        )}
         <Enlace texto={activar.textos.volver} onPress={activar.volver} alinear="centro" />
       </View>
     </PantallaAuth>
@@ -73,9 +63,5 @@ const styles = StyleSheet.create({
     fontFamily: fuente.texto,
     fontSize: tipo.pequeno.tamano,
     lineHeight: tipo.pequeno.linea,
-  },
-  espera: {
-    textAlign: 'center',
-    fontVariant: ['tabular-nums'],
   },
 });

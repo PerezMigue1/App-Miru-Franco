@@ -6,13 +6,21 @@
  */
 
 /**
- * Por qué se cerró la sesión. 'salida': la clienta cerró sesión (o la cuenta no era de clienta);
- * 'vencida': el servidor rechazó la sesión (la clienta puede volver a entrar y seguir donde iba);
- * 'cambioContrasena': cambió la contraseña y el servidor revocó la sesión.
+ * Por qué se cerró la sesión. 'salida': la clienta cerró sesión, desactivó su cuenta (o la cuenta no
+ * era de clienta); 'vencida': el servidor rechazó la sesión (la clienta puede volver a entrar y seguir
+ * donde iba); 'cambioContrasena': cambió la contraseña y el servidor revocó la sesión;
+ * 'cuentaEliminada': la clienta eliminó su cuenta (como 'salida', y además se borra lo que el
+ * teléfono guarda de ella, por ejemplo la preferencia "Avisos en la app").
  */
-export type MotivoCierreSesion = 'salida' | 'vencida' | 'cambioContrasena';
+export type MotivoCierreSesion = 'salida' | 'vencida' | 'cambioContrasena' | 'cuentaEliminada';
 
-export type OyenteCierreSesion = (motivo: MotivoCierreSesion) => void;
+/** Datos del cierre: con 'cuentaEliminada', el id de la clienta cuya cuenta se eliminó. */
+export interface DetalleCierreSesion {
+  usuarioId?: string;
+}
+
+/** Recibe el motivo y, solo si quien cierra lo mandó, el detalle (una copia que no se puede cambiar). */
+export type OyenteCierreSesion = (motivo: MotivoCierreSesion, detalle?: Readonly<DetalleCierreSesion>) => void;
 
 const oyentes = new Set<OyenteCierreSesion>();
 
@@ -25,10 +33,15 @@ export function alCerrarSesion(oyente: OyenteCierreSesion): () => void {
 }
 
 /** Avisa a cada oyente una vez; uno que falla no impide avisar a los demás ni a quien cierra. */
-export function avisarCierreSesion(motivo: MotivoCierreSesion): void {
+export function avisarCierreSesion(motivo: MotivoCierreSesion, detalle?: DetalleCierreSesion): void {
+  const copia = detalle ? Object.freeze({ ...detalle }) : undefined;
   for (const oyente of [...oyentes]) {
     try {
-      oyente(motivo);
+      if (copia) {
+        oyente(motivo, copia);
+      } else {
+        oyente(motivo);
+      }
     } catch {
       // Se sigue con los demás.
     }

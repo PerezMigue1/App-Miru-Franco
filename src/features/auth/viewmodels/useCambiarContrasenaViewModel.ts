@@ -8,6 +8,7 @@ import { mensajeParaClienta } from '@/shared/api/mensajesError';
 import { obtenerTexto } from '@/shared/api/textosSitio';
 import { useEsperaLimite } from '@/shared/api/useEsperaLimite';
 import { generacionActual } from '@/shared/api/tokenStorage';
+import { useTextos, type FuncionTexto } from '@/shared/api/useTextos';
 import { soloDigitos, telefonoSinLada } from '@/shared/ui/digitos';
 import { duracion } from '@/shared/ui/tokens';
 import { useCandado } from '@/shared/ui/useCandado';
@@ -39,6 +40,8 @@ export interface CambiarContrasenaViewModel {
   estado: EstadoContrasena;
   /** Con estado 'error': por qué no se cargó la cuenta (sin red, servidor...); null si no hay error. */
   mensajeError: string | null;
+  /** Texto del botón para volver a cargar la cuenta, del catálogo. */
+  textoReintentar: string;
   reintentar: () => void;
   paso: PasoContrasena;
   valores: Record<CampoDato, string>;
@@ -194,12 +197,12 @@ function destinoDelError(error: unknown, ruta: 'codigo' | 'cambio', sesionVigent
   return { tipo: 'aviso', mensaje: mensajeParaClienta(error, { respaldo: errorGenerico() }) };
 }
 
-/** "Continuar" si ya hay un código vigente para la contraseña actual; si no, se pide uno. */
-function tituloDelEnvio(enviando: boolean, codigoVigente: boolean): string {
+/** "Continuar" si ya hay un código vigente para la contraseña actual; si no, se pide uno. Del catálogo. */
+function tituloDelEnvio(texto: FuncionTexto, enviando: boolean, codigoVigente: boolean): string {
   if (enviando) {
-    return 'Enviando código…';
+    return texto('auth.cambiarContrasena.enviandoCodigo');
   }
-  return codigoVigente ? 'Continuar' : 'Enviar código';
+  return texto(codigoVigente ? 'auth.cambiarContrasena.continuar' : 'auth.cambiarContrasena.enviarCodigo');
 }
 
 /**
@@ -211,6 +214,8 @@ function tituloDelEnvio(enviando: boolean, codigoVigente: boolean): string {
 export function useCambiarContrasenaViewModel(): CambiarContrasenaViewModel {
   const { back } = useRouter();
   const { cerrarTrasCambioDeContrasena } = useAuth();
+  // Textos de los botones, del catálogo (siguen a la configuración del servidor).
+  const textoCatalogo = useTextos();
   const [estado, setEstado] = useState<EstadoContrasena>('cargando');
   const [errorCarga, setErrorCarga] = useState<unknown>(null);
   const [perfil, setPerfil] = useState<DatosCuenta | null>(null);
@@ -518,6 +523,7 @@ export function useCambiarContrasenaViewModel(): CambiarContrasenaViewModel {
   return {
     estado,
     mensajeError: estado === 'error' ? mensajeParaClienta(errorCarga) : null,
+    textoReintentar: textoCatalogo('auth.cambiarContrasena.reintentar'),
     reintentar: cargar,
     paso,
     valores,
@@ -533,7 +539,7 @@ export function useCambiarContrasenaViewModel(): CambiarContrasenaViewModel {
     vigenciaMinutos,
     codigoVigente: codigoVigente && espera > 0,
     enviando,
-    tituloEnvio: limite.texto ?? tituloDelEnvio(enviando, codigoVigente && espera > 0),
+    tituloEnvio: limite.texto ?? tituloDelEnvio(textoCatalogo, enviando, codigoVigente && espera > 0),
     enviarCodigo: () => {
       if (!enviando && !limite.activa) {
         candadoEnvio(enviar);
@@ -541,7 +547,8 @@ export function useCambiarContrasenaViewModel(): CambiarContrasenaViewModel {
     },
     cambiando,
     cambioEnEspera: limiteCambio.activa,
-    tituloCambiar: limiteCambio.texto ?? (cambiando ? 'Cambiando…' : 'Cambiar contraseña'),
+    tituloCambiar:
+      limiteCambio.texto ?? textoCatalogo(cambiando ? 'auth.cambiarContrasena.cambiando' : 'auth.cambiarContrasena.cambiar'),
     cambiarContrasena: () => {
       if (!cambiando && !reenviando && !limiteCambio.activa) {
         candadoCambio(confirmar);
@@ -550,7 +557,8 @@ export function useCambiarContrasenaViewModel(): CambiarContrasenaViewModel {
     reenviando,
     espera,
     enEspera: limite.activa,
-    tituloReenviar: limite.texto ?? (reenviando ? 'Reenviando…' : 'Reenviar código'),
+    tituloReenviar:
+      limite.texto ?? textoCatalogo(reenviando ? 'auth.cambiarContrasena.reenviando' : 'auth.cambiarContrasena.reenviar'),
     reenviar: () => {
       if (!reenviando && !cambiando && espera <= 0 && !limite.activa) {
         candadoReenvio(reenviarCodigo);

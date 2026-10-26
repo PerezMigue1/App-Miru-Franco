@@ -47,7 +47,8 @@ const TODOS = [
   VM_ANTICIPO,
   VM_DETALLE,
   TARJETA,
-  componente('BadgeEstado'),
+  // Corrección de GP-09: BadgeEstado se movió a src/shared/ui.
+  src('shared', 'ui', 'BadgeEstado.tsx'),
   componente('ResumenCita'),
   CITA_MODEL,
 ];

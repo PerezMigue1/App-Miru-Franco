@@ -1,4 +1,4 @@
-import { createContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { KeyboardAvoidingView, Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import Animated, { ReduceMotion, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,6 +16,12 @@ interface HojaProps {
   titulo: string;
   /** Texto de apoyo bajo el título. */
   texto?: string;
+  /**
+   * Avisa una vez por cierre que la hoja ya terminó de irse: al acabar la salida (cuando el Modal deja
+   * de pintarse), o en cuanto se cierra con movimiento reducido. Si la Hoja misma se desmonta antes,
+   * no avisa. Sirve para abrir otra hoja sin cruzarlas.
+   */
+  alCerrarse?: () => void;
   children: ReactNode;
 }
 
@@ -26,11 +32,12 @@ interface HojaProps {
  *
  * Sube desde abajo en 240 ms mientras el velo se funde, y al cerrarse baja en 200 ms (salir es más
  * rápido que entrar). Con movimiento reducido, solo se funde. Mientras sale no recibe toques.
+ * alCerrarse avisa cuando ya se fue (para encadenar otra hoja).
  */
 /** true dentro de una Hoja: el botón secundario se dibuja con filete para no perderse en ella. */
 export const DentroDeHoja = createContext(false);
 
-export function Hoja({ visible, onCerrar, titulo, texto, children }: HojaProps) {
+export function Hoja({ visible, onCerrar, titulo, texto, alCerrarse, children }: HojaProps) {
   const { colores } = useTheme();
   const { top, bottom } = useSafeAreaInsets();
   const { height: altoVentana } = useWindowDimensions();
@@ -45,8 +52,24 @@ export function Hoja({ visible, onCerrar, titulo, texto, children }: HojaProps) 
   const progreso = useSharedValue(0);
   const altoHoja = useSharedValue(0);
 
+  // El aviso más reciente (se lee al terminar la salida) y si hay un cierre por avisar: solo después
+  // de haberse abierto, así una hoja que nunca se abrió no avisa nada.
+  const avisoCierre = useRef(alCerrarse);
+  const cierrePorAvisar = useRef(false);
+  useEffect(() => {
+    avisoCierre.current = alCerrarse;
+  });
+  // Si la Hoja se desmonta a mitad de la salida, ya no avisa a un dueño que tampoco está.
+  useEffect(
+    () => () => {
+      cierrePorAvisar.current = false;
+    },
+    [],
+  );
+
   useEffect(() => {
     if (visible) {
+      cierrePorAvisar.current = true;
       // Al abrir desde cerrada se vuelve a medir: el contenido pudo cambiar de alto.
       if (progreso.get() === 0) {
         altoHoja.set(0);
@@ -60,6 +83,20 @@ export function Hoja({ visible, onCerrar, titulo, texto, children }: HojaProps) 
       );
       return;
     }
+    const avisarCierre = () => {
+      if (cierrePorAvisar.current) {
+        cierrePorAvisar.current = false;
+        avisoCierre.current?.();
+      }
+    };
+    const terminarSalida = () => {
+      setMontada(false);
+      avisarCierre();
+    };
+    if (reducido) {
+      // Con movimiento reducido solo hay un fundido breve: no hace falta esperarlo.
+      avisarCierre();
+    }
     progreso.set(
       withTiming(
         0,
@@ -70,7 +107,7 @@ export function Hoja({ visible, onCerrar, titulo, texto, children }: HojaProps) 
         },
         (terminada) => {
           if (terminada) {
-            scheduleOnRN(setMontada, false);
+            scheduleOnRN(terminarSalida);
           }
         },
       ),

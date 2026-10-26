@@ -382,6 +382,7 @@ function PasoConfirmar({ vm }: { vm: ReservarCitaViewModel }) {
           titulo={vm.textoBoton}
           onPress={vm.confirmar}
           cargando={vm.enviando}
+          deshabilitado={vm.enEspera}
           accessibilityHint={
             vm.anticipo && vm.opcionPago === 'linea' ? 'Reserva tu cita y abre Mercado Pago en el navegador' : undefined
           }

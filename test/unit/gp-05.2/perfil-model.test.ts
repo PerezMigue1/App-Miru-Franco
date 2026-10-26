@@ -66,12 +66,19 @@ const PERFIL: PerfilCuenta = {
   colorActual: 'Castaño claro',
   productosUsados: 'Shampoo ficticio',
   alergias: '',
+  // PERFIL_COMPLETO no trae datosSensiblesAutorizados: sin ese true nunca se supone la autorización.
+  datosSensiblesAutorizados: false,
+  alergiasOcultas: false,
   tratamientosQuimicos: false,
   tratamientos: '',
   recibePromociones: false,
   foto: null,
   tienePassword: true,
 };
+
+/** GP-09 (Ronda 5): con la autorización de datos sensibles vigente, las alergias se leen y se mandan. */
+const AUTORIZADA = { datosSensiblesAutorizados: true };
+const PERFIL_AUTORIZADO: PerfilCuenta = { ...PERFIL, datosSensiblesAutorizados: true };
 
 const FECHA_GUARDADA = '1995-04-12';
 
@@ -171,6 +178,8 @@ describe('normalizarPerfil: sobres y campos obligatorios', () => {
       colorActual: '',
       productosUsados: '',
       alergias: '',
+      datosSensiblesAutorizados: false,
+      alergiasOcultas: false,
       tratamientosQuimicos: null,
       tratamientos: '',
       recibePromociones: false,
@@ -266,15 +275,15 @@ describe('normalizarPerfil: datos capilares planos o en perfilCapilar', () => {
   const CAPILAR_LEIDO = { ...CAPILAR, tipoCabello: 'liso' };
 
   it('los lee dentro de perfilCapilar', () => {
-    expect(normalizar({ perfilCapilar: CAPILAR })).toMatchObject(CAPILAR_LEIDO);
+    expect(normalizar({ ...AUTORIZADA, perfilCapilar: CAPILAR })).toMatchObject(CAPILAR_LEIDO);
   });
 
   it('los lee planos, como la web', () => {
-    expect(normalizar(CAPILAR)).toMatchObject(CAPILAR_LEIDO);
+    expect(normalizar({ ...AUTORIZADA, ...CAPILAR })).toMatchObject(CAPILAR_LEIDO);
   });
 
   it('el dato plano gana sobre el de perfilCapilar', () => {
-    const perfil = normalizar({ tipoCabello: 'rizado', alergias: 'Polen', perfilCapilar: CAPILAR });
+    const perfil = normalizar({ ...AUTORIZADA, tipoCabello: 'rizado', alergias: 'Polen', perfilCapilar: CAPILAR });
     expect(perfil.tipoCabello).toBe('rizado');
     expect(perfil.alergias).toBe('Polen');
     expect(perfil.colorNatural).toBe('Negro');
@@ -415,7 +424,7 @@ describe('cambiosDelPerfil', () => {
       { tratamientosQuimicos: true, tratamientos: 'Keratina' },
     ],
   ])('%s', (_caso, cambios, esperado) => {
-    expect(cambiosDelPerfil(PERFIL, formulario(cambios), FECHA_GUARDADA)).toEqual(esperado);
+    expect(cambiosDelPerfil(PERFIL_AUTORIZADO, formulario(cambios), FECHA_GUARDADA)).toEqual(esperado);
   });
 
   it.each<[string, string | null, CambiosPerfil]>([
@@ -431,21 +440,21 @@ describe('cambiosDelPerfil', () => {
   });
 
   it('borrar las alergias envía null y no pide consentimiento', () => {
-    const perfil = { ...PERFIL, alergias: 'Polen' };
+    const perfil = { ...PERFIL_AUTORIZADO, alergias: 'Polen' };
     const cambios = cambiosDelPerfil(perfil, formulario({ alergias: ' ' }), FECHA_GUARDADA);
     expect(cambios).toEqual({ alergias: null });
     expect(cambios).not.toHaveProperty('consienteDatosSensibles');
   });
 
   it('las alergias sin cambio no piden consentimiento aunque traigan texto', () => {
-    const perfil = { ...PERFIL, alergias: 'Polen' };
+    const perfil = { ...PERFIL_AUTORIZADO, alergias: 'Polen' };
     const cambios = cambiosDelPerfil(perfil, { ...formularioDesdePerfil(perfil) }, FECHA_GUARDADA);
     expect(cambios).toEqual({});
   });
 
   it('junta varios cambios en un solo cuerpo', () => {
     const cambios = cambiosDelPerfil(
-      PERFIL,
+      PERFIL_AUTORIZADO,
       formulario({
         nombre: 'Clienta Nueva',
         tipoCabello: 'liso',
@@ -479,7 +488,7 @@ describe('requiereConsentimientoPerfil', () => {
     ['Polen', 'Látex', true],
     ['Polen', '', false],
   ])('guardadas "%s" y escritas "%s": %s', (guardadas, escritas, esperado) => {
-    expect(requiereConsentimientoPerfil({ ...PERFIL, alergias: guardadas }, escritas)).toBe(esperado);
+    expect(requiereConsentimientoPerfil({ ...PERFIL_AUTORIZADO, alergias: guardadas }, escritas)).toBe(esperado);
   });
 });
 

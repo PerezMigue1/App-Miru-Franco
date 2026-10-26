@@ -14,6 +14,12 @@ module.exports = {
     [String.raw`\.mjs$`]: transformadorExpo,
   },
   setupFilesAfterEnv: ['<rootDir>/test/setup.ts'],
+  // La mitad de los núcleos, no todos menos uno (el valor de Jest): con --coverage cada worker carga
+  // las pantallas instrumentadas y, en un equipo de 16 hilos con 16 GB, 15 workers agotaban la memoria
+  // (memoria libre en 0). El sistema paginaba, una prueba de 0.1 s pasaba de los 5 s y los workers no
+  // alcanzaban a salir a tiempo ("A worker process has failed to exit gracefully"). Con la mitad, la
+  // corrida completa con cobertura es más rápida y no deja ese aviso. En el CI (2 a 4 núcleos) cambia poco.
+  maxWorkers: '50%',
   moduleNameMapper: {
     '^@/assets/(.*)$': '<rootDir>/assets/$1',
     '^@/(.*)$': '<rootDir>/src/$1',

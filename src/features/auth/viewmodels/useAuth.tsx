@@ -93,13 +93,17 @@ interface ContextoAuth {
   /**
    * Tras desactivar o eliminar la cuenta (200): el servidor ya revocó todas las sesiones, así que
    * solo se borra la sesión local (token y refreshToken, sin /logout), se cortan los avisos en vivo
-   * y queda el aviso para Acceso. No es una sesión vencida.
+   * y queda el aviso para Acceso. No es una sesión vencida. Con 'eliminada' también se borra lo que
+   * el teléfono guarda de la clienta (cierre 'cuentaEliminada'); al desactivar se conserva.
    */
-  cerrarTrasBajaDeCuenta: (aviso: AvisoBaja) => Promise<void>;
+  cerrarTrasBajaDeCuenta: (aviso: AvisoBaja, baja?: TipoBaja) => Promise<void>;
   /** Aviso que muestra Acceso tras la baja, hasta que se cierra. */
   avisoBaja: AvisoBaja | null;
   descartarAvisoBaja: () => void;
 }
+
+/** Qué baja de la cuenta se hizo: desactivarla (temporal) o eliminarla (definitiva). */
+export type TipoBaja = 'desactivada' | 'eliminada';
 
 const RENOVAR_CADA_MS = 10 * 60 * 1000;
 
@@ -472,18 +476,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [usuario, quedarAnonimo]);
 
   const cerrarTrasBajaDeCuenta = useCallback(
-    async (aviso: AvisoBaja) => {
+    async (aviso: AvisoBaja, baja: TipoBaja = 'desactivada') => {
+      // El id se toma antes de quedar sin sesión: con la cuenta eliminada se borra lo suyo del teléfono.
+      const usuarioId = usuario ? String(usuario.id) : undefined;
       // Generación nueva: un 401 tardío de los tokens ya revocados no avisa "Tu sesión terminó".
       nuevaGeneracion();
       // Si el borrado local fallara, el token guardado ya no sirve: al reabrir, /me lo rechaza.
       await borrarConReintento();
       // Los avisos en vivo, el carrito y lo demás en memoria de la clienta se van ya.
-      avisarCierreSesion('salida');
+      if (baja === 'eliminada') {
+        avisarCierreSesion('cuentaEliminada', { usuarioId });
+      } else {
+        avisarCierreSesion('salida');
+      }
       setSesionVencida(false);
       setAvisoBaja(aviso);
       quedarAnonimo();
     },
-    [quedarAnonimo],
+    [usuario, quedarAnonimo],
   );
 
   const valor = useMemo(

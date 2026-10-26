@@ -230,14 +230,12 @@ describe('Registro de una clienta en dos pasos (GP-05)', () => {
         await fireEvent(screen.getByLabelText(etiqueta), 'submitEditing');
         expect(screen.getByLabelText(etiqueta)).toHaveProp('value', 'Dato ficticio');
       }
+      // GP-09 (Ronda 5): con "Sí" primero se pide la autorización de datos sensibles; sin ella el
+      // campo de alergias no aparece (la autorización la prueban las pruebas registro-datos-sensibles).
       await fireEvent.press(screen.getByRole('radio', { name: '¿Tienes alergias a productos?: Sí' }));
-      const alergias = await screen.findByLabelText('Especifica tus alergias');
-      await fireEvent.changeText(alergias, 'Alergia ficticia');
-      await fireEvent(alergias, 'submitEditing');
-      await fireEvent(alergias, 'blur');
-      const consentimiento = screen.getByRole('checkbox', { name: /^Autorizo el uso de mis datos de salud/ });
-      await fireEvent.press(consentimiento);
-      expect(consentimiento).toBeChecked();
+      expect(await screen.findByRole('button', { name: 'Leer y autorizar' })).toBeOnTheScreen();
+      expect(screen.queryByLabelText('Especifica tus alergias')).not.toBeOnTheScreen();
+      expect(screen.queryByRole('checkbox', { name: /^Autorizo el uso de mis datos de salud/ })).not.toBeOnTheScreen();
       expect(llamadasA(llamadas, 'POST', '/api/usuarios/registro')).toHaveLength(0);
 
       esperarConsolaLimpia();

@@ -7,6 +7,7 @@ import { ApiError } from '@/shared/api/apiClient';
 import { mensajeParaClienta } from '@/shared/api/mensajesError';
 import { obtenerTexto } from '@/shared/api/textosSitio';
 import { useConfiguracionPublica } from '@/shared/api/useConfiguracionPublica';
+import { useEsperaLimite } from '@/shared/api/useEsperaLimite';
 import { useCandado } from '@/shared/ui/useCandado';
 import { tiendaCompra } from '@/shared/ui/tokens';
 
@@ -117,6 +118,10 @@ export interface DetallePedidoViewModel {
   cerrarCancelar: () => void;
   cancelar: () => void;
   cancelando: boolean;
+  /** Tras un 429 al cancelar: el botón de la hoja queda deshabilitado hasta que pase la espera. */
+  cancelarEnEspera: boolean;
+  /** "Intenta de nuevo en N s" en el botón de la hoja mientras dura la espera; null sin espera. */
+  textoEsperaCancelar: string | null;
   /** Mensaje para la clienta dentro de la hoja si la cancelación falla, o null. */
   errorCancelacion: string | null;
   hojaRevocarVisible: boolean;
@@ -178,6 +183,8 @@ export function useDetallePedidoViewModel(pedidoId: string | undefined): Detalle
   const router = useRouter();
   const candado = useCandado();
   const { configuracion } = useConfiguracionPublica();
+  // Un 429 al cancelar deja el botón de la hoja en espera; el message del backend queda en la hoja.
+  const { activa: cancelarEnEspera, texto: textoEsperaCancelar, esperarSiLimite } = useEsperaLimite();
   const [estado, setEstado] = useState<EstadoDetallePedido>('cargando');
   const [errorCarga, setErrorCarga] = useState<unknown>(null);
   const [pedido, setPedido] = useState<Pedido | null>(null);
@@ -471,7 +478,7 @@ export function useDetallePedidoViewModel(pedidoId: string | undefined): Detalle
 
   const cancelar = useCallback(() => {
     const actualPedido = pedido;
-    if (!actualPedido || !puedeCancelarAhora) {
+    if (!actualPedido || !puedeCancelarAhora || cancelarEnEspera) {
       return;
     }
     candado(async () => {
@@ -487,6 +494,7 @@ export function useDetallePedidoViewModel(pedidoId: string | undefined): Detalle
         // se lee el pedido; si ya quedó cancelado, se muestra así.
         const terminado = !montada.current || (sinRespuesta(error) && (await releerCancelado(actualPedido.id)));
         if (!terminado) {
+          esperarSiLimite(error);
           atenderErrorCancelacion(error);
         }
       } finally {
@@ -495,7 +503,17 @@ export function useDetallePedidoViewModel(pedidoId: string | undefined): Detalle
         }
       }
     });
-  }, [pedido, puedeCancelarAhora, candado, mostrarResultado, configuracion, releerCancelado, atenderErrorCancelacion]);
+  }, [
+    pedido,
+    puedeCancelarAhora,
+    cancelarEnEspera,
+    candado,
+    mostrarResultado,
+    configuracion,
+    releerCancelado,
+    atenderErrorCancelacion,
+    esperarSiLimite,
+  ]);
 
   // ── Revocar la compra ──────────────────────────────────────────────────────────────────
 
@@ -670,6 +688,8 @@ export function useDetallePedidoViewModel(pedidoId: string | undefined): Detalle
     cerrarCancelar,
     cancelar,
     cancelando,
+    cancelarEnEspera,
+    textoEsperaCancelar,
     errorCancelacion,
     hojaRevocarVisible,
     abrirRevocar,

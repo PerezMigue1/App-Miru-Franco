@@ -7,6 +7,7 @@ import {
   Package,
   Palette,
   ShieldCheck,
+  ShieldUser,
   Store,
   UserCog,
   UserPen,
@@ -40,6 +41,7 @@ import { useTheme } from '@/shared/ui/useTheme';
 import { Aviso } from '../components/AuthContainer';
 import { HojaApariencia } from '../components/HojaApariencia';
 import { HojaConfirmacion } from '../components/HojaConfirmacion';
+import { HojaPermisoGaleria } from '../components/HojaPermisoGaleria';
 import { InvitacionSesion } from '../components/InvitacionSesion';
 import { usePerfilViewModel, type PerfilViewModel } from '../viewmodels/usePerfilViewModel';
 
@@ -107,13 +109,24 @@ export default function PerfilView() {
         onElegir={perfil.elegirApariencia}
         onCerrar={perfil.cerrarApariencia}
       />
-      <Hoja visible={perfil.opcionesFoto} onCerrar={perfil.cerrarOpcionesFoto} titulo="Foto de perfil">
+      <Hoja
+        visible={perfil.opcionesFoto}
+        onCerrar={perfil.cerrarOpcionesFoto}
+        alCerrarse={perfil.alCerrarseOpciones}
+        titulo="Foto de perfil"
+      >
         <Button titulo="Elegir de la galería" onPress={perfil.elegirFoto} />
         {perfil.perfil?.foto ? (
           <Button titulo="Quitar foto" variante="secundario" onPress={perfil.quitarFoto} />
         ) : null}
         <Button titulo="Cancelar" variante="secundario" onPress={perfil.cerrarOpcionesFoto} />
       </Hoja>
+      <HojaPermisoGaleria
+        visible={perfil.explicacionGaleria}
+        textos={perfil.textosGaleria}
+        onContinuar={perfil.continuarGaleria}
+        onCerrar={perfil.cerrarExplicacionGaleria}
+      />
       <HojaConfirmacion
         visible={perfil.confirmarQuitarFoto}
         titulo="¿Quitar tu foto?"
@@ -187,6 +200,15 @@ function ContenidoConSesion({ perfil }: { perfil: PerfilViewModel }) {
           <Button titulo="Abrir ajustes" variante="secundario" onPress={perfil.abrirAjustes} />
         </View>
       ) : null}
+      {/* Negó el permiso esta vez: se explica sin ajustes, porque el teléfono lo vuelve a preguntar. */}
+      {/* La región en vivo queda siempre montada para que TalkBack anuncie el aviso al aparecer. */}
+      <View collapsable={false} accessibilityLiveRegion="polite" style={perfil.avisoPermisoGaleria ? null : styles.fueraDeFlujo}>
+        {perfil.avisoPermisoGaleria ? (
+          <View style={[styles.permiso, { borderColor: colores.hairline }]}>
+            <Text style={[styles.textoPermiso, { color: colores.texto }]}>{perfil.avisoPermisoGaleria}</Text>
+          </View>
+        ) : null}
+      </View>
 
       <SeccionFilas titulo="Tu cuenta" estilo={styles.separacionSeccion}>
         <FilaTarjeta
@@ -217,6 +239,12 @@ function ContenidoConSesion({ perfil }: { perfil: PerfilViewModel }) {
           titulo={perfil.filaMiCuenta.titulo}
           descripcion={perfil.filaMiCuenta.descripcion}
           onPress={perfil.abrirMiCuenta}
+        />
+        <FilaTarjeta
+          icono={ShieldUser}
+          titulo={perfil.filaMisDatos.titulo}
+          descripcion={perfil.filaMisDatos.descripcion}
+          onPress={perfil.abrirMisDatos}
         />
       </SeccionFilas>
 
@@ -294,6 +322,10 @@ function etiquetaAvatar(foto: string | null, ocupada: boolean): string {
 }
 
 const styles = StyleSheet.create({
+  // La región en vivo vacía queda fuera del flujo: no suma espacio.
+  fueraDeFlujo: {
+    position: 'absolute',
+  },
   contenido: {
     flexGrow: 1,
     paddingBottom: espacio.x3,

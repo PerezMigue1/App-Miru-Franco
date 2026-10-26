@@ -391,7 +391,7 @@ describe('Reenviar el código de activación', () => {
 
     await tocar(() => result.current.reenviar());
     await waitFor(() => expect(result.current.error).toBe(NO_SE_REENVIO));
-    expect(result.current.error).not.toBe(RESPALDO_TEXTOS['auth.activar.yaActivada']);
+    expect(result.current.error).not.toMatch(/ya está activad/i);
     expect(result.current.error).not.toMatch(/activad|encontrad|existe|registrad/i);
     expect(result.current.mensaje).toBeNull();
     expect(result.current.reenvioEnLimite).toBe(false);

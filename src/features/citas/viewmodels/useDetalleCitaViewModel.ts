@@ -6,6 +6,7 @@ import { obtenerConfiguracion, suscribir, type DatosTransferencia } from '@/shar
 import { rutaVisorDocumento } from '@/shared/api/documentosLegales';
 import { mensajeParaClienta } from '@/shared/api/mensajesError';
 import { obtenerTexto } from '@/shared/api/textosSitio';
+import { useEsperaLimite } from '@/shared/api/useEsperaLimite';
 import { useCandado } from '@/shared/ui/useCandado';
 
 import {
@@ -135,10 +136,12 @@ export interface DetalleCitaViewModel {
   /** Con anticipo pagado: la hoja ofrece el enlace a la política. */
   avisoConPolitica: boolean;
   /**
-   * El botón de confirmar se desactiva mientras carga la política del anticipo pagado o se revisa si
-   * hay un pago en línea del anticipo sin pagar.
+   * El botón de confirmar se desactiva mientras carga la política del anticipo pagado, se revisa si
+   * hay un pago en línea del anticipo sin pagar o dura la espera de un 429 al cancelar.
    */
   puedeConfirmarCancelacion: boolean;
+  /** Tras un 429 al cancelar: "Intenta de nuevo en N s" en el botón de la hoja; null sin espera. */
+  textoEsperaCancelar: string | null;
   /** "Prefiero reprogramar" solo fuera de las horas de aviso de la cita. */
   puedeReprogramar: boolean;
   /** Mensaje para la clienta si la cancelación falla, o null. */
@@ -184,6 +187,8 @@ export function useDetalleCitaViewModel(citaId: string | undefined): DetalleCita
   const candado = useCandado();
   const configuracion = useSyncExternalStore(suscribir, obtenerConfiguracion, obtenerConfiguracion);
   const casilla = useAceptacionAnticipos(RUTA_ORIGEN_DETALLE);
+  // Un 429 al cancelar deja el botón de la hoja en espera; el message del backend queda en la hoja.
+  const { activa: cancelarEnEspera, texto: textoEsperaCancelar, esperarSiLimite } = useEsperaLimite();
   const [estado, setEstado] = useState<EstadoDetalleCita>('cargando');
   const [errorCarga, setErrorCarga] = useState<unknown>(null);
   const [cita, setCita] = useState<Cita | null>(null);
@@ -422,7 +427,7 @@ export function useDetalleCitaViewModel(citaId: string | undefined): DetalleCita
       const actualCita = cita;
       const limpio = motivo.trim();
       const consultando = politica === 'cargando' || pagoPorConfirmar === 'cargando';
-      if (!actualCita || actualCita.id === '' || limpio === '' || consultando) {
+      if (!actualCita || actualCita.id === '' || limpio === '' || consultando || cancelarEnEspera) {
         return;
       }
       // El aviso final se decide con la política que la clienta vio al confirmar.
@@ -434,6 +439,7 @@ export function useDetalleCitaViewModel(citaId: string | undefined): DetalleCita
           await cancelarCita(actualCita.id, limpio);
         } catch (error) {
           if (montada.current) {
+            esperarSiLimite(error);
             setErrorCancelacion(mensajeCancelacion(error));
             setCancelando(false);
           }
@@ -463,7 +469,7 @@ export function useDetalleCitaViewModel(citaId: string | undefined): DetalleCita
         setHojaCancelarVisible(false);
       });
     },
-    [cita, politica, pagoPorConfirmar, candado],
+    [cita, politica, pagoPorConfirmar, candado, cancelarEnEspera, esperarSiLimite],
   );
 
   const ahora = new Date();
@@ -494,7 +500,11 @@ export function useDetalleCitaViewModel(citaId: string | undefined): DetalleCita
     avisoCancelacion: cita ? avisoCancelacion(cita, politica, ahora, configuracion, pagoPorConfirmar) : '',
     avisoConPolitica: conAnticipo,
     puedeConfirmarCancelacion:
-      !cancelando && !(conAnticipoPagado && politica === 'cargando') && pagoPorConfirmar !== 'cargando',
+      !cancelando &&
+      !cancelarEnEspera &&
+      !(conAnticipoPagado && politica === 'cargando') &&
+      pagoPorConfirmar !== 'cargando',
+    textoEsperaCancelar,
     puedeReprogramar: cita != null && !dentroDelAviso(cita, ahora),
     errorCancelacion,
     avisoCancelada,

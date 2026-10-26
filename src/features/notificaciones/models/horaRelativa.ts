@@ -1,4 +1,4 @@
-import { fechaLocal } from '@/features/citas/models/citaModel';
+import { fechaLocal } from '@/shared/ui/fechasLegibles';
 
 /**
  * Hora de un aviso dicha como la diría una persona, con la fecha y la hora locales del teléfono

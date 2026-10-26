@@ -1,8 +1,9 @@
 import { useEffect, useSyncExternalStore } from 'react';
 
+import { alCerrarSesion } from '@/shared/api/eventosSesion';
 import { useTextos } from '@/shared/api/useTextos';
 
-import { guardarPreferenciaAvisos, leerPreferenciaAvisos } from '../models/preferenciaAvisos';
+import { borrarPreferenciaAvisos, guardarPreferenciaAvisos, leerPreferenciaAvisos } from '../models/preferenciaAvisos';
 
 /**
  * Interruptor "Avisos en la app" (GP-07.6): un solo estado en memoria para toda la app (Singleton,
@@ -81,6 +82,22 @@ export function cambiarAvisosEnApp(enApp: boolean): void {
   fijar({ usuarioId, enApp, lista: true });
   void guardarPreferenciaAvisos(usuarioId, enApp);
 }
+
+/**
+ * Al eliminar la cuenta (cierre 'cuentaEliminada' de shared) se borra su preferencia del teléfono y,
+ * si era la clienta en memoria, se olvida. Al desactivar (cierre 'salida') se conserva.
+ */
+alCerrarSesion((motivo, detalle) => {
+  const usuarioId = detalle?.usuarioId;
+  if (motivo !== 'cuentaEliminada' || !usuarioId) {
+    return;
+  }
+  if (estado.usuarioId === usuarioId) {
+    lectura += 1;
+    fijar({ usuarioId: null, enApp: true, lista: false });
+  }
+  void borrarPreferenciaAvisos(usuarioId);
+});
 
 /** Solo para pruebas: vuelve al estado inicial. */
 export function reiniciarPreferenciaAvisos(): void {
