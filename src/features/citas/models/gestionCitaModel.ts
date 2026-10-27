@@ -3,6 +3,7 @@ import { enlaceTelefono, enlaceWhatsApp } from '@/features/salon/models/salonMod
 import { ApiError } from '@/shared/api/apiClient';
 import { obtenerConfiguracion, type ConfiguracionPublica } from '@/shared/api/configuracionPublica';
 import { aceptacionDeDocumento, registrarConsentimientos } from '@/shared/api/consentimientos';
+import { esDocumentoActualizado } from '@/shared/api/documentosActualizados';
 import { obtenerDocumentoVigente, type DocumentoLegalVigente } from '@/shared/api/documentosLegales';
 import { mensajeParaClienta } from '@/shared/api/mensajesError';
 import { obtenerTexto, obtenerTextoConReglas, type ClaveTextoSitio } from '@/shared/api/textosSitio';
@@ -230,20 +231,32 @@ export function textoAnticipoPendiente(
 /** Formulario del consentimiento al pagar o cambiar el anticipo de una cita (el mismo de la web). */
 export const FORMULARIO_ANTICIPO_CITA = 'anticipo-cita';
 
+/** Por qué no se registró la aceptación de la Política de anticipos. */
+export interface FallaAceptacionAnticipos {
+  /** El mensaje para la clienta. */
+  mensaje: string;
+  /**
+   * El servidor rechazó la versión que tuvo a la vista (400 DOCUMENTO_NO_VIGENTE o
+   * DOCUMENTO_NO_COINCIDE): hay que pedir la vigente y que la vuelva a marcar.
+   */
+  documentoCambiado: boolean;
+}
+
 /**
  * Registra que la clienta aceptó la Política de anticipos y cancelación antes de pagar o de cambiar
  * la forma de pago, con la versión y el hash que tuvo a la vista (`vista`, la que mostraba la casilla
- * al marcarla) o, si no había ninguna a la vista, la vigente. Devuelve null si quedó registrado o el
- * mensaje para la clienta si no: sin versión no se registra nada. Nunca rechaza.
+ * al marcarla) o, si no había ninguna a la vista, la vigente. Devuelve null si quedó registrado o la
+ * falla con su mensaje y si la versión ya no es la vigente: sin versión no se registra nada. Nunca
+ * rechaza.
  */
-export async function registrarAceptacionAnticipos(
+export async function aceptarPoliticaAnticipos(
   rutaOrigen: string,
   config: ConfiguracionPublica = obtenerConfiguracion(),
   vista: DocumentoLegalVigente | null = null,
-): Promise<string | null> {
+): Promise<FallaAceptacionAnticipos | null> {
   const documento = vista ?? (await obtenerDocumentoVigente('anticipos')).documento;
   if (!documento) {
-    return obtenerTexto('citas.detalle.politicaNoDisponible', {}, config);
+    return { mensaje: obtenerTexto('citas.detalle.politicaNoDisponible', {}, config), documentoCambiado: false };
   }
   try {
     await registrarConsentimientos({
@@ -253,8 +266,20 @@ export async function registrarAceptacionAnticipos(
     });
     return null;
   } catch (error) {
-    return mensajeParaClienta(error, { respaldo: obtenerTexto('citas.detalle.consentimientoFallo', {}, config) });
+    return {
+      mensaje: mensajeParaClienta(error, { respaldo: obtenerTexto('citas.detalle.consentimientoFallo', {}, config) }),
+      documentoCambiado: esDocumentoActualizado(error),
+    };
   }
+}
+
+/** Como aceptarPoliticaAnticipos, solo con el mensaje: null si quedó registrado. Nunca rechaza. */
+export async function registrarAceptacionAnticipos(
+  rutaOrigen: string,
+  config: ConfiguracionPublica = obtenerConfiguracion(),
+  vista: DocumentoLegalVigente | null = null,
+): Promise<string | null> {
+  return (await aceptarPoliticaAnticipos(rutaOrigen, config, vista))?.mensaje ?? null;
 }
 
 // ── Cancelar ─────────────────────────────────────────────────────────────────────────────────

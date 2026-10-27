@@ -12,7 +12,7 @@ import { AHORA, citaConAnticipo, citaEnSalon, ID_CITA, masMinutos, rutaCita } fr
 import { espiarConsola } from '../../helpers/consola';
 import { documentoCrudo, HASH_VIGENTE, rutaVigente } from '../../helpers/documentosFicticios';
 import { citaComo, conReglas, hacer, normalizada, reiniciarRepositorios, servidorGestion, turnos } from '../../helpers/gestionCitas';
-import { consentimientosEnviados } from '../../helpers/reservaFicticia';
+import { consentimientoRegistrado, consentimientosEnviados, RUTA_CONSENTIMIENTOS } from '../../helpers/reservaFicticia';
 import { respuesta } from '../../helpers/servidorSimulado';
 import { cerrarConTemporizadores, reiniciarSimulaciones, routerSimulado } from '../../helpers/viewmodelsAuth';
 
@@ -28,7 +28,8 @@ jest.mock('expo-router', () => require('../../helpers/viewmodelsAuth').expoRoute
 const RUTA_DOCUMENTO = `GET ${rutaVigente('anticipos')}`;
 const HASH_NUEVO = 'c'.repeat(64);
 const SEIS_MINUTOS = 6 * 60 * 1000;
-const ACTUALIZADA = RESPALDO_TEXTOS['citas.politicaAnticipos.actualizada'];
+// Desde la Ronda 9 la casilla usa el aviso común de los documentos legales (el mismo de la reserva).
+const ACTUALIZADA = RESPALDO_TEXTOS['legal.documentoActualizado'];
 
 reiniciarRepositorios();
 beforeEach(() => {
@@ -110,6 +111,49 @@ describe('Revisión: casilla de la política en el detalle', () => {
     await waitFor(() => expect(result.current.casilla.marcada).toBe(false));
     expect(result.current.casilla.error).toBe(ACTUALIZADA);
   });
+
+  it.each(['DOCUMENTO_NO_VIGENTE', 'DOCUMENTO_NO_COINCIDE'])(
+    'si el servidor rechaza la versión (%s), la pide con forzarRed, desmarca, avisa y no reintenta solo',
+    async (code) => {
+      let nueva = false;
+      const llamadas = await servidorGestion({
+        [rutaCita()]: turnos(citaComo(conReglas(citaConAnticipo()))),
+        [RUTA_DOCUMENTO]: () => (nueva ? VERSION_NUEVA() : respuesta({ success: true, data: documentoCrudo('anticipos') })),
+        [RUTA_CONSENTIMIENTOS]: (cuerpo) => {
+          if (nueva) {
+            return consentimientoRegistrado(cuerpo);
+          }
+          // El salón publicó otra versión justo antes: el backend rechaza la que la clienta vio.
+          nueva = true;
+          return respuesta({ statusCode: 400, message: 'Mensaje técnico ficticio', code }, 400);
+        },
+      });
+      const { result } = await renderHook(() => useDetalleCitaViewModel(String(ID_CITA)));
+      await waitFor(() => expect(result.current.estado).toBe('listo'));
+      await act(async () => {
+        await obtenerDocumentoVigente('anticipos');
+      });
+      await hacer(() => result.current.casilla.cambiar(true));
+      const lecturas = llamadas.filter((l) => `${l.metodo} ${l.ruta}` === RUTA_DOCUMENTO).length;
+
+      await hacer(() => result.current.pagarAnticipo());
+      await waitFor(() => expect(result.current.pagando).toBeNull());
+      expect(result.current.casilla.marcada).toBe(false);
+      expect(result.current.casilla.error).toBe(ACTUALIZADA);
+      // El aviso va junto a la casilla, no como error general con el texto del servidor.
+      expect(result.current.avisoPago).toBeNull();
+      expect(llamadas.filter((l) => `${l.metodo} ${l.ruta}` === RUTA_DOCUMENTO).length).toBeGreaterThan(lecturas);
+      expect(versiones(llamadas)).toEqual([`2.3 ${HASH_VIGENTE}`]);
+      expect(routerSimulado.push).not.toHaveBeenCalled();
+
+      // Marcada otra vez, registra la versión nueva y sigue.
+      await hacer(() => result.current.casilla.cambiar(true));
+      expect(result.current.casilla.error).toBeNull();
+      await hacer(() => result.current.pagarAnticipo());
+      await waitFor(() => expect(routerSimulado.push).toHaveBeenCalledWith(`/anticipo/${ID_CITA}?pagar=1`));
+      expect(versiones(llamadas)).toEqual([`2.3 ${HASH_VIGENTE}`, `2.4 ${HASH_NUEVO}`]);
+    },
+  );
 
   it('marcada antes de que llegue la política, toma la primera versión que llega sin desmarcarse', async () => {
     const llamadas = await servidorGestion({

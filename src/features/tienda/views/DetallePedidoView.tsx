@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EncabezadoVolver } from '@/features/auth/components/EncabezadoVolver';
 import { BadgeEstado } from '@/shared/ui/BadgeEstado';
+import { BotonesComprobante } from '@/shared/ui/BotonesComprobante';
 import { Button } from '@/shared/ui/Button';
 import { DatosTransferencia } from '@/shared/ui/DatosTransferencia';
 import { EmptyState } from '@/shared/ui/EmptyState';
@@ -214,6 +215,8 @@ function Contenido({
           <Text style={[styles.etiquetaMonto, { color: colores.texto }]}>{textos.formaPago}</Text>
           <Text style={[styles.cuerpo, { color: colores.texto }]}>{detalle.formaPago}</Text>
         </View>
+        {/* Solo si el pedido tiene un pago con comprobante (GP-09). */}
+        <BotonesComprobante botones={vm.comprobantes} />
       </Tarjeta>
 
       {detalle.recoger ? (

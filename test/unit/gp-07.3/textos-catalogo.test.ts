@@ -77,6 +77,8 @@ const VARIABLES_CONTEXTO = [
   // GP-09 (privacidad): {titulo}, {version} y {versionAceptada} de los documentos pendientes y de la
   // autorización de datos sensibles (legal.pendientes.*, datosSensibles.app.*).
   'titulo', 'version', 'versionAceptada',
+  // GP-09 (comprobante): {etiqueta}, {descripcion}, {cantidad} e {importe} de comprobante.app.*.
+  'etiqueta', 'descripcion', 'cantidad', 'importe',
 ];
 
 describe('RESPALDO_TEXTOS', () => {

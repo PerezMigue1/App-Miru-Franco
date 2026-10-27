@@ -9,6 +9,7 @@ import type { TestInstance } from 'test-renderer';
 import { reanudarAvisos } from '@/features/notificaciones/viewmodels/useAvisosEnVivo';
 
 import { AVISOS_FICTICIOS, avisoComprobante, ID_AVISO_COMPROBANTE, rutaAviso } from '../../helpers/avisosFicticios';
+import { comprobanteMinimo, respuestaMio, rutaMio } from '../../helpers/comprobantesFicticios';
 import { LIMITE_MS } from '../../helpers/pantallas';
 import {
   abrirBandeja,
@@ -23,7 +24,6 @@ import {
   pedidasDeLista,
   prepararPruebasAvisos,
 } from '../../helpers/pantallasAvisos';
-import { esperarDetalle } from '../../helpers/pantallasMisCitas';
 import { esperarRuta } from '../../helpers/pantallasReserva';
 import { llamadasA, respuesta } from '../../helpers/servidorSimulado';
 import { abrirFlujo, flujosVivos, llamadasFlujo } from '../../helpers/streamSimulado';
@@ -32,8 +32,9 @@ import { abrirFlujo, flujosVivos, llamadasFlujo } from '../../helpers/streamSimu
  * GP-09, Bloque C, con las pantallas reales (renderRouter sobre src/app), el servidor simulado y el
  * flujo en vivo simulado (expo/fetch): el evento 'cierre' del servidor deja los avisos en pausa y la
  * app los reanuda cuando la clienta vuelve a usarla (un toque en la raíz o una pantalla nueva), sin
- * abrir nunca dos flujos; y el aviso "Te enviamos tu comprobante" abre el detalle de su pedido o de su
- * cita desde la bandeja y desde el aviso en pantalla. Datos ficticios; nada sale a la red.
+ * abrir nunca dos flujos; y el aviso "Te enviamos tu comprobante" abre la pantalla del comprobante de
+ * su pedido o de su cita desde la bandeja y desde el aviso en pantalla. Datos ficticios; nada sale a la
+ * red.
  */
 
 const CAMPANA_DOS = 'Abrir notificaciones, 2 avisos sin leer';
@@ -66,6 +67,11 @@ async function pasarTiempo(ms: number): Promise<void> {
 const MARCAR_COMPROBANTE = {
   [`PUT ${rutaAviso(ID_AVISO_COMPROBANTE)}`]: () => respuesta({ success: true }),
 };
+
+/** GET del comprobante de esa compra, con su folio y su compra. */
+function comprobanteDe(tipo: 'pedido' | 'cita', id: number, folio: string, compra: string) {
+  return { [rutaMio(tipo, id)]: () => respuestaMio(comprobanteMinimo({ tipo, folio, compra })) };
+}
 
 describe('Avisos en vivo: cierre del servidor y aviso de comprobante (GP-09)', () => {
   const revisarConsola = prepararPruebasAvisos();
@@ -161,17 +167,21 @@ describe('Avisos en vivo: cierre del servidor y aviso de comprobante (GP-09)', (
   );
 
   it(
-    'el aviso de comprobante de un pedido abre el detalle del pedido desde la bandeja',
+    'el aviso de comprobante de un pedido abre su comprobante desde la bandeja',
     async () => {
       const comprobante = avisoComprobante('pedido', ID_PEDIDO_AVISO);
-      const { app, llamadas } = await abrirConAvisos('/', { lista: [comprobante, ...AVISOS_FICTICIOS] });
+      const { app, llamadas } = await abrirConAvisos('/', {
+        lista: [comprobante, ...AVISOS_FICTICIOS],
+        rutas: comprobanteDe('pedido', ID_PEDIDO_AVISO, 'P-000010', `Pedido #${ID_PEDIDO_AVISO}`),
+      });
       await esperarCampana(CAMPANA_TRES, '3');
       await abrirBandeja(app, CAMPANA_TRES);
 
       await fireEvent.press(await filaSinLeer(TITULO_COMPROBANTE));
 
-      await esperarRuta(app, `/pedido/${ID_PEDIDO_AVISO}`);
-      expect(await screen.findByRole('header', { name: `Pedido #${ID_PEDIDO_AVISO}` })).toBeOnTheScreen();
+      await esperarRuta(app, '/comprobante');
+      expect(await screen.findByText(`Folio: P-000010 (Pedido #${ID_PEDIDO_AVISO})`)).toBeOnTheScreen();
+      expect(llamadasA(llamadas, 'GET', `/api/comprobantes/mio?tipo=pedido&id=${ID_PEDIDO_AVISO}`)).toHaveLength(1);
       expect(llamadasA(llamadas, 'PUT', rutaAviso(ID_AVISO_COMPROBANTE))).toHaveLength(1);
       revisarConsola();
     },
@@ -179,9 +189,11 @@ describe('Avisos en vivo: cierre del servidor y aviso de comprobante (GP-09)', (
   );
 
   it(
-    'el aviso de comprobante de una cita que llega en vivo abre el detalle de la cita desde el aviso en pantalla',
+    'el aviso de comprobante de una cita que llega en vivo abre su comprobante desde el aviso en pantalla',
     async () => {
-      const { app, flujo, llamadas } = await abrirConAvisos('/', { rutas: MARCAR_COMPROBANTE });
+      const { app, flujo, llamadas } = await abrirConAvisos('/', {
+        rutas: { ...MARCAR_COMPROBANTE, ...comprobanteDe('cita', ID_CITA_AVISO, 'A-000003', `Cita #${ID_CITA_AVISO}`) },
+      });
       await esperarCampana(CAMPANA_DOS, '2');
       const vivo = await esperarFlujo(flujo);
 
@@ -193,7 +205,9 @@ describe('Avisos en vivo: cierre del servidor y aviso de comprobante (GP-09)', (
 
       await fireEvent.press(screen.getByRole('button', { name: TARJETA_COMPROBANTE }));
 
-      await esperarDetalle(app, ID_CITA_AVISO);
+      await esperarRuta(app, '/comprobante');
+      expect(await screen.findByText(`Folio: A-000003 (Cita #${ID_CITA_AVISO})`)).toBeOnTheScreen();
+      expect(llamadasA(llamadas, 'GET', `/api/comprobantes/mio?tipo=cita&id=${ID_CITA_AVISO}`)).toHaveLength(1);
       expect(llamadasA(llamadas, 'PUT', rutaAviso(ID_AVISO_COMPROBANTE))).toHaveLength(1);
       expect(screen.queryByRole('button', { name: TARJETA_COMPROBANTE })).not.toBeOnTheScreen();
       revisarConsola();

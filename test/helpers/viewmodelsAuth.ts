@@ -23,11 +23,49 @@ export const routerSimulado = {
   dismissTo: jest.fn(),
 };
 
-/** Parámetros de búsqueda y setParams de la navegación de la pantalla. */
-export const navegacionSimulada: { params: Record<string, string | undefined>; setParams: jest.Mock } = {
+/** Evento beforeRemove simulado: la acción que se iba a hacer y si la pantalla la detuvo. */
+interface EventoAntesDeSalir {
+  data: { action: unknown };
+  preventDefault: () => void;
+}
+
+/** Oyentes de beforeRemove registrados con navigation.addListener. */
+const oyentesAntesDeSalir = new Set<(evento: EventoAntesDeSalir) => void>();
+
+/**
+ * Parámetros de búsqueda y setParams de la navegación de la pantalla, más addListener('beforeRemove')
+ * y dispatch para las pantallas que piden confirmar antes de salir.
+ */
+export const navegacionSimulada: {
+  params: Record<string, string | undefined>;
+  setParams: jest.Mock;
+  addListener: jest.Mock;
+  dispatch: jest.Mock;
+} = {
   params: {},
   setParams: jest.fn(),
+  addListener: jest.fn((evento: string, oyente: (e: EventoAntesDeSalir) => void) => {
+    if (evento === 'beforeRemove') {
+      oyentesAntesDeSalir.add(oyente);
+    }
+    return () => {
+      oyentesAntesDeSalir.delete(oyente);
+    };
+  }),
+  dispatch: jest.fn(),
 };
+
+/**
+ * Simula que la pantalla se va a quitar (Volver, el Atrás de Android o un gesto) con `accion`. Devuelve
+ * true si algún oyente la detuvo (preventDefault).
+ */
+export function intentarSalir(accion: unknown = { type: 'GO_BACK' }): boolean {
+  let detenida = false;
+  for (const oyente of [...oyentesAntesDeSalir]) {
+    oyente({ data: { action: accion }, preventDefault: () => (detenida = true) });
+  }
+  return detenida;
+}
 
 /** Módulo expo-router simulado; la pantalla se da por enfocada mientras está montada. */
 export function expoRouterSimulado() {
@@ -77,6 +115,9 @@ export function reiniciarSimulaciones(): void {
   Object.values(routerSimulado).forEach((fn) => fn.mockClear());
   navegacionSimulada.params = {};
   navegacionSimulada.setParams.mockClear();
+  navegacionSimulada.addListener.mockClear();
+  navegacionSimulada.dispatch.mockClear();
+  oyentesAntesDeSalir.clear();
   authSimulada.estado = 'anonimo';
   authSimulada.usuario = null;
   authSimulada.salir.mockReset();

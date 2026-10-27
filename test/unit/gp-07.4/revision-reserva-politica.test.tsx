@@ -28,7 +28,8 @@ jest.mock('expo-web-browser', () => require('../../helpers/google').navegadorSim
 
 const RUTA_DOCUMENTO = `GET ${rutaVigente('anticipos')}`;
 const HASH_NUEVO = 'c'.repeat(64);
-const ACTUALIZADA = RESPALDO_TEXTOS['citas.politicaAnticipos.actualizada'];
+// Desde la Ronda 9 la reserva usa el aviso común de los documentos legales junto a la casilla.
+const ACTUALIZADA = RESPALDO_TEXTOS['legal.documentoActualizado'];
 const FALTA = RESPALDO_TEXTOS['citas.politicaAnticipos.falta'];
 const SEIS_MINUTOS = 6 * 60 * 1000;
 

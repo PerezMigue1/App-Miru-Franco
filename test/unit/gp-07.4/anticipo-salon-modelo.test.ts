@@ -8,7 +8,11 @@ import {
   mensajeAnticipoEnSalon,
   plazoAnticipoEnSalon,
 } from '@/features/citas/models/citaModel';
-import { FORMULARIO_ANTICIPO_CITA, registrarAceptacionAnticipos } from '@/features/citas/models/gestionCitaModel';
+import {
+  aceptarPoliticaAnticipos,
+  FORMULARIO_ANTICIPO_CITA,
+  registrarAceptacionAnticipos,
+} from '@/features/citas/models/gestionCitaModel';
 import { ApiError, ErrorDeRed } from '@/shared/api/apiClient';
 import { RESPALDO_TEXTOS } from '@/shared/api/textosSitio';
 
@@ -142,5 +146,25 @@ describe('registrarAceptacionAnticipos', () => {
   ])('si el registro falla con %s lo explica', async (_caso, falla, mensaje) => {
     await servidorGestion({ [RUTA_CONSENTIMIENTOS]: turnos(falla) });
     await expect(registrarAceptacionAnticipos('app/cita')).resolves.toBe(mensaje);
+  });
+
+  it.each(['DOCUMENTO_NO_VIGENTE', 'DOCUMENTO_NO_COINCIDE'])(
+    'aceptarPoliticaAnticipos con %s dice que la versión cambió, con el aviso común',
+    async (code) => {
+      await servidorGestion({
+        [RUTA_CONSENTIMIENTOS]: () => respuesta({ statusCode: 400, message: 'Mensaje técnico ficticio', code }, 400),
+      });
+      await expect(aceptarPoliticaAnticipos('app/cita')).resolves.toEqual({
+        mensaje: RESPALDO_TEXTOS['legal.documentoActualizado'],
+        documentoCambiado: true,
+      });
+    },
+  );
+
+  it('aceptarPoliticaAnticipos: registrada da null y otra falla no es un cambio de versión', async () => {
+    await servidorGestion();
+    await expect(aceptarPoliticaAnticipos('app/cita')).resolves.toBeNull();
+    await servidorGestion({ [RUTA_CONSENTIMIENTOS]: turnos(sinRedTurno) });
+    await expect(aceptarPoliticaAnticipos('app/cita')).resolves.toEqual({ mensaje: MENSAJE_SIN_CONEXION, documentoCambiado: false });
   });
 });

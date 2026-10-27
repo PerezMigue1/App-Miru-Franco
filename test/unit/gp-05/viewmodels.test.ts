@@ -479,6 +479,7 @@ const PASO_2_VALIDO: Partial<CamposRegistro> = {
   tipoCabello: 'ondulado',
   tieneAlergias: false,
   tratamientosQuimicos: false,
+  aceptaTerminos: true,
   aceptaAviso: true,
 };
 
@@ -819,6 +820,7 @@ describe('useRegistroViewModel', () => {
           tipoCabello: 'Selecciona tu tipo de cabello',
           tieneAlergias: 'Debes indicar si tienes alergias a productos',
           tratamientosQuimicos: 'Debes indicar si has tenido tratamientos químicos previos',
+          aceptaTerminos: 'Debes aceptar los Términos y Condiciones',
           aceptaAviso: 'Debes aceptar el Aviso de Privacidad',
         }),
       );
@@ -901,8 +903,10 @@ describe('useRegistroViewModel', () => {
           alergias: 'Alergia ficticia al amoniaco',
           tratamientosQuimicos: false,
         },
+        aceptaTerminos: true,
         aceptaAvisoPrivacidad: true,
         recibePromociones: true,
+        rutaOrigen: '/registro',
         consienteDatosSensibles: true,
         autorizacionDatosSensibles: AUTORIZACION,
       });
@@ -1035,7 +1039,7 @@ describe('useRegistroViewModel', () => {
   });
 
   describe('aviso, términos y reinicio', () => {
-    it('abre el aviso de privacidad y los términos del sitio en el navegador', async () => {
+    it('abre el aviso de privacidad en el navegador y los términos en el visor de la app', async () => {
       servidor({});
       const { result } = await renderHook(() => useRegistroViewModel());
 
@@ -1046,8 +1050,9 @@ describe('useRegistroViewModel', () => {
         result.current.abrirTerminos();
       });
 
-      expect(openBrowserAsync).toHaveBeenNthCalledWith(1, 'http://web.test/aviso-de-privacidad');
-      expect(openBrowserAsync).toHaveBeenNthCalledWith(2, 'http://web.test/terminos-y-condiciones');
+      expect(openBrowserAsync).toHaveBeenCalledTimes(1);
+      expect(openBrowserAsync).toHaveBeenCalledWith('http://web.test/aviso-de-privacidad');
+      expect(mockRouter.push).toHaveBeenCalledWith('/legal/terminos');
       expect(result.current.errorGeneral).toBeNull();
     });
 

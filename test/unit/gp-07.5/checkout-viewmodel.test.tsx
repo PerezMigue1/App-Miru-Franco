@@ -7,6 +7,7 @@ import { useCheckoutViewModel, type CheckoutViewModel } from '@/features/tienda/
 import { avisarCambioCarrito } from '@/features/tienda/viewmodels/usePiezasCarrito';
 import { refrescar, reiniciarConfiguracionPublica } from '@/shared/api/configuracionPublica';
 import { obtenerDocumentoVigente, reiniciarDocumentosLegales } from '@/shared/api/documentosLegales';
+import { obtenerTexto } from '@/shared/api/textosSitio';
 
 import { limpiarArchivos } from '../../helpers/archivosLocales';
 import {
@@ -19,7 +20,7 @@ import {
 import { CLIENTA_CITAS, usarRelojFijo } from '../../helpers/citasFicticias';
 import { CLABE_FICTICIA } from '../../helpers/configuracionFicticia';
 import { espiarConsola } from '../../helpers/consola';
-import { documentoCrudo, rutaDocumento } from '../../helpers/documentosFicticios';
+import { documentoCrudo, rutaDocumento, rutaVigente } from '../../helpers/documentosFicticios';
 import { RUTA_CONSENTIMIENTOS } from '../../helpers/reservaFicticia';
 import { respuesta } from '../../helpers/servidorSimulado';
 import { sembrarSesion } from '../../helpers/sesionGuardada';
@@ -299,8 +300,76 @@ describe('Casillas', () => {
       await obtenerDocumentoVigente('terminos', { forzarRed: true });
     });
     expect(result.current.casillas.map((c) => [c.marcada, c.error])).toEqual([
-      [false, 'Este documento se actualizó. Revísalo y vuelve a marcar la casilla.'],
+      [false, obtenerTexto('legal.documentoActualizado')],
       [true, null],
+    ]);
+  });
+});
+
+describe('Ronda 9: un documento que ya no es el vigente al confirmar', () => {
+  /** El POST responde el 400 con ese code y, desde ese momento, el documento de `slug` es la versión 2.4. */
+  function documentoQueCambia(slug: 'terminos' | 'reembolsos', code: string): Rutas {
+    let publicada = false;
+    return {
+      [RUTA_CONSENTIMIENTOS]: () => {
+        publicada = true;
+        return errorServidor(400, 'Mensaje técnico ficticio', code);
+      },
+      [`GET ${rutaVigente(slug)}`]: () =>
+        respuesta({ success: true, data: documentoCrudo(slug, publicada ? { version: '2.4', hash: 'c'.repeat(64) } : {}) }),
+    };
+  }
+
+  it.each<[string, 'terminos' | 'reembolsos', number]>([
+    ['DOCUMENTO_NO_VIGENTE', 'terminos', 0],
+    ['DOCUMENTO_NO_COINCIDE', 'reembolsos', 1],
+  ])('%s: pide los documentos a la red y solo desmarca la casilla del que cambió', async (code, slug, indice) => {
+    const { result, llamadas } = await abrir(undefined, documentoQueCambia(slug, code));
+    await alPaso3(result, 'mercado_pago');
+    await marcarAmbas(result);
+    const lecturasAntes = llamadas.filter((l) => l.ruta === rutaVigente(slug)).length;
+    await hacer(() => result.current.confirmar());
+    await waitFor(() => expect(result.current.enviando).toBe(false));
+    await vaciar();
+
+    const esperado = [true, true];
+    esperado[indice] = false;
+    expect(result.current.casillas.map((c) => c.marcada)).toEqual(esperado);
+    expect(result.current.casillas[indice].error).toBe(obtenerTexto('legal.documentoActualizado'));
+    expect(result.current.casillas[1 - indice].error).toBeNull();
+    // Lo demás que eligió la clienta se queda: forma de pago y paso.
+    expect(result.current.metodo).toBe('mercado_pago');
+    expect(result.current.paso).toBe(3);
+    expect(result.current.errorEnvio).toContain(NO_GUARDO);
+    expect(result.current.errorEnvio).not.toContain('técnico');
+    // Se volvió a pedir el documento (forzarRed) y nada se reintentó solo.
+    expect(llamadas.filter((l) => l.ruta === rutaVigente(slug)).length).toBeGreaterThan(lecturasAntes);
+    expect(escriturasCompra(llamadas)).toEqual([RUTA_CONSENTIMIENTOS]);
+    expect(routerSimulado.replace).not.toHaveBeenCalled();
+
+    // Al volver a marcarla se quita el aviso y la compra manda la versión nueva.
+    servidorVm({ ...RUTAS_COMPRA_LEGAL, ...rutaDocumento(slug, { success: true, data: documentoCrudo(slug, { version: '2.4', hash: 'c'.repeat(64) }) }) });
+    await hacer(() => result.current.cambiarCasilla(result.current.casillas[indice].id, true));
+    expect(result.current.casillas[indice].error).toBeNull();
+  });
+
+  it('si no se puede confirmar cuál cambió (sin red), desmarca las dos', async () => {
+    const { result } = await abrir(undefined, {
+      [RUTA_CONSENTIMIENTOS]: () => errorServidor(400, 'x', 'DOCUMENTO_NO_VIGENTE'),
+    });
+    await alPaso3(result);
+    await marcarAmbas(result);
+    servidorVm({
+      ...RUTAS_COMPRA_LEGAL,
+      [RUTA_CONSENTIMIENTOS]: () => errorServidor(400, 'x', 'DOCUMENTO_NO_VIGENTE'),
+      [`GET ${rutaVigente('terminos')}`]: () => sinRed(),
+      [`GET ${rutaVigente('reembolsos')}`]: () => sinRed(),
+    });
+    await hacer(() => result.current.confirmar());
+    await waitFor(() => expect(result.current.enviando).toBe(false));
+    expect(result.current.casillas.map((c) => [c.marcada, c.error])).toEqual([
+      [false, obtenerTexto('legal.documentoActualizado')],
+      [false, obtenerTexto('legal.documentoActualizado')],
     ]);
   });
 });

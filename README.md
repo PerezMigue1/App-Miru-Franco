@@ -199,6 +199,78 @@ Hallazgos de MobSF aceptados (v4.5.3, build de production con versionCode 2):
 | warning | Almacenamiento externo | Caché de Fresco y `FileProvider` de AndroidX y expo-clipboard; la app no guarda datos ahí. |
 | warning | Posibles secretos en el código | Cadenas de las `.so` (tablas hex y símbolos C++); JADX con los patrones del CI no encuentra secretos. |
 
+## Certificate pinning (GP-09)
+
+El plugin `plugins/conPinning.js` (en `app.json`) fija las llaves raíz de `api.mirufranco.com` con el `network_security_config` de Android. Solo actúa con `PINNING=1`, que está en el `env` de los perfiles `preview` y `production` de `eas.json`; entonces el prebuild escribe `android/app/src/main/res/xml/network_security_config.xml` y pone `android:networkSecurityConfig="@xml/network_security_config"` en el `<application>` del manifiesto. Sin la variable, el plugin devuelve la configuración intacta.
+
+Qué hace el XML de Release:
+
+- `base-config` con `cleartextTrafficPermitted="false"` y las raíces del sistema como confianza.
+- Un solo `domain-config`, para `api.mirufranco.com` con `includeSubdomains="false"`, con el `pin-set`. Mercado Pago, Cloudinary, Google y la web no tienen `domain-config`: se validan solo con los certificados del sistema.
+- Cada pin es el SHA-256 del SPKI (la llave pública) de una raíz, en base64. Se fijan las raíces de todas las CA que usa Cloudflare, incluidas las de firma cruzada, para que Cloudflare pueda renovar o cambiar de CA sin romper la app. Android compara los pines contra toda la ruta de confianza que arma, así que basta con que una llave de la ruta esté en la lista.
+
+| CA | Raíz | Pin SHA-256 (base64) |
+|---|---|---|
+| Let's Encrypt | ISRG Root X1 | `C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=` |
+| Let's Encrypt | ISRG Root X2 | `diGVwiVYbubAI3RW4hB9xU8e/CH2GnkuvVFZE8zmgzI=` |
+| Google Trust Services | GTS Root R1 | `hxqRlPTu1bMS/0DITB1SSu0vd4u/8l8TjPgfaAp63Gc=` |
+| Google Trust Services | GTS Root R2 | `Vfd95BwDeSQo+NUYxVEEIlvkOlWY2SalKK1lPhzOx78=` |
+| Google Trust Services | GTS Root R3 | `QXnt2YHvdHR3tJYmQIr0Paosp6t/nggsEGD4QJZ3Q0g=` |
+| Google Trust Services | GTS Root R4 | `mEflZT5enoR1FuXLgYYGqnVEoZvmf9c2bVBpiOjYQ0c=` |
+| Google Trust Services (firma cruzada) | GlobalSign Root CA | `K87oWBWM9UZfyddvDfoxL+8lpNyoUB2ptGtn0fv6G2Q=` |
+| SSL.com | SSL.com TLS RSA Root CA 2022 | `K89VOmb1cJAN3TK6bf4ezAbJGC1mLcG2Dh97dnwr3VQ=` |
+| SSL.com | SSL.com TLS ECC Root CA 2022 | `G/ANXI8TwJTdF+AFBM8IiIUPEv0Gf6H5LA/b9guG4yE=` |
+| SSL.com | SSL.com Root Certification Authority RSA | `0cRTd+vc1hjNFlHcLgLCHXUeWqn80bNDH/bs9qMTSPo=` |
+| SSL.com | SSL.com Root Certification Authority ECC | `oyD01TTXvpfBro3QSZc1vIlcMjrdLTiL/M9mLCPX+Zo=` |
+| SSL.com (firma cruzada) | Certum Trusted Network CA | `qiYwp7YXsE0KKUureoyqpQFubb5gSDeoOoVxn6tmfrU=` |
+| Sectigo | USERTrust RSA Certification Authority | `x4QzPSC810K5/cMjb05Qm4k3Bw5zBn4lTdO/nEW/Td4=` |
+| Sectigo | USERTrust ECC Certification Authority | `ICGRfpgmOUXIWcQ/HXPLQTkFPEFPoDyjvH7ohhQpjzs=` |
+| Sectigo | AAA Certificate Services | `vRU+17BDT2iGsXvOi76E7TQMcTLXAqj0+jGPdW7L1vM=` |
+| Sectigo | Sectigo Public Server Authentication Root R46 | `Douxi77vs4G+Ib/BogbTFymEYq0QSFXwSgVCaZcI09Q=` |
+| Sectigo | Sectigo Public Server Authentication Root E46 | `sLVjNUaFYfW7n6EtgBeEpjOlcnBdNPMrZDRF36iwBdE=` |
+
+R46 y E46 son las raíces TLS de Sectigo desde 2025 (firmadas en cruz por USERTrust); van para que un certificado nuevo de Sectigo cuya ruta termine en ellas también coincida.
+
+Vencimiento y renovación:
+
+- El `pin-set` vence el 30 de junio de 2027 (`expiration="2027-06-30"`). Al vencer, Android deja de aplicar el pinning y la app sigue conectando con los certificados del sistema: no se queda sin conexión, solo sin pinning.
+- Se renueva en cada versión con `scripts/pines-spki.sh`: descarga cada raíz de la página oficial de su CA, compara su huella con la que publica la CA, imprime el pin de cada una y comprueba que la cadena en vivo de `api.mirufranco.com` llegue a una raíz fijada (sale con error si algo falla). Si cambia un pin, se copia a `PINES` en `plugins/conPinning.js`, se mueve `VENCIMIENTO_PINES` y se actualiza esta tabla.
+
+```bash
+docker run --rm --cpus=2 --memory=4g -v "$PWD/scripts:/s:ro" node:22 bash -c "tr -d '\r' < /s/pines-spki.sh | bash"
+```
+
+El `tr` quita los retornos de carro que Git agrega al sacar el repo en Windows; sin él, bash no reconoce `set -euo pipefail`.
+
+En qué compilaciones aplica (matriz E2E de Debug y Release):
+
+| Compilación | Pinning | Texto plano hacia Metro |
+|---|---|---|
+| Expo Go | No | Sí |
+| `npx expo start` | No | Sí |
+| Perfil `development` de EAS (dev client, Debug) | No | Sí |
+| Cualquier compilación Debug local | No | Sí |
+| Perfil `preview` de EAS (APK Release) | Sí | No |
+| Perfil `production` de EAS (AAB Release) | Sí | No |
+
+Con `PINNING=1` el plugin también escribe una copia permisiva en `android/app/src/debug/res/xml/network_security_config.xml` (sin `pin-set` y con texto plano). Gradle la usa en la variante Debug, así que una compilación Debug nunca lleva pinning aunque la variable esté puesta; el pinning solo vive en Release.
+
+Cómo probarlo:
+
+- En Expo Go no se puede probar: Expo Go es su propia app con su propio manifiesto y no carga plugins nativos.
+- En el APK de `preview`: instalarlo y usar la app con normalidad (inicio de sesión, catálogo, citas, tienda). Debe conectar como siempre; la cadena de hoy es `api.mirufranco.com`, emitido por WE1, emitido por GTS Root R4 (pin fijado).
+- Pin falso en una compilación local de Release, con Android Studio. En una terminal de PowerShell nueva (las variables solo viven en esa terminal):
+
+```powershell
+$env:PINNING='1'; $env:PINNING_PRUEBA_FALSA='1'; $env:EXPO_PUBLIC_API_URL='https://api.mirufranco.com'
+npx expo prebuild --platform android --clean
+cd android; .\gradlew assembleRelease
+```
+
+  O, después del prebuild, abrir `android/` en Android Studio, elegir la variante `release` en Build Variants y compilar. Instalar el APK (`adb install -r app\build\outputs\apk\release\app-release.apk`) y comprobar que la app no conecta con la API (con el pin falso Android rechaza la conexión). Después cerrar esa terminal, o quitar las variables (`Remove-Item Env:PINNING, Env:PINNING_PRUEBA_FALSA, Env:EXPO_PUBLIC_API_URL`), y volver a correr `npx expo prebuild --platform android --clean` sin ellas.
+- `PINNING_PRUEBA_FALSA=1` nunca se usa en EAS: si `EAS_BUILD` está presente, el plugin lanza un error que detiene la compilación.
+- La carpeta `android/` que genera el prebuild no se versiona (está en `.gitignore`).
+
 ## Pruebas
 
 ```bash

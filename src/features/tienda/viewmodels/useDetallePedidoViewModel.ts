@@ -6,8 +6,10 @@ import { enlaceTelefono } from '@/features/salon/models/salonModel';
 import { ApiError } from '@/shared/api/apiClient';
 import { mensajeParaClienta } from '@/shared/api/mensajesError';
 import { obtenerTexto } from '@/shared/api/textosSitio';
+import { useComprobantesDeCompra } from '@/shared/api/useComprobantesDeCompra';
 import { useConfiguracionPublica } from '@/shared/api/useConfiguracionPublica';
 import { useEsperaLimite } from '@/shared/api/useEsperaLimite';
+import type { BotonComprobante } from '@/shared/ui/BotonesComprobante';
 import { useCandado } from '@/shared/ui/useCandado';
 import { tiendaCompra } from '@/shared/ui/tokens';
 
@@ -145,6 +147,8 @@ export interface DetallePedidoViewModel {
   reintentarDevoluciones: () => void;
   /** Pedir una solicitud de cambio o reembolso y retirar una pendiente. */
   solicitud: SolicitudDevolucionViewModel;
+  /** "Ver comprobante" (GP-09): uno por cada comprobante del pedido; vacío si no hay o la consulta falló. */
+  comprobantes: BotonComprobante[];
 }
 
 /** Id numérico positivo del parámetro de la ruta, en texto; null si no es válido. */
@@ -669,6 +673,9 @@ export function useDetallePedidoViewModel(pedidoId: string | undefined): Detalle
     recargarDevoluciones: releerDevoluciones,
   });
 
+  // Comprobantes del pedido cargado; se vuelven a pedir cuando cambia su estado (por ejemplo, al pagarse).
+  const comprobantes = useComprobantesDeCompra('pedido', pedido?.id ?? null, pedido?.estado ?? '');
+
   const texto = (clave: Parameters<typeof obtenerTexto>[0], contexto = {}) => obtenerTexto(clave, contexto, configuracion);
 
   return {
@@ -726,5 +733,6 @@ export function useDetallePedidoViewModel(pedidoId: string | undefined): Detalle
     },
     reintentarDevoluciones,
     solicitud: solicitudDevolucion,
+    comprobantes,
   };
 }

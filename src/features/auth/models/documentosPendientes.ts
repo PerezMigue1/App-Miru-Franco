@@ -78,12 +78,15 @@ export function normalizarPendiente(crudo: unknown): Omit<DocumentoPendiente, 't
   return { tipo, slug, version, hash, vigenteDesde, versionAceptada: esVersionDocumento(aceptada) ? aceptada : null };
 }
 
-/** Título y ruta del documento vigente de un slug; vacíos si no se pudieron leer. Nunca rechaza. */
-async function datosDelDocumento(slug: string): Promise<{ titulo: string; ruta: string | null }> {
+/**
+ * Título y ruta del documento vigente de un slug; vacíos si no se pudieron leer. Con forzarRed (tras
+ * un 400 de versión cambiada) el repositorio vuelve a pedir el documento a la red. Nunca rechaza.
+ */
+async function datosDelDocumento(slug: string, forzarRed: boolean): Promise<{ titulo: string; ruta: string | null }> {
   if (esSlugDocumentoLegal(slug)) {
     // Los conocidos pasan por el repositorio de documentos (memoria, red o archivo guardado); sin él,
     // el título y la ruta de respaldo: la clienta siempre puede leer lo que se le pide aceptar.
-    const { documento } = await obtenerDocumentoVigente(slug);
+    const { documento } = await obtenerDocumentoVigente(slug, { forzarRed });
     return documento
       ? { titulo: documento.titulo, ruta: documento.ruta }
       : { titulo: TITULO_DOCUMENTO_LEGAL[slug], ruta: RUTA_DOCUMENTO_LEGAL[slug] };
@@ -132,10 +135,14 @@ export async function leerPendientes(): Promise<DocumentoPendiente[]> {
 
 /**
  * El título y la ruta del documento vigente de cada pendiente (también de un slug que la app no
- * conoce). Lo que no se pueda leer se queda con su respaldo. Nunca rechaza.
+ * conoce). Lo que no se pueda leer se queda con su respaldo. Con forzarRed los documentos conocidos se
+ * vuelven a pedir a la red aunque la memoria siga vigente. Nunca rechaza.
  */
-export async function completarDatos(pendientes: DocumentoPendiente[]): Promise<DocumentoPendiente[]> {
-  const datos = await Promise.all(pendientes.map((pendiente) => datosDelDocumento(pendiente.slug)));
+export async function completarDatos(
+  pendientes: DocumentoPendiente[],
+  { forzarRed = false }: { forzarRed?: boolean } = {},
+): Promise<DocumentoPendiente[]> {
+  const datos = await Promise.all(pendientes.map((pendiente) => datosDelDocumento(pendiente.slug, forzarRed)));
   return pendientes.map((pendiente, i) => ({ ...pendiente, ...datos[i] }));
 }
 

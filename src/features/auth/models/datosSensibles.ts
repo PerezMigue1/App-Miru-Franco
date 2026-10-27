@@ -1,4 +1,5 @@
 import { ApiError, apiGet, apiPost } from '@/shared/api/apiClient';
+import { esTextoDatosSensiblesActualizado } from '@/shared/api/documentosActualizados';
 import { esHashDocumento } from '@/shared/api/documentosLegales';
 
 /**
@@ -129,7 +130,10 @@ export async function retirarDatosSensibles(rutaOrigen: RutaDatosSensibles): Pro
   await apiPost<unknown>('/api/consentimientos/datos-sensibles/retirar', { rutaOrigen });
 }
 
-/** El 400 de autorizar: el texto cambió o la autorización no es válida. */
+/**
+ * El 400 de autorizar: el texto cambió (code TEXTO_DATOS_SENSIBLES_NO_VIGENTE desde la Ronda 9) o,
+ * con un backend anterior, un 400 sin code. Un 400 con otro code no es un cambio del texto.
+ */
 export function esTextoCambiado(error: unknown): boolean {
-  return error instanceof ApiError && error.status === 400;
+  return esTextoDatosSensiblesActualizado(error) || (error instanceof ApiError && error.status === 400 && !error.code);
 }

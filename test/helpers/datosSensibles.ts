@@ -49,10 +49,19 @@ export function respuestaRetirada(): Response {
   });
 }
 
-/** 400 del backend cuando el texto de la autorización cambió. */
-export function textoCambio400(): Response {
+/**
+ * 400 del backend cuando el texto de la autorización cambió: desde la Ronda 9 con el code
+ * TEXTO_DATOS_SENSIBLES_NO_VIGENTE (null: sin code, como un backend anterior).
+ */
+export function textoCambio400(code: string | null = 'TEXTO_DATOS_SENSIBLES_NO_VIGENTE'): Response {
   return respuesta(
-    { success: false, statusCode: 400, error: 'Bad Request', message: 'El texto de la autorización cambió. Vuelve a leerlo y autoriza otra vez.' },
+    {
+      success: false,
+      statusCode: 400,
+      error: 'Bad Request',
+      message: 'El texto de la autorización cambió. Vuelve a leerlo y autoriza otra vez.',
+      ...(code ? { code } : {}),
+    },
     400,
   );
 }

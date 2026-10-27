@@ -135,6 +135,8 @@ interface FilaInterruptorProps {
   onCambiar: (encendido: boolean) => void;
   /** Aún no se puede cambiar (por ejemplo, mientras se lee): atenuada y anunciada como deshabilitada. */
   deshabilitada?: boolean;
+  /** Nombre para TalkBack si el título solo no basta (por omisión, el título). */
+  etiquetaAccesible?: string;
 }
 
 /**
@@ -150,12 +152,13 @@ export function FilaInterruptor({
   encendido,
   onCambiar,
   deshabilitada = false,
+  etiquetaAccesible,
 }: FilaInterruptorProps) {
   const { colores } = useTheme();
   return (
     <Pressable
       accessibilityRole="switch"
-      accessibilityLabel={titulo}
+      accessibilityLabel={etiquetaAccesible ?? titulo}
       accessibilityHint={descripcion}
       accessibilityState={{ checked: encendido, disabled: deshabilitada }}
       disabled={deshabilitada}

@@ -13,6 +13,7 @@ import { obtenerTexto as t } from '@/shared/api/textosSitio';
 
 import {
   ALERGIA_FICTICIA,
+  ALERGIAS_AUTORIZADAS,
   FOTOS_ACEPTADAS,
   FOTOS_REVOCADAS,
   RUTA_CONSENTIMIENTOS,
@@ -156,8 +157,9 @@ describe('usePermisosPrivacidad: recargas y respuestas viejas', () => {
     expect(result.current.interruptores).toHaveLength(3);
 
     await act(async () => {
-      segunda.soltar(respuestaMios(FOTOS_REVOCADAS));
+      segunda.soltar(respuestaMios([]));
     });
+    // Sin ningún registro de fotos su interruptor ya no sale.
     await waitFor(() => expect(result.current.interruptores.map((i) => i.permiso)).toEqual(['salud', 'promociones']));
   });
 
@@ -206,16 +208,34 @@ describe('usePermisosPrivacidad: lo que no envía nada', () => {
     return encontrado;
   };
 
-  it('las fotos no se vuelven a encender desde la app: ni confirmación, ni hoja, ni petición', async () => {
+  it('encender las fotos pide confirmar con la acción principal; sin confirmar no envía nada', async () => {
     const { result, llamadas } = await conPermisos();
     const antes = llamadas.length;
 
     await act(async () => {
       de(result, 'fotos').cambiar(true);
     });
-    expect(result.current.confirmacion.visible).toBe(false);
+    expect(result.current.confirmacion).toMatchObject({
+      visible: true,
+      titulo: t('privacidad.app.fotos.autorizarTitulo'),
+      texto: t('privacidad.app.fotos.autorizarTexto'),
+      accion: t('privacidad.app.fotos.autorizar'),
+      destructiva: false,
+    });
     expect(result.current.hojaSalud.visible).toBe(false);
+    await act(async () => {
+      result.current.confirmacion.cerrar();
+    });
+    expect(result.current.confirmacion.visible).toBe(false);
     expect(llamadas).toHaveLength(antes);
+  });
+
+  it('retirar un permiso se confirma con la acción en el color de peligro', async () => {
+    const { result } = await conPermisos();
+    await act(async () => {
+      de(result, 'promociones').cambiar(false);
+    });
+    expect(result.current.confirmacion).toMatchObject({ visible: true, destructiva: true });
   });
 
   it('mientras se activa promociones, tocar otro interruptor no abre nada ni envía otro cambio', async () => {
@@ -315,6 +335,7 @@ describe('Mis permisos sin cargar todavía', () => {
         return respuestaAutorizada();
       },
       [`GET ${RUTA_MIOS}`]: enSecuencia(sinRed, () => respuestaMios(FOTOS_ACEPTADAS)),
+      [`GET ${RUTA_MIS_DATOS}`]: () => respuestaMisDatos(perfilMisDatos(autorizada ? ALERGIAS_AUTORIZADAS : {})),
     });
     await pintar();
     expect(await screen.findByRole('button', { name: t('privacidad.app.reintentar') })).toBeOnTheScreen();

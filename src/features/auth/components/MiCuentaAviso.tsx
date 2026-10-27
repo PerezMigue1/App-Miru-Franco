@@ -18,6 +18,8 @@ const ICONOS: Record<TonoMiCuenta, LucideIcon> = {
 interface MiCuentaAvisoProps {
   tono: TonoMiCuenta;
   texto: string | null;
+  /** Dato aparte del mensaje, destacado en su propia línea (por ejemplo, un folio). */
+  detalle?: string | null;
 }
 
 /**
@@ -27,7 +29,7 @@ interface MiCuentaAvisoProps {
  * siempre montada, para que TalkBack los anuncie al aparecer; el irreversible es fijo y se lee en
  * orden, sin anunciarse.
  */
-export function MiCuentaAviso({ tono, texto }: MiCuentaAvisoProps) {
+export function MiCuentaAviso({ tono, texto, detalle = null }: Readonly<MiCuentaAvisoProps>) {
   const { oscuro } = useTheme();
   const entrada = useEntradaContenido();
   const familia = tono === 'exito' ? 'exito' : 'peligro';
@@ -42,7 +44,10 @@ export function MiCuentaAviso({ tono, texto }: MiCuentaAvisoProps) {
       <View style={styles.icono} importantForAccessibility="no-hide-descendants">
         <Icono color={colores.texto} size={icono.tamanoPequeno} strokeWidth={icono.trazo} />
       </View>
-      <Text style={[styles.texto, { color: colores.texto }]}>{texto}</Text>
+      <View style={styles.textos}>
+        <Text style={[styles.texto, { color: colores.texto }]}>{texto}</Text>
+        {detalle ? <Text style={[styles.texto, styles.detalle, { color: colores.texto }]}>{detalle}</Text> : null}
+      </View>
     </Animated.View>
   ) : null;
 
@@ -69,11 +74,17 @@ const styles = StyleSheet.create({
     // Centra el ícono con la primera línea del texto.
     paddingTop: (tipo.parrafo.linea - icono.tamanoPequeno) / 2,
   },
-  texto: {
+  textos: {
     flex: 1,
+    gap: espacio.xs,
+  },
+  texto: {
     fontFamily: fuente.textoMedio,
     fontSize: tipo.parrafo.tamano,
     lineHeight: tipo.parrafo.linea,
+  },
+  detalle: {
+    fontFamily: fuente.textoFuerte,
   },
   // La región en vivo vacía queda fuera del flujo: no suma espacio.
   fueraDeFlujo: {

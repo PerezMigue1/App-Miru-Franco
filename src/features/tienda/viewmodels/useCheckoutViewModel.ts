@@ -25,6 +25,7 @@ import {
   botonFinal,
   CASILLAS_COMPRA,
   CASILLAS_COMPRA_INICIALES,
+  casillasConDocumentoCambiado,
   ErrorConsentimientoCompra,
   erroresCasillasCompra,
   esVersionCambiadaCompra,
@@ -43,6 +44,7 @@ import {
   textoRecogesEn,
   textosCheckout,
   textosSinMetodos,
+  type DocumentosVistos,
   type TextosCheckout,
   type EstadoCasillasCompra,
   type EtiquetaCasillaCompra,
@@ -336,17 +338,25 @@ export function useCheckoutViewModel(): CheckoutViewModel {
     }, []),
   );
 
-  /** El consentimiento no se guardó: mensaje claro; con la versión cambiada, hay que volver a marcar. */
+  /**
+   * El consentimiento no se guardó: mensaje claro. Con una versión que ya no es la vigente (400
+   * DOCUMENTO_NO_VIGENTE o DOCUMENTO_NO_COINCIDE) se vuelven a pedir los documentos a la red y solo se
+   * desmarca la casilla del que cambió, con su aviso al lado; la forma de pago y lo demás se quedan
+   * como estaban. Nunca se reintenta solo: la clienta revisa y confirma otra vez.
+   */
   const mostrarFallaConsentimiento = useCallback(
-    (error: ErrorConsentimientoCompra) => {
+    async (error: ErrorConsentimientoCompra, vistos: DocumentosVistos) => {
       setErrorEnvio(mensajeConsentimientoCompra(error, configuracion));
-      if (esVersionCambiadaCompra(error)) {
-        setCasillas(CASILLAS_COMPRA_INICIALES);
-        // Trae las versiones vigentes para que la clienta revise las nuevas; nunca rechaza.
-        for (const slug of SLUGS_CASILLAS) {
-          void obtenerDocumentoVigente(slug, { forzarRed: true });
-        }
+      if (!esVersionCambiadaCompra(error)) {
+        return;
       }
+      const cambiadas = await casillasConDocumentoCambiado(vistos);
+      if (!montada.current) {
+        return;
+      }
+      const aviso = textoDocumentoActualizado(configuracion);
+      setCasillas((previas) => ({ ...previas, ...Object.fromEntries(cambiadas.map((id) => [id, false])) }));
+      setErroresCasillas((previos) => ({ ...previos, ...Object.fromEntries(cambiadas.map((id) => [id, aviso])) }));
     },
     [configuracion],
   );
@@ -388,9 +398,12 @@ export function useCheckoutViewModel(): CheckoutViewModel {
           if (esperarSiLimite(falla.causa)) {
             setErrorEnvio(mensajeParaClienta(falla.causa));
           } else {
-            mostrarFallaConsentimiento(falla);
+            // Las casillas siguen bloqueadas (enviando) hasta saber qué documento cambió.
+            await mostrarFallaConsentimiento(falla, vistos);
           }
-          setEnviando(false);
+          if (montada.current) {
+            setEnviando(false);
+          }
         }
         return;
       }

@@ -118,8 +118,6 @@ export const RESPALDO_TEXTOS = Object.freeze({
     'Si al pagar tu anticipo faltan más de {diasExcepcion} días hábiles para tu cita, puedes cancelarla dentro de los {diasReembolso} días hábiles siguientes a tu pago y te devolvemos el anticipo completo. Si faltan {diasExcepcion} días hábiles o menos, al cancelar el anticipo no se devuelve, pero puedes reagendar con aviso; si el salón cancela, te lo devolvemos.',
   'citas.politicaAnticipos.casilla': 'Leí la Política de anticipos y cancelación',
   'citas.politicaAnticipos.falta': 'Para continuar marca que leíste la Política de anticipos y cancelación.',
-  'citas.politicaAnticipos.actualizada':
-    'La Política de anticipos y cancelación se actualizó. Revisa la versión vigente y vuelve a marcar la casilla.',
   // Propias de la app (GP-07.4, detalle de la cita, anticipo en el salón y reprogramar): el backend
   // no tiene estas claves. Las cifras salen de las reglas guardadas en la cita (obtenerTextoConReglas).
   'citas.anticipoSalon.plazo': 'Paga tu anticipo en el salón {limite} ({minutosAntesPagoSalon} minutos antes de tu cita).',
@@ -210,7 +208,6 @@ export const RESPALDO_TEXTOS = Object.freeze({
   'tienda.checkout.faltaTerminos': 'Para confirmar tu pedido acepta los Términos de venta.',
   'tienda.checkout.faltaReembolsos': 'Para confirmar tu pedido marca que leíste la Política de reembolsos, cambios y cancelaciones.',
   'tienda.checkout.faltanCasillas': 'Para confirmar tu pedido marca las casillas de "Antes de confirmar".',
-  'tienda.checkout.documentoActualizado': 'Este documento se actualizó. Revísalo y vuelve a marcar la casilla.',
   'tienda.checkout.consentimientoNoGuardado':
     'No pudimos guardar tu aceptación de los Términos de venta y la Política de reembolsos, así que tu pedido no se creó.',
   'tienda.checkout.consentimientoSinVersion':
@@ -544,6 +541,45 @@ export const RESPALDO_TEXTOS = Object.freeze({
   'eliminarCuenta.conserva.historial': 'Tus citas, quejas y valoraciones, ya sin tu nombre.',
   'eliminarCuenta.conserva.constancias':
     'La constancia de tus consentimientos y de tus solicitudes ARCO, incluida la de esta eliminación con su folio.',
+  // Ver comprobante (GP-09): copia exacta de los valores por omisión de correos.comprobante.* del
+  // catálogo del backend. Las leyendas del ticket ya llegan llenas en GET /api/comprobantes/mio; los
+  // textos propios de la pantalla van en textosPropiosApp.json (comprobante.app.*).
+  'correos.comprobante.titulo': 'Comprobante de compra',
+  'correos.comprobante.gracias': 'Gracias por tu preferencia.',
+  // Mis datos y privacidad (Ronda 9 del backend): copia exacta de los valores por omisión del catálogo
+  // (src/textos-sitio/catalogo.ts). Lo que se conserva visto desde Mis datos, el aviso junto a la
+  // casilla de un documento legal que cambió de versión y el folio de la cancelación ARCO abierta.
+  'privacidad.conserva.constancias': 'La constancia de tus consentimientos y de tus solicitudes ARCO.',
+  'legal.documentoActualizado': 'Actualizamos este documento; revísalo y acéptalo de nuevo.',
+  'privacidad.arco.folioAbierta': 'Folio de tu solicitud abierta: {folio}',
+  // Preferencias de avisos (Ronda 9): copia exacta de preferenciasAvisos.* del catálogo del backend.
+  'preferenciasAvisos.titulo': 'Preferencias de avisos',
+  'preferenciasAvisos.descripcion': 'Elige qué avisos recibes en la app y por correo',
+  'preferenciasAvisos.intro':
+    'Elige qué avisos quieres recibir en la app y por correo. Si apagas uno, dejamos de mandártelo desde ahora, incluidos los recordatorios que ya estaban programados.',
+  'preferenciasAvisos.canalApp': 'En la app',
+  'preferenciasAvisos.canalCorreo': 'Por correo',
+  'preferenciasAvisos.canalNoAplica': 'Este aviso no se manda por este medio',
+  'preferenciasAvisos.arcoRespuesta': 'Respuesta a tus solicitudes ARCO',
+  'preferenciasAvisos.arcoRespuestaExplicacion':
+    'Este aviso siempre está encendido: la ley nos obliga a comunicarte la respuesta a tus solicitudes de acceso, rectificación, cancelación, oposición o revocación.',
+  'preferenciasAvisos.guardado': 'Guardamos tus preferencias de avisos.',
+  'preferenciasAvisos.noDisponible':
+    'Las preferencias de avisos todavía no están disponibles. Vuelve a intentarlo más tarde.',
+  'preferenciasAvisos.errorCarga': 'No pudimos cargar tus preferencias de avisos. Intenta de nuevo.',
+  'preferenciasAvisos.guardar': 'Guardar',
+  'preferenciasAvisos.guardando': 'Guardando…',
+  'preferenciasAvisos.guardarEspera': 'Guardar ({segundos} s)',
+  'preferenciasAvisos.reintentar': 'Reintentar',
+  'preferenciasAvisos.reintentarEspera': 'Reintentar ({segundos} s)',
+  'preferenciasAvisos.cargando': 'Cargando tus preferencias de avisos',
+  'preferenciasAvisos.errorGuardado': 'No pudimos guardar tus preferencias de avisos. Intenta de nuevo.',
+  'preferenciasAvisos.canalSoloApp': 'Solo en la app',
+  'preferenciasAvisos.sinGuardarTitulo': 'Tienes cambios sin guardar',
+  'preferenciasAvisos.sinGuardarTexto':
+    'Si sales ahora, se pierden los cambios que hiciste en tus preferencias de avisos.',
+  'preferenciasAvisos.sinGuardarSalir': 'Salir sin guardar',
+  'preferenciasAvisos.sinGuardarQuedarse': 'Seguir aquí',
   // Propias de la app agregadas en GP-07.6 (textosPropiosApp.json): no existen en el catálogo del
   // backend y son respaldos de la app hasta que el backend agregue las claves. Viven en JSON porque
   // son datos, no código. Traen los defectos de citas, los avisos por tipo de falla, los textos que

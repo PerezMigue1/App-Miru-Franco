@@ -1,18 +1,19 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
+import { documentosQueCambiaron, textoDocumentoActualizado } from '@/shared/api/documentosActualizados';
 import {
   documentoEnMemoria,
   suscribir as suscribirDocumentos,
   type DocumentoLegalVigente,
 } from '@/shared/api/documentosLegales';
 
-import { registrarAceptacionAnticipos } from '../models/gestionCitaModel';
-import { textoFaltaPolitica, textoPoliticaActualizada } from '../models/formaPagoModel';
+import { aceptarPoliticaAnticipos } from '../models/gestionCitaModel';
+import { textoFaltaPolitica } from '../models/formaPagoModel';
 
 /** Resultado de aceptar: listo, o el motivo por el que no se puede seguir. */
 export type ResultadoAceptacion =
   | { ok: true }
-  /** mensaje null: falta marcar la casilla (el error ya se ve en la casilla). */
+  /** mensaje null: falta marcar la casilla o su versión cambió (el aviso ya se ve en la casilla). */
   | { ok: false; mensaje: string | null };
 
 export interface AceptacionAnticipos {
@@ -76,9 +77,11 @@ export function useAceptacionAnticipos(rutaOrigen: string): AceptacionAnticipos 
   const [marcada, setMarcada] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Con la casilla marcada la política cambió de versión: se desmarca con el aviso común de los
+  // documentos legales (el mismo de la reserva).
   const alCambiarVersion = useCallback(() => {
     setMarcada(false);
-    setError(textoPoliticaActualizada());
+    setError(textoDocumentoActualizado());
   }, []);
   const versionVista = usePoliticaVista(marcada, alCambiarVersion);
 
@@ -94,8 +97,21 @@ export function useAceptacionAnticipos(rutaOrigen: string): AceptacionAnticipos 
       setError(textoFaltaPolitica());
       return { ok: false, mensaje: null };
     }
-    const mensaje = await registrarAceptacionAnticipos(rutaOrigen, undefined, versionVista());
-    return mensaje ? { ok: false, mensaje } : { ok: true };
+    const vista = versionVista();
+    const falla = await aceptarPoliticaAnticipos(rutaOrigen, undefined, vista);
+    if (!falla) {
+      return { ok: true };
+    }
+    if (!falla.documentoCambiado) {
+      return { ok: false, mensaje: falla.mensaje };
+    }
+    // La versión que vio ya no es la vigente (400 DOCUMENTO_NO_VIGENTE o DOCUMENTO_NO_COINCIDE): se pide
+    // la vigente a la red, la casilla se desmarca con su aviso y, al marcarla otra vez, cuenta la
+    // versión nueva. Nunca se reintenta solo.
+    await documentosQueCambiaron([{ clave: 'anticipos', slug: 'anticipos', aceptado: vista }]);
+    setMarcada(false);
+    setError(textoDocumentoActualizado());
+    return { ok: false, mensaje: null };
   }, [marcada, rutaOrigen, versionVista]);
 
   return { marcada, cambiar, error, aceptar };

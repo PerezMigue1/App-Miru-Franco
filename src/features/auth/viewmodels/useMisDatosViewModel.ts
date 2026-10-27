@@ -8,7 +8,6 @@ import { fechaHoraLegible, fechaLargaLegible } from '@/shared/ui/fechasLegibles'
 import { useCandado } from '@/shared/ui/useCandado';
 
 import { leerMisDatos, oponerseAPromociones, resumirMisDatos, type PerfilMisDatos, type ResumenMisDatos } from '../models/arcoModel';
-import { obtenerEstadoDatosSensibles } from '../models/datosSensibles';
 import { invalidarPerfil } from '../models/perfilCompartido';
 import {
   usePermisosPrivacidad,
@@ -131,16 +130,12 @@ function camposDe(texto: FuncionTexto, perfil: PerfilMisDatos, alergiasVisibles:
   });
 }
 
-/** Pide los datos y el estado de la autorización a la vez; sin estado, las alergias no se guardan. */
+/**
+ * Pide los datos y los resume. Las alergias y si están guardadas y ocultas las decide el backend
+ * (Ronda 9): sin autorización vigente, su texto no viaja.
+ */
 async function cargarResumen(): Promise<ResumenMisDatos> {
-  const [crudo, autorizadas] = await Promise.all([
-    leerMisDatos(),
-    obtenerEstadoDatosSensibles().then(
-      (estado) => estado.autorizado,
-      () => false,
-    ),
-  ]);
-  return resumirMisDatos(crudo, autorizadas);
+  return resumirMisDatos(await leerMisDatos());
 }
 
 /**
@@ -207,7 +202,8 @@ export function useMisDatosViewModel(): MisDatosViewModel {
           if (!previo) {
             return previo;
           }
-          const ocultas = previo.perfil.alergiasOcultas || Boolean(previo.perfil.alergias);
+          const ocultas =
+            previo.perfil.alergiasOcultas || previo.perfil.alergiasGuardadas || Boolean(previo.perfil.alergias);
           return { ...previo, perfil: { ...previo.perfil, alergias: null, alergiasOcultas: ocultas } };
         });
         return;
@@ -350,6 +346,7 @@ export function useMisDatosViewModel(): MisDatosViewModel {
       titulo: texto('privacidad.app.oposicion.confirmarTitulo'),
       texto: texto('privacidad.app.oposicion.confirmarTexto'),
       accion: texto('privacidad.app.oposicion.confirmar'),
+      destructiva: true,
       cancelar: texto('privacidad.app.cancelar'),
       confirmar: () => {
         setConfirmandoOposicion(false);
@@ -367,7 +364,8 @@ export function useMisDatosViewModel(): MisDatosViewModel {
       puntos: [
         texto('eliminarCuenta.conserva.fiscal'),
         texto('eliminarCuenta.conserva.historial'),
-        texto('eliminarCuenta.conserva.constancias'),
+        // En Mis datos, la versión sin "esta eliminación" (la de eliminar cuenta sigue en Mi cuenta).
+        texto('privacidad.conserva.constancias'),
       ],
     },
   };

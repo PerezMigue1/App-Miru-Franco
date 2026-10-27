@@ -72,7 +72,37 @@ export function respuestaSolicitud(cambios: Record<string, unknown> = {}): Respo
   return respuesta({ success: true, data: solicitudCruda(cambios) }, 201);
 }
 
-/** Perfil crudo de GET /api/arco/mis-datos (SELECT_MIS_DATOS): trae las alergias aunque no haya autorización. */
+/**
+ * Alergias en GET /api/arco/mis-datos desde la Ronda 9 del backend: sin autorización vigente el texto
+ * no viaja (alergias en null) y los campos nuevos dicen si hay uno guardado.
+ */
+export const ALERGIAS_OCULTAS = Object.freeze({
+  alergias: null,
+  datosSensiblesAutorizados: false,
+  alergiasGuardadas: true,
+  alergiasOcultas: true,
+});
+
+/** Con la autorización vigente: el texto viaja y no están ocultas. */
+export const ALERGIAS_AUTORIZADAS = Object.freeze({
+  alergias: ALERGIA_FICTICIA,
+  datosSensiblesAutorizados: true,
+  alergiasGuardadas: true,
+  alergiasOcultas: false,
+});
+
+/** Sin alergias guardadas (ni texto ni aviso). */
+export const SIN_ALERGIAS = Object.freeze({
+  alergias: null,
+  datosSensiblesAutorizados: false,
+  alergiasGuardadas: false,
+  alergiasOcultas: false,
+});
+
+/**
+ * Perfil crudo de GET /api/arco/mis-datos (SELECT_MIS_DATOS) de la Ronda 9: por omisión, con alergias
+ * guardadas y sin autorización (el texto no viaja).
+ */
 export function perfilMisDatos(cambios: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     id: 'clienta-mis-datos-1',
@@ -94,7 +124,7 @@ export function perfilMisDatos(cambios: Record<string, unknown> = {}): Record<st
     colorNatural: 'Castaño',
     colorActual: 'Castaño claro',
     productosUsados: 'Shampoo ficticio',
-    alergias: ALERGIA_FICTICIA,
+    ...ALERGIAS_OCULTAS,
     tratamientosQuimicos: true,
     tratamientos: 'Tinte ficticio',
     ...cambios,
@@ -171,14 +201,18 @@ export function error500(referencia = 'A1B2C3D4'): Response {
   return respuesta({ success: false, statusCode: 500, message: 'Error interno ficticio', referencia }, 500);
 }
 
-/** 409 de POST /api/arco/solicitudes con una cancelación abierta. */
-export function cancelacionAbierta409(): Response {
+/** Folio ficticio de la cancelación que ya está abierta. */
+export const FOLIO_ABIERTA = 'ARCO-2026-000040';
+
+/** 409 de POST /api/arco/solicitudes con una cancelación abierta; desde la Ronda 9 el folio va en errors.folio (null: sin errors). */
+export function cancelacionAbierta409(errors: unknown = { folio: FOLIO_ABIERTA }): Response {
   return respuesta(
     {
       success: false,
       statusCode: 409,
-      message: 'Ya tienes una solicitud de cancelación abierta con folio ARCO-2026-000040.',
+      message: `Ya tienes una solicitud de cancelación abierta con folio ${FOLIO_ABIERTA}.`,
       code: 'CANCELACION_ABIERTA',
+      ...(errors === null ? {} : { errors }),
     },
     409,
   );

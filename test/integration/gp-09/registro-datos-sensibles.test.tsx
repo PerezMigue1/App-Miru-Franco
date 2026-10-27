@@ -44,8 +44,10 @@ const CUERPO_BASE = {
   password: CLAVE,
   fechaNacimiento: '1990-03-15',
   preguntaSeguridad: { pregunta: PREGUNTA, respuesta: 'Firulais' },
+  aceptaTerminos: true,
   aceptaAvisoPrivacidad: true,
   recibePromociones: false,
+  rutaOrigen: '/registro',
 };
 
 function creada(extra: Record<string, unknown> = {}): Response {
@@ -69,11 +71,12 @@ async function llegarAlPaso2(llamadas: Llamada[]): Promise<void> {
   expect(await screen.findByText('Cuéntanos sobre tu cabello')).toBeOnTheScreen();
 }
 
-/** Tipo de cabello, "Sí" en alergias, tratamientos en No y el aviso aceptado. */
+/** Tipo de cabello, "Sí" en alergias, tratamientos en No, y los Términos y el aviso aceptados. */
 async function llenarPaso2ConAlergias(): Promise<void> {
   await fireEvent.press(screen.getByRole('radio', { name: 'Tipo de cabello: Lacio' }));
   await fireEvent.press(screen.getByRole('radio', { name: SI_ALERGIAS }));
   await fireEvent.press(screen.getByRole('radio', { name: '¿Tratamientos químicos previos?: No' }));
+  await fireEvent.press(screen.getByRole('checkbox', { name: /^Acepto los/ }));
   await fireEvent.press(screen.getByRole('checkbox', { name: /^Acepto el/ }));
 }
 

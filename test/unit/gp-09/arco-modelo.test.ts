@@ -2,6 +2,7 @@
 
 import {
   crearSolicitudArco,
+  folioCancelacionAbierta,
   leerMisDatos,
   misSolicitudesArco,
   normalizarSolicitudArco,
@@ -11,6 +12,7 @@ import {
 } from '@/features/auth/models/arcoModel';
 import {
   activarPromociones,
+  autorizarFotos,
   estadoFotos,
   leerRecibePromociones,
   misConsentimientos,
@@ -23,6 +25,8 @@ import { ApiError } from '@/shared/api/apiClient';
 
 import {
   ALERGIA_FICTICIA,
+  ALERGIAS_AUTORIZADAS,
+  FOLIO_ABIERTA,
   FOTOS_ACEPTADAS,
   FOTOS_REVOCADAS,
   RESPONDIDA,
@@ -33,6 +37,7 @@ import {
   RUTA_MIS_DATOS,
   RUTA_OPOSICION,
   RUTA_SOLICITUDES,
+  SIN_ALERGIAS,
   cancelacionAbierta409,
   filaConsentimiento,
   perfilMisDatos,
@@ -114,12 +119,23 @@ describe('solicitudes ARCO', () => {
     expect(cuerpos).toEqual([{ tipo: 'acceso' }, { tipo: 'acceso' }]);
   });
 
-  it('el 409 CANCELACION_ABIERTA llega como ApiError con su code', async () => {
+  it('el 409 CANCELACION_ABIERTA llega como ApiError con su code y el folio sale de errors.folio', async () => {
     servidor({ [`POST ${RUTA_SOLICITUDES}`]: () => cancelacionAbierta409() });
-    await expect(crearSolicitudArco({ tipo: 'cancelacion' })).rejects.toMatchObject({
-      status: 409,
-      code: 'CANCELACION_ABIERTA',
-    });
+    const error = await crearSolicitudArco({ tipo: 'cancelacion' }).catch((causa: unknown) => causa);
+    expect(error).toMatchObject({ status: 409, code: 'CANCELACION_ABIERTA' });
+    expect(folioCancelacionAbierta(error)).toBe(FOLIO_ABIERTA);
+  });
+
+  it.each([
+    ['sin errors (backend anterior)', new ApiError(409, 'x', 'CANCELACION_ABIERTA')],
+    ['errors sin folio', new ApiError(409, 'x', 'CANCELACION_ABIERTA', undefined, undefined, { otro: 1 })],
+    ['folio que no es texto', new ApiError(409, 'x', 'CANCELACION_ABIERTA', undefined, undefined, { folio: 3 })],
+    ['folio con otra forma', new ApiError(409, 'x', 'CANCELACION_ABIERTA', undefined, undefined, { folio: '<b>1</b>' })],
+    ['otro code', new ApiError(409, 'x', 'OPERACIONES_EN_CURSO', undefined, undefined, { folio: FOLIO_ABIERTA })],
+    ['otro estado', new ApiError(400, 'x', 'CANCELACION_ABIERTA', undefined, undefined, { folio: FOLIO_ABIERTA })],
+    ['un error que no es del servidor', new Error('x')],
+  ])('folioCancelacionAbierta: %s da null', (_caso, error) => {
+    expect(folioCancelacionAbierta(error)).toBeNull();
   });
 
   it('una respuesta sin solicitud válida es un error', async () => {
@@ -157,27 +173,53 @@ describe('mis datos (acceso)', () => {
     await expect(leerMisDatos()).rejects.toBeInstanceOf(ApiError);
   });
 
-  it('sin autorización vigente descarta las alergias y solo marca que están ocultas', async () => {
+  it('guardadas y ocultas (Ronda 9): el texto no llega y se marca que están guardadas y ocultas', async () => {
     servidor({ [`GET ${RUTA_MIS_DATOS}`]: () => respuestaMisDatos() });
-    const resumen = resumirMisDatos(await leerMisDatos(), false);
+    const resumen = resumirMisDatos(await leerMisDatos());
     expect(resumen.perfil.alergias).toBeNull();
+    expect(resumen.perfil.alergiasGuardadas).toBe(true);
     expect(resumen.perfil.alergiasOcultas).toBe(true);
     expect(JSON.stringify(resumen)).not.toContain(ALERGIA_FICTICIA);
   });
 
-  it('con autorización vigente conserva las alergias', () => {
-    const resumen = resumirMisDatos({ perfil: perfilMisDatos() }, true);
+  it('guardadas y autorizadas: el texto se muestra y nada está oculto', () => {
+    const resumen = resumirMisDatos({ perfil: perfilMisDatos(ALERGIAS_AUTORIZADAS) });
     expect(resumen.perfil.alergias).toBe(ALERGIA_FICTICIA);
+    expect(resumen.perfil.alergiasGuardadas).toBe(true);
     expect(resumen.perfil.alergiasOcultas).toBe(false);
   });
 
-  it('sin alergias guardadas no hay nada oculto', () => {
-    expect(resumirMisDatos({ perfil: perfilMisDatos({ alergias: null }) }, false).perfil.alergiasOcultas).toBe(false);
+  it('sin alergias guardadas no hay nada oculto ni texto', () => {
+    const { perfil } = resumirMisDatos({ perfil: perfilMisDatos(SIN_ALERGIAS) });
+    expect(perfil).toMatchObject({ alergias: null, alergiasGuardadas: false, alergiasOcultas: false });
+  });
+
+  it('autorizada sin texto guardado: el campo existe vacío y no hay aviso', () => {
+    const { perfil } = resumirMisDatos({ perfil: perfilMisDatos({ ...SIN_ALERGIAS, datosSensiblesAutorizados: true }) });
+    expect(perfil).toMatchObject({ alergias: '', alergiasGuardadas: false, alergiasOcultas: false });
+  });
+
+  it('ya no se calcula a partir del texto: sin datosSensiblesAutorizados el texto nunca se muestra', () => {
+    // Un backend anterior a la Ronda 9 mandaba el texto sin los campos nuevos.
+    const anterior = perfilMisDatos({
+      alergias: ALERGIA_FICTICIA,
+      datosSensiblesAutorizados: undefined,
+      alergiasGuardadas: undefined,
+      alergiasOcultas: undefined,
+    });
+    const { perfil } = resumirMisDatos({ perfil: anterior });
+    expect(perfil).toMatchObject({ alergias: null, alergiasGuardadas: false, alergiasOcultas: false });
+    expect(JSON.stringify(perfil)).not.toContain(ALERGIA_FICTICIA);
+  });
+
+  it('alergiasOcultas del backend basta aunque falte alergiasGuardadas', () => {
+    const { perfil } = resumirMisDatos({ perfil: perfilMisDatos({ alergiasGuardadas: undefined }) });
+    expect(perfil.alergiasOcultas).toBe(true);
   });
 
   it('resume el perfil sin nada técnico y cuenta cada sección (las que faltan cuentan 0)', async () => {
-    servidor({ [`GET ${RUTA_MIS_DATOS}`]: () => respuestaMisDatos() });
-    const resumen = resumirMisDatos(await leerMisDatos(), true);
+    servidor({ [`GET ${RUTA_MIS_DATOS}`]: () => respuestaMisDatos(perfilMisDatos(ALERGIAS_AUTORIZADAS)) });
+    const resumen = resumirMisDatos(await leerMisDatos());
     expect(resumen.generadoEn).toBe('2026-10-26T17:30:00.000Z');
     expect(resumen.perfil).toEqual({
       nombre: 'Clienta Ficticia',
@@ -191,6 +233,7 @@ describe('mis datos (acceso)', () => {
       tratamientosQuimicos: true,
       tratamientos: 'Tinte ficticio',
       alergias: ALERGIA_FICTICIA,
+      alergiasGuardadas: true,
       alergiasOcultas: false,
       recibePromociones: true,
       creadoEn: '2026-01-15T17:00:00.000Z',
@@ -199,7 +242,7 @@ describe('mis datos (acceso)', () => {
     const cuenta = Object.fromEntries(resumen.conteos.map((c) => [c.seccion, c.cantidad]));
     expect(cuenta).toMatchObject({ pedidos: 2, citas: 3, facturas: 1, direcciones: 0 });
 
-    const vacio = resumirMisDatos(null, false);
+    const vacio = resumirMisDatos(null);
     expect(vacio.conteos.every((c) => c.cantidad === 0)).toBe(true);
     expect(vacio.perfil.tratamientosQuimicos).toBeNull();
   });
@@ -252,6 +295,19 @@ describe('permisos', () => {
     await retirar();
     expect(llamadasA(llamadas, 'POST', RUTA_CONSENTIMIENTOS)[0].cuerpo).toEqual({
       items: [{ tipo, accion: 'revocado' }],
+      formulario: 'perfil_privacidad',
+      rutaOrigen: '/mis-datos',
+    });
+  });
+
+  it('volver a autorizar las fotos manda el cuerpo exacto de fotos-reautorizar.spec.ts', async () => {
+    const llamadas = servidor({
+      [`POST ${RUTA_CONSENTIMIENTOS}`]: () =>
+        respuesta({ success: true, data: [{ id: '78', tipo: 'fotos_resultado', accion: 'aceptado' }] }, 201),
+    });
+    await autorizarFotos();
+    expect(llamadasA(llamadas, 'POST', RUTA_CONSENTIMIENTOS)[0].cuerpo).toEqual({
+      items: [{ tipo: 'fotos_resultado', accion: 'aceptado' }],
       formulario: 'perfil_privacidad',
       rutaOrigen: '/mis-datos',
     });

@@ -58,7 +58,7 @@ export function HojaSolicitudArco({ hoja }: { hoja: HojaSolicitudVista }) {
           largoMaximo={hoja.largoMaximo}
           ayuda={hoja.ayudaDescripcion}
         />
-        <MiCuentaAviso tono="peligro" texto={hoja.error} />
+        <MiCuentaAviso tono="peligro" texto={hoja.error} detalle={hoja.detalleError} />
         <View style={styles.acciones}>
           <Button
             titulo={hoja.textoEnviar}

@@ -974,7 +974,7 @@ function PasoCuenta({
 
 /**
  * Paso 2, "Tu cabello": perfil capilar, alergias (solo con la autorización expresa de datos
- * sensibles), tratamientos, aviso de privacidad y promociones. Textos de la web.
+ * sensibles), tratamientos, Términos y Condiciones, aviso de privacidad y promociones. Textos de la web.
  */
 function PasoCabello({ registro, refs }: { registro: RegistroViewModel; refs: RefsRegistro }) {
   const { colores } = useTheme();
@@ -992,6 +992,11 @@ function PasoCabello({ registro, refs }: { registro: RegistroViewModel; refs: Re
     crearCuenta,
     textosAlergias,
   } = registro;
+  const enlaceTerminos = {
+    texto: textos.terminosEnlace,
+    accion: 'Leer los Términos y Condiciones',
+    onPress: abrirTerminos,
+  };
   const enlaceAviso = {
     texto: 'Aviso de Privacidad',
     accion: 'Abrir el Aviso de Privacidad',
@@ -1085,10 +1090,19 @@ function PasoCabello({ registro, refs }: { registro: RegistroViewModel; refs: Re
           valor={campos.tratamientos}
           onCambiar={(t) => cambiar('tratamientos', t)}
           onSalir={() => salir('tratamientos')}
-          siguiente={refs.irABloque('aceptaAviso')}
+          siguiente={refs.irABloque('aceptaTerminos')}
           error={errores.tratamientos}
         />
       ) : null}
+      <View ref={refs.bloqueDe('aceptaTerminos')}>
+        <Casilla
+          marcada={campos.aceptaTerminos}
+          onCambiar={(v) => cambiar('aceptaTerminos', v)}
+          texto={textos.terminosCasilla}
+          enlace={enlaceTerminos}
+          error={errores.aceptaTerminos ?? null}
+        />
+      </View>
       <View ref={refs.bloqueDe('aceptaAviso')}>
         <Casilla
           marcada={campos.aceptaAviso}
@@ -1114,7 +1128,6 @@ function PasoCabello({ registro, refs }: { registro: RegistroViewModel; refs: Re
         />
         <Button titulo="Atrás" variante="secundario" onPress={atras} deshabilitado={cargando} />
       </View>
-      <LeyendaTerminos onPress={abrirTerminos} />
     </>
   );
 }
@@ -1217,32 +1230,6 @@ function Requisito({
         {etiqueta}
       </Text>
     </View>
-  );
-}
-
-/**
- * "Al crear tu cuenta aceptas los Términos y Condiciones", como la web. Toda la línea es el enlace:
- * así el área táctil llega a 48dp aunque el texto ocupe dos renglones.
- */
-function LeyendaTerminos({ onPress }: { onPress: () => void }) {
-  const { colores } = useTheme();
-  const { estilo: estiloPresion, hundir, soltar } = usePresion();
-  return (
-    <Pressable
-      accessibilityRole="link"
-      accessibilityLabel="Al crear tu cuenta aceptas los Términos y Condiciones"
-      accessibilityHint="Se abre en el navegador"
-      onPress={onPress}
-      onPressIn={hundir}
-      onPressOut={soltar}
-    >
-      <Animated.View style={[styles.leyenda, estiloPresion]}>
-        <Text style={[styles.textoLeyenda, { color: colores.textoSuave }]}>
-          Al crear tu cuenta aceptas los{' '}
-          <Text style={[styles.enlaceEnTexto, { color: colores.enlace }]}>Términos y Condiciones</Text>
-        </Text>
-      </Animated.View>
-    </Pressable>
   );
 }
 
@@ -1902,18 +1889,6 @@ const styles = StyleSheet.create({
   },
   botonesPaso: {
     gap: espacio.m,
-  },
-  leyenda: {
-    minHeight: toqueMinimo,
-    justifyContent: 'center',
-    paddingHorizontal: espacio.xs,
-    borderRadius: radio.campo,
-  },
-  textoLeyenda: {
-    textAlign: 'center',
-    fontFamily: fuente.texto,
-    fontSize: tipo.pequeno.tamano,
-    lineHeight: tipo.pequeno.linea,
   },
   requisito: {
     flexDirection: 'row',

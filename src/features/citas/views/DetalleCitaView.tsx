@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EncabezadoVolver } from '@/features/auth/components/EncabezadoVolver';
 import { BadgeEstado } from '@/shared/ui/BadgeEstado';
+import { BotonesComprobante } from '@/shared/ui/BotonesComprobante';
 import { Button } from '@/shared/ui/Button';
 import { DatosTransferencia } from '@/shared/ui/DatosTransferencia';
 import { estilosDetalle } from '@/shared/ui/estilosDetalle';
@@ -166,6 +167,9 @@ function Contenido({
           />
         ) : null}
       </View>
+
+      {/* El del anticipo y el de la venta del salón, si los hay (GP-09). */}
+      <BotonesComprobante botones={vm.comprobantes} />
 
       {presentacion.recordatorio ? (
         <Text style={[styles.cuerpo, { color: colores.texto }]}>{presentacion.recordatorio}</Text>

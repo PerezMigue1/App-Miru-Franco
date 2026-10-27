@@ -95,6 +95,35 @@ describe('aceptar a mitad de una petición', () => {
     expect(result.current.error).not.toMatch(/no está publicada/);
   });
 
+  it.each(['DOCUMENTO_NO_VIGENTE', 'DOCUMENTO_NO_COINCIDE'])(
+    '%s (Ronda 9): el aviso común junto a la casilla, sin marcar, con la versión nueva y el documento pedido a la red',
+    async (code) => {
+      const rutaVigente = '/api/documentos-legales/aviso-privacidad/vigente';
+      const { result, llamadas } = await montar({
+        [`GET ${RUTA_PENDIENTES}`]: enSecuencia(
+          () => respuestaPendientes([pendienteCrudo()]),
+          () => respuestaPendientes([pendienteCrudo({ version: '2.2', hash: 'e'.repeat(64) })]),
+        ),
+        [`POST ${RUTA_CONSENTIMIENTOS}`]: () => versionNoPublicada400(code),
+        [`GET ${rutaVigente}`]: () => vigenteCrudo('aviso-privacidad', 'Aviso de Privacidad', '/aviso-de-privacidad'),
+      });
+      await waitFor(() => expect(llamadasA(llamadas, 'GET', rutaVigente)).toHaveLength(1));
+      await marcar(result);
+      await act(async () => {
+        result.current.aceptar();
+      });
+
+      await waitFor(() => expect(llamadasA(llamadas, 'GET', RUTA_PENDIENTES)).toHaveLength(2));
+      await waitFor(() => expect(result.current.enviando).toBe(false));
+      expect(result.current.error).toBe(obtenerTexto('legal.documentoActualizado'));
+      expect(result.current.marcada).toBe(false);
+      expect(result.current.vigencia?.version).toBe('Versión 2.2');
+      // El documento se pidió otra vez a la red aunque la memoria seguía vigente, y nada se reintentó solo.
+      await waitFor(() => expect(llamadasA(llamadas, 'GET', rutaVigente)).toHaveLength(2));
+      expect(llamadasA(llamadas, 'POST', RUTA_CONSENTIMIENTOS)).toHaveLength(1);
+    },
+  );
+
   it('doble toque en "Aceptar" mientras se envía: una sola aceptación', async () => {
     const envio = diferida();
     const { result, llamadas } = await montar({

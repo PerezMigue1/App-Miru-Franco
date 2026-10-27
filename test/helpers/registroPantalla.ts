@@ -78,7 +78,7 @@ export async function llenarPaso1(): Promise<void> {
   await fireEvent.changeText(screen.getByLabelText('Confirmar contraseña'), CLAVE);
 }
 
-/** Paso 2, "Tu cabello": tipo, un color opcional, sin alergias, con tratamientos y el aviso. */
+/** Paso 2, "Tu cabello": tipo, un color opcional, sin alergias, con tratamientos, los Términos y el aviso. */
 export async function llenarPaso2(): Promise<void> {
   await fireEvent.press(screen.getByRole('radio', { name: 'Tipo de cabello: Lacio' }));
   await fireEvent.changeText(screen.getByLabelText('Color natural (opcional)'), '  Castaño oscuro ');
@@ -88,6 +88,8 @@ export async function llenarPaso2(): Promise<void> {
     await screen.findByLabelText('Especifica los tratamientos'),
     'Tinte hace seis meses',
   );
+  await fireEvent.press(screen.getByRole('checkbox', { name: /^Acepto los/ }));
+  expect(screen.getByRole('checkbox', { name: /^Acepto los/ })).toBeChecked();
   await fireEvent.press(screen.getByRole('checkbox', { name: /^Acepto el/ }));
   expect(screen.getByRole('checkbox', { name: /^Acepto el/ })).toBeChecked();
 }

@@ -5,7 +5,7 @@ import { BackHandler } from 'react-native';
 import { useAuth } from '@/features/auth/viewmodels/useAuth';
 import { ApiError } from '@/shared/api/apiClient';
 import { obtenerConfiguracion, suscribir as suscribirConfiguracion } from '@/shared/api/configuracionPublica';
-import { obtenerDocumentoVigente } from '@/shared/api/documentosLegales';
+import { documentosQueCambiaron, textoDocumentoActualizado } from '@/shared/api/documentosActualizados';
 import { mensajeParaClienta } from '@/shared/api/mensajesError';
 import { obtenerTexto } from '@/shared/api/textosSitio';
 import { useEsperaLimite } from '@/shared/api/useEsperaLimite';
@@ -38,7 +38,7 @@ import {
   mensajeConsentimiento,
   registrarConsentimientosReserva,
 } from '../models/consentimientosReserva';
-import { textoFaltaPolitica, textoPoliticaActualizada } from '../models/formaPagoModel';
+import { textoFaltaPolitica } from '../models/formaPagoModel';
 import { guardarReservaPendiente, tomarReservaPendiente, type ReservaPendiente } from '../models/reservaPendiente';
 import { anticipoVigente, obtenerServicio, type Servicio } from '../models/servicioModel';
 import {
@@ -239,10 +239,10 @@ export function useReservarCitaViewModel(
   const anticipo = anticipoVigente(servicio, configuracion);
   const opcionPago = opcionVigente(opcionElegida, configuracion);
   // La versión de la política que se registra es la que la casilla mostraba al marcarla; si cambia
-  // con la casilla marcada, se desmarca y se avisa.
+  // con la casilla marcada, se desmarca y se avisa junto a ella (legal.documentoActualizado).
   const alCambiarPolitica = useCallback(() => {
     setAceptaPolitica(false);
-    setErrorPolitica(textoPoliticaActualizada(obtenerConfiguracion()));
+    setErrorPolitica(textoDocumentoActualizado(obtenerConfiguracion()));
   }, []);
   const politicaVista = usePoliticaVista(aceptaPolitica, alCambiarPolitica);
 
@@ -620,9 +620,10 @@ export function useReservarCitaViewModel(
       setErrorEnvio(null);
       setErrorPolitica(null);
       setRecuperada(false);
+      const vista = politicaVista();
       try {
         // Las casillas se registran antes de apartar el horario: si un registro falla, la cita no se crea.
-        await registrarConsentimientosReserva({ conAnticipo, autorizaFotos, politicaVista: politicaVista() });
+        await registrarConsentimientosReserva({ conAnticipo, autorizaFotos, politicaVista: vista });
         // Si la respuesta se pierde, antes de dejar reintentar se busca la cita entre las de la clienta.
         const cita = await crearCitaVerificada({
           clienteId: usuario.id,
@@ -652,6 +653,12 @@ export function useReservarCitaViewModel(
         }
         router.replace(destino as Href);
       } catch (error: unknown) {
+        // La política que vio ya no es la vigente (400 DOCUMENTO_NO_VIGENTE o DOCUMENTO_NO_COINCIDE):
+        // se pide la vigente a la red mientras la casilla sigue bloqueada (enviando).
+        const politicaCambio = error instanceof ErrorConsentimiento && esVersionNoPublicada(error);
+        if (politicaCambio) {
+          await documentosQueCambiaron([{ clave: 'anticipos', slug: 'anticipos', aceptado: vista }]);
+        }
         const causa = error instanceof ErrorConsentimiento ? error.causa : error;
         if (esSesionTerminada(causa)) {
           // apiClient ya cerró la sesión: lo elegido se guarda en memoria (aunque la pantalla ya se
@@ -685,10 +692,11 @@ export function useReservarCitaViewModel(
           return;
         }
         if (error instanceof ErrorConsentimiento) {
-          if (esVersionNoPublicada(error)) {
-            // La versión que vio ya no es la publicada: se pide la vigente y se vuelve a marcar.
+          if (politicaCambio) {
+            // Solo la casilla de la política se desmarca, con su aviso al lado; la hora, la forma de
+            // pago, las notas y la casilla de fotos se quedan como estaban. Nunca se reintenta solo.
             setAceptaPolitica(false);
-            void obtenerDocumentoVigente('anticipos', { forzarRed: true });
+            setErrorPolitica(textoDocumentoActualizado(configuracion));
           }
           setErrorEnvio(mensajeConsentimiento(error));
           return;

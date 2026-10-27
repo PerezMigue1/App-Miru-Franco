@@ -5,6 +5,8 @@ import '../../helpers/mocksPantallas';
 
 import { fireEvent, screen, waitFor } from 'expo-router/testing-library';
 
+import { RESPALDO_TEXTOS } from '@/shared/api/textosSitio';
+
 import {
   conError,
   ERRORES,
@@ -177,6 +179,33 @@ describe('Consentimientos al confirmar la reserva (GP-07.4)', () => {
       await waitFor(() =>
         expect(llamadasDeRuta(llamadas, `GET ${rutaVigente('anticipos')}`).length).toBeGreaterThan(lecturasAntes),
       );
+      esperarConsolaLimpia();
+    },
+    LIMITE_MS,
+  );
+
+  it.each(['DOCUMENTO_NO_VIGENTE', 'DOCUMENTO_NO_COINCIDE'])(
+    '%s (Ronda 9): pide la política a la red, desmarca solo su casilla con el aviso al lado y lo demás se queda',
+    async (code) => {
+      const { llamadas } = await abrirConfirmar({
+        rutas: { [RUTA_CONSENTIMIENTOS]: conError({ statusCode: 400, message: 'Mensaje técnico ficticio', code }) },
+      });
+      const lecturasAntes = llamadasDeRuta(llamadas, `GET ${rutaVigente('anticipos')}`).length;
+      await marcarFotos();
+
+      await confirmarConAnticipo('linea');
+      expect(await screen.findByText(RESPALDO_TEXTOS['legal.documentoActualizado'])).toBeOnTheScreen();
+      expect(screen.getByRole('checkbox', { name: CASILLA_POLITICA })).not.toBeChecked();
+      // La casilla de fotos y la forma de pago elegida se quedan como estaban.
+      expect(screen.getByRole('checkbox', { name: CASILLA_FOTOS })).toBeChecked();
+      expect(screen.getByRole('radio', { name: OPCION_PAGO.linea })).toBeChecked();
+      sinCita(llamadas);
+      sinTextos(/técnico/);
+      await waitFor(() =>
+        expect(llamadasDeRuta(llamadas, `GET ${rutaVigente('anticipos')}`).length).toBeGreaterThan(lecturasAntes),
+      );
+      // Nada se reintenta solo: un solo registro.
+      expect(llamadasDeRuta(llamadas, RUTA_CONSENTIMIENTOS)).toHaveLength(1);
       esperarConsolaLimpia();
     },
     LIMITE_MS,
