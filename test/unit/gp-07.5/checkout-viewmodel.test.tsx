@@ -50,9 +50,23 @@ import {
 } from '../../helpers/viewmodelsAuth';
 
 jest.mock('expo-router', () => {
+  const react = require('react');
   const simulado = require('../../helpers/viewmodelsAuth');
   simulado.routerSimulado.canGoBack = jest.fn(() => true);
-  return simulado.expoRouterSimulado();
+  return {
+    ...simulado.expoRouterSimulado(),
+    // Como el real: corre al montar y cuando cambia el callback; la prueba lo repite con reenfocar().
+    useFocusEffect: (efecto: () => void | (() => void)) => {
+      react.useEffect(() => {
+        mockEnfocadas.add(efecto);
+        const limpiar = efecto();
+        return () => {
+          mockEnfocadas.delete(efecto);
+          if (typeof limpiar === 'function') limpiar();
+        };
+      }, [efecto]);
+    },
+  };
 });
 jest.mock('@/features/tienda/viewmodels/usePiezasCarrito', () => ({
   avisarCambioCarrito: jest.fn(),
@@ -77,6 +91,19 @@ const NO_GUARDO =
   'No pudimos guardar tu aceptación de los Términos de venta y la Política de reembolsos, así que tu pedido no se creó.';
 /** Total del carrito de ejemplo: $382.50 + 2 x $380. */
 const TOTAL = '$1,142.50';
+
+/** Efectos de enfoque del checkout montado (los registra el useFocusEffect simulado). */
+const mockEnfocadas = new Set<() => void | (() => void)>();
+
+/** El checkout vuelve a enfocarse (por ejemplo, al regresar del visor legal). */
+const reenfocar = () =>
+  act(async () => {
+    mockEnfocadas.forEach((efecto) => {
+      const limpiar = efecto();
+      // El efecto montado sigue activo: lo que abra este repaso (el BackHandler) se cierra enseguida.
+      if (typeof limpiar === 'function') limpiar();
+    });
+  });
 
 const crearComoServidor: ManejadorVm = (cuerpo) => respuesta(cuerpoPedido(pedidoDesdeCuerpo(cuerpo)), 201);
 
@@ -286,9 +313,21 @@ describe('Casillas', () => {
   it('el enlace abre el visor legal encima del checkout', async () => {
     const { result } = await abrir();
     await hacer(() => result.current.abrirDocumento('terminos'));
+    // GP-10.1: al volver del visor el checkout se enfoca de nuevo y el otro enlace ya abre el suyo.
+    await reenfocar();
     await hacer(() => result.current.abrirDocumento('reembolsos'));
     expect(routerSimulado.push.mock.calls).toEqual([['/legal/terminos'], ['/legal/reembolsos']]);
     expect(result.current.paso).toBe(1);
+  });
+
+  it('un doble toque en el enlace abre un solo visor (GP-10.1)', async () => {
+    const { result } = await abrir();
+    await hacer(() => {
+      result.current.abrirDocumento('terminos');
+      result.current.abrirDocumento('terminos');
+    });
+    expect(routerSimulado.push).toHaveBeenCalledTimes(1);
+    expect(routerSimulado.push).toHaveBeenCalledWith('/legal/terminos');
   });
 
   it('si la versión de un documento cambia con su casilla marcada, se desmarca y lo explica', async () => {

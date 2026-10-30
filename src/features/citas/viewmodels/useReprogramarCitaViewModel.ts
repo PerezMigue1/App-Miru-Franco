@@ -7,6 +7,7 @@ import { obtenerConfiguracion, suscribir } from '@/shared/api/configuracionPubli
 import { rutaVisorDocumento } from '@/shared/api/documentosLegales';
 import { mensajeParaClienta } from '@/shared/api/mensajesError';
 import { obtenerTexto } from '@/shared/api/textosSitio';
+import { useAbrirUnaVez } from '@/shared/ui/useAbrirUnaVez';
 import { useCandado } from '@/shared/ui/useCandado';
 
 import {
@@ -144,6 +145,7 @@ function diaInicial(cita: Cita, ahora: Date): string {
  */
 export function useReprogramarCitaViewModel(citaId: string | undefined): ReprogramarCitaViewModel {
   const router = useRouter();
+  const abrirUnaVez = useAbrirUnaVez();
   const candado = useCandado();
   const configuracion = useSyncExternalStore(suscribir, obtenerConfiguracion, obtenerConfiguracion);
 
@@ -392,8 +394,8 @@ export function useReprogramarCitaViewModel(citaId: string | undefined): Reprogr
   }, [candado, cita, slot, fecha, cargarHorarios, salir]);
 
   const abrirPolitica = useCallback(() => {
-    router.push(rutaVisorDocumento('anticipos'));
-  }, [router]);
+    abrirUnaVez(rutaVisorDocumento('anticipos'));
+  }, [abrirUnaVez]);
 
   const abrirContacto = useCallback((url: string) => {
     Linking.openURL(url).catch(() => {

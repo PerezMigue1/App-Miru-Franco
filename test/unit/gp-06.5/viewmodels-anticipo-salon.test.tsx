@@ -365,4 +365,14 @@ describe('useAnticipoViewModel: cita en el salón', () => {
     await waitFor(() => expect(result.current.pago).toEqual(pago));
     expect(result.current).toMatchObject({ avisoSalon: AVISO_SALON, limite: null });
   });
+
+  it('un doble toque en el enlace de la política abre un solo visor (GP-10.1)', async () => {
+    const { result } = await abrirAnticipo(citaEnSalon());
+    await hacer(() => {
+      result.current.abrirPolitica();
+      result.current.abrirPolitica();
+    });
+    expect(router.push).toHaveBeenCalledTimes(1);
+    expect(router.push).toHaveBeenCalledWith('/legal/anticipos');
+  });
 });

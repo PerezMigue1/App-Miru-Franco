@@ -175,6 +175,17 @@ describe('qué pasa con el anticipo al reprogramar', () => {
     expect(routerSimulado.push).toHaveBeenCalledWith('/legal/anticipos');
   });
 
+  it('un doble toque en el enlace de la política abre un solo visor (GP-10.1)', async () => {
+    const { result } = await abrir(conReglas(citaConAnticipo()));
+    await waitFor(() => expect(result.current.estadoHorarios).toBe('listo'));
+    await hacer(() => {
+      result.current.abrirPolitica();
+      result.current.abrirPolitica();
+    });
+    expect(routerSimulado.push).toHaveBeenCalledTimes(1);
+    expect(routerSimulado.push).toHaveBeenCalledWith('/legal/anticipos');
+  });
+
   it('sin anticipo, ni aviso ni enlace', async () => {
     const { result } = await abrir(conReglas(citaCruda()), {
       [rutaDisponibilidad(ESPECIALISTA_UNO.usuarioId, DIA_CITA, 1)]: turnos(() =>

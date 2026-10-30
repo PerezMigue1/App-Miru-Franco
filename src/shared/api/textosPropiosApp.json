@@ -69,8 +69,6 @@
   "datosSensibles.app.ofertaTexto": "Tienes alergias guardadas, pero están ocultas: nadie las ve ni las usa hasta que des tu autorización expresa. Si no la das, siguen ocultas y tu cuenta funciona igual.",
   "datosSensibles.app.ofertaLeer": "Leer y autorizar",
   "auth.revisaCampos": "Revisa los campos marcados.",
-  "auth.avisoPrivacidad.noAbre": "No pudimos abrir el aviso de privacidad.",
-  "auth.terminos.noAbre": "No pudimos abrir los términos y condiciones.",
   "auth.activar.titulo": "Activa tu cuenta",
   "auth.activar.instrucciones": "Escribe el código de {digitos} dígitos que enviamos a {correo}.",
   "auth.activar.instruccionesSinCorreo": "Escribe el código de {digitos} dígitos que enviamos a tu correo.",

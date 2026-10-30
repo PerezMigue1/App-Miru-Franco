@@ -11,6 +11,7 @@ import { mensajeParaClienta } from '@/shared/api/mensajesError';
 import { obtenerTexto } from '@/shared/api/textosSitio';
 import { useConfiguracionPublica } from '@/shared/api/useConfiguracionPublica';
 import { useEsperaLimite } from '@/shared/api/useEsperaLimite';
+import { useAbrirUnaVez } from '@/shared/ui/useAbrirUnaVez';
 import { useCandado } from '@/shared/ui/useCandado';
 
 import {
@@ -162,6 +163,7 @@ const SLUGS_CASILLAS = CASILLAS_COMPRA.map((casilla) => casilla.slug);
  */
 export function useCheckoutViewModel(): CheckoutViewModel {
   const router = useRouter();
+  const abrirUnaVez = useAbrirUnaVez();
   const candado = useCandado();
   const { configuracion } = useConfiguracionPublica();
   // Un 429 al crear el pedido (o al registrar sus casillas) deja el botón final en espera.
@@ -305,9 +307,9 @@ export function useCheckoutViewModel(): CheckoutViewModel {
   const abrirDocumento = useCallback(
     (slug: SlugDocumentoLegal) => {
       // push: el visor se apila encima y al volver el checkout sigue en el mismo paso y estado.
-      router.push(rutaVisorDocumento(slug));
+      abrirUnaVez(rutaVisorDocumento(slug));
     },
-    [router],
+    [abrirUnaVez],
   );
 
   const atras = useCallback(() => {

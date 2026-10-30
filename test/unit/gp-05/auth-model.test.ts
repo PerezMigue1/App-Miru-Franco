@@ -28,9 +28,7 @@ import {
   ROL_CLIENTE,
   TIPOS_CABELLO,
   tieneFragmentosPeligrosos,
-  urlAvisoPrivacidad,
   urlOlvidoContrasena,
-  urlTerminos,
 } from '@/features/auth/models/AuthModel';
 import { ApiError, ErrorDeRed } from '@/shared/api/apiClient';
 
@@ -395,22 +393,20 @@ describe('URLs del sitio web', () => {
     process.env.EXPO_PUBLIC_WEB_URL = webOriginal;
   });
 
-  it('arma cada página con la URL de prueba', () => {
-    expect(urlAvisoPrivacidad()).toBe('http://web.test/aviso-de-privacidad');
-    expect(urlTerminos()).toBe('http://web.test/terminos-y-condiciones');
+  it('arma la página con la URL de prueba', () => {
     expect(urlOlvidoContrasena()).toBe('http://web.test/forgot-password');
   });
 
   it('quita espacios y diagonales finales de la base', () => {
     process.env.EXPO_PUBLIC_WEB_URL = '  https://www.ejemplo.test///  ';
-    expect(urlAvisoPrivacidad()).toBe('https://www.ejemplo.test/aviso-de-privacidad');
+    expect(urlOlvidoContrasena()).toBe('https://www.ejemplo.test/forgot-password');
   });
 
   it('devuelve null si falta la variable o está vacía', () => {
     delete process.env.EXPO_PUBLIC_WEB_URL;
-    expect(urlTerminos()).toBeNull();
+    expect(urlOlvidoContrasena()).toBeNull();
     process.env.EXPO_PUBLIC_WEB_URL = '   ';
-    expect(urlTerminos()).toBeNull();
+    expect(urlOlvidoContrasena()).toBeNull();
   });
 
   it('devuelve null con un esquema no permitido', () => {
@@ -425,9 +421,9 @@ describe('URLs del sitio web', () => {
     const devOriginal = global.__DEV__;
     try {
       global.__DEV__ = false;
-      expect(urlAvisoPrivacidad()).toBeNull();
+      expect(urlOlvidoContrasena()).toBeNull();
       process.env.EXPO_PUBLIC_WEB_URL = 'https://www.ejemplo.test';
-      expect(urlAvisoPrivacidad()).toBe('https://www.ejemplo.test/aviso-de-privacidad');
+      expect(urlOlvidoContrasena()).toBe('https://www.ejemplo.test/forgot-password');
     } finally {
       global.__DEV__ = devOriginal;
     }

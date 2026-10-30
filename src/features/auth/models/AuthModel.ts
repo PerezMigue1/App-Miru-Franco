@@ -464,16 +464,6 @@ function urlDelSitio(ruta: string): string | null {
   return `${base.slice(0, fin)}${ruta}`;
 }
 
-/** Aviso de privacidad en el sitio web. */
-export function urlAvisoPrivacidad(): string | null {
-  return urlDelSitio('/aviso-de-privacidad');
-}
-
-/** Términos y condiciones en el sitio web. */
-export function urlTerminos(): string | null {
-  return urlDelSitio('/terminos-y-condiciones');
-}
-
 /** Recuperación de contraseña en el sitio web (para quien no recuerda la actual). */
 export function urlOlvidoContrasena(): string | null {
   return urlDelSitio('/forgot-password');

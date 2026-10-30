@@ -674,9 +674,9 @@ describe('useRegistroViewModel', () => {
       expect(result.current.verificandoCorreo).toBe(false);
     });
 
-    it('"Continuar" espera la verificación del correo con verificandoCorreo', async () => {
+    it('"Continuar" espera la verificación del correo con verificandoCorreo y no se repite mientras', async () => {
       const pendiente = diferida();
-      servidor({ [URL_VERIFICAR_CORREO]: { espera: pendiente.promesa } });
+      const simulado = servidor({ [URL_VERIFICAR_CORREO]: { espera: pendiente.promesa } });
       const { result } = await renderHook(() => useRegistroViewModel());
       await llenar(result, PASO_1_VALIDO);
 
@@ -685,6 +685,12 @@ describe('useRegistroViewModel', () => {
       });
       expect(result.current.verificandoCorreo).toBe(true);
       expect(result.current.estadoCorreo).toBe('verificando');
+      const verificaciones = llamadasA(simulado, URL_VERIFICAR_CORREO).length;
+
+      await act(async () => {
+        result.current.continuar();
+      });
+      expect(llamadasA(simulado, URL_VERIFICAR_CORREO)).toHaveLength(verificaciones);
 
       await act(async () => {
         pendiente.resolver(respuesta({ existe: false }));
@@ -712,6 +718,23 @@ describe('useRegistroViewModel', () => {
       const llamadas = llamadasA(simulado, URL_VERIFICAR_CORREO);
       expect(llamadas).toHaveLength(1);
       expect(cuerpoDe(llamadas[0])).toEqual({ correo: CORREO });
+    });
+
+    it('salir del campo con el mismo correo ya verificado no lo vuelve a pedir', async () => {
+      const simulado = servidor({ [URL_VERIFICAR_CORREO]: { cuerpo: { existe: false } } });
+      const { result } = await renderHook(() => useRegistroViewModel());
+      await cambiarCampo(result, 'correo', CORREO);
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(600);
+      });
+      await waitFor(() => expect(result.current.estadoCorreo).toBe('sinAviso'));
+
+      await act(async () => {
+        result.current.salir('correo');
+      });
+
+      expect(llamadasA(simulado, URL_VERIFICAR_CORREO)).toHaveLength(1);
+      expect(result.current.estadoCorreo).toBe('sinAviso');
     });
 
     it('un correo inválido no se verifica', async () => {
@@ -744,6 +767,26 @@ describe('useRegistroViewModel', () => {
         await jest.advanceTimersByTimeAsync(5000);
       });
       await waitFor(() => expect(result.current.estadoCorreo).toBe('sinAviso'));
+      expect(llamadasA(simulado, URL_VERIFICAR_CORREO)).toHaveLength(2);
+    });
+
+    it('una respuesta sin "existe" queda "revisando" y reintenta a los 5 s', async () => {
+      const simulado = servidor({
+        [URL_VERIFICAR_CORREO]: [{ cuerpo: { success: true } }, { cuerpo: { existe: true } }],
+      });
+      const { result } = await renderHook(() => useRegistroViewModel());
+      await cambiarCampo(result, 'correo', CORREO);
+
+      await act(async () => {
+        result.current.salir('correo');
+      });
+      await waitFor(() => expect(result.current.estadoCorreo).toBe('revisando'));
+      expect(llamadasA(simulado, URL_VERIFICAR_CORREO)).toHaveLength(1);
+
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(5000);
+      });
+      await waitFor(() => expect(result.current.estadoCorreo).toBe('registrado'));
       expect(llamadasA(simulado, URL_VERIFICAR_CORREO)).toHaveLength(2);
     });
 
@@ -1039,35 +1082,38 @@ describe('useRegistroViewModel', () => {
   });
 
   describe('aviso, términos y reinicio', () => {
-    it('abre el aviso de privacidad en el navegador y los términos en el visor de la app', async () => {
+    it.each<[string, (vm: RegistroViewModel) => void, string]>([
+      ['el aviso de privacidad', (vm) => vm.abrirAviso(), '/legal/aviso-privacidad'],
+      ['los términos', (vm) => vm.abrirTerminos(), '/legal/terminos'],
+    ])('abre %s en el visor de la app, no en el navegador', async (_documento, abrir, ruta) => {
       servidor({});
       const { result } = await renderHook(() => useRegistroViewModel());
 
       await act(async () => {
+        abrir(result.current);
+      });
+
+      expect(mockRouter.push).toHaveBeenCalledTimes(1);
+      expect(mockRouter.push).toHaveBeenCalledWith(ruta);
+      expect(openBrowserAsync).not.toHaveBeenCalled();
+      expect(result.current.errorGeneral).toBeNull();
+    });
+
+    it('un doble toque en el aviso y luego los términos abren un solo visor', async () => {
+      servidor({});
+      const { result } = await renderHook(() => useRegistroViewModel());
+
+      await act(async () => {
+        result.current.abrirAviso();
         result.current.abrirAviso();
       });
       await act(async () => {
         result.current.abrirTerminos();
       });
 
-      expect(openBrowserAsync).toHaveBeenCalledTimes(1);
-      expect(openBrowserAsync).toHaveBeenCalledWith('http://web.test/aviso-de-privacidad');
-      expect(mockRouter.push).toHaveBeenCalledWith('/legal/terminos');
-      expect(result.current.errorGeneral).toBeNull();
-    });
-
-    it('si el navegador no abre, lo dice en el aviso general', async () => {
-      servidor({});
-      jest.mocked(openBrowserAsync).mockRejectedValueOnce(new Error('sin navegador'));
-      const { result } = await renderHook(() => useRegistroViewModel());
-
-      await act(async () => {
-        result.current.abrirAviso();
-      });
-
-      await waitFor(() =>
-        expect(result.current.errorGeneral).toBe('No pudimos abrir el aviso de privacidad.'),
-      );
+      expect(mockRouter.push).toHaveBeenCalledTimes(1);
+      expect(mockRouter.push).toHaveBeenCalledWith('/legal/aviso-privacidad');
+      expect(openBrowserAsync).not.toHaveBeenCalled();
     });
 
     it('reiniciar vuelve al paso 1 con todo vacío y cancela la verificación pendiente', async () => {
