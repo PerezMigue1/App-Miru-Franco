@@ -1,18 +1,19 @@
 import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter, type Href } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { openBrowserAsync } from 'expo-web-browser';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking, Platform } from 'react-native';
 
+import { rutaVisorDocumento } from '@/shared/api/documentosLegales';
 import { mensajeParaClienta } from '@/shared/api/mensajesError';
 import { obtenerTexto, type ClaveTextoSitio } from '@/shared/api/textosSitio';
 import { generacionActual } from '@/shared/api/tokenStorage';
 import { useTextos } from '@/shared/api/useTextos';
 import { useApariencia } from '@/shared/ui/apariencia';
 import type { PreferenciaApariencia } from '@/shared/ui/preferencias';
+import { useAbrirUnaVez } from '@/shared/ui/useAbrirUnaVez';
 import { useCandado } from '@/shared/ui/useCandado';
 
-import { estadoHttp, urlAvisoPrivacidad } from '../models/AuthModel';
+import { estadoHttp } from '../models/AuthModel';
 import { actualizarPerfil, obtenerPerfilCompleto, pedirFirmaFoto, subirFoto } from '../models/authService';
 import { borrarFotoTemporal, prepararFoto } from '../models/fotoPerfil';
 import { galeriaSinPermiso, resultadoPermisoGaleria } from '../models/permisoGaleria';
@@ -113,6 +114,7 @@ export interface PerfilViewModel {
   abrirMiCuenta: () => void;
   abrirMisDatos: () => void;
   abrirPreferenciasAvisos: () => void;
+  /** Abre el Aviso de privacidad en el visor de documentos legales de la app. */
   abrirAviso: () => void;
   cerrarSesion: () => void;
 }
@@ -140,6 +142,7 @@ function mensajeDeFoto(error: unknown, etapa: EtapaFoto): string {
  */
 export function usePerfilViewModel(): PerfilViewModel {
   const { push, navigate } = useRouter();
+  const abrirVisor = useAbrirUnaVez();
   // Navegación de esta pantalla: su setParams cambia los parámetros de Perfil, no de la ruta enfocada.
   const navegacion = useNavigation<{ setParams: (params: { guardado?: string }) => void }>();
   const { estado: estadoSesion, salir } = useAuth();
@@ -390,13 +393,9 @@ export function usePerfilViewModel(): PerfilViewModel {
     navigate('/inicio');
   };
 
+  // En el visor de la app, una sola vez aunque se toque dos veces.
   const abrirAviso = () => {
-    const url = urlAvisoPrivacidad();
-    if (url) {
-      openBrowserAsync(url).catch(() => {
-        // Sin navegador disponible no hay nada más que hacer aquí.
-      });
-    }
+    abrirVisor(rutaVisorDocumento('aviso-privacidad'));
   };
 
   return {

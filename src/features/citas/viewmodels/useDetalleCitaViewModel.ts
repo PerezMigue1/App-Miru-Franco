@@ -10,6 +10,7 @@ import { idDeCompra } from '@/shared/api/comprobantesDeCompra';
 import { useComprobantesDeCompra } from '@/shared/api/useComprobantesDeCompra';
 import { useEsperaLimite } from '@/shared/api/useEsperaLimite';
 import type { BotonComprobante } from '@/shared/ui/BotonesComprobante';
+import { useAbrirUnaVez } from '@/shared/ui/useAbrirUnaVez';
 import { useCandado } from '@/shared/ui/useCandado';
 
 import {
@@ -193,6 +194,7 @@ function presentacionDe(cita: Cita, ahora: Date, config: ReturnType<typeof obten
 export function useDetalleCitaViewModel(citaId: string | undefined): DetalleCitaViewModel {
   const router = useRouter();
   const candado = useCandado();
+  const abrirUnaVez = useAbrirUnaVez();
   const configuracion = useSyncExternalStore(suscribir, obtenerConfiguracion, obtenerConfiguracion);
   const casilla = useAceptacionAnticipos(RUTA_ORIGEN_DETALLE);
   // Un 429 al cancelar deja el botón de la hoja en espera; el message del backend queda en la hoja.
@@ -290,9 +292,10 @@ export function useDetalleCitaViewModel(citaId: string | undefined): DetalleCita
     router.replace('/mis-citas');
   }, [router]);
 
+  // Candado propio: el enlace de la hoja de cancelar no deja sin efecto Reprogramar de la misma hoja.
   const abrirPolitica = useCallback(() => {
-    router.push(rutaVisorDocumento('anticipos'));
-  }, [router]);
+    abrirUnaVez(rutaVisorDocumento('anticipos'));
+  }, [abrirUnaVez]);
 
   const idCita = cita && cita.id !== '' ? encodeURIComponent(String(cita.id)) : null;
 

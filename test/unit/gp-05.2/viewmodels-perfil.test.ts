@@ -341,14 +341,16 @@ describe('usePerfilViewModel', () => {
     expect(routerSimulado.push).toHaveBeenCalledWith(ruta);
   });
 
-  it('abre el aviso de privacidad del sitio y no truena sin navegador', async () => {
+  it('abre el aviso de privacidad en el visor de la app y un doble toque lo abre una sola vez', async () => {
     const { result } = await montarPerfil();
-    jest.mocked(openBrowserAsync).mockRejectedValueOnce(new Error('sin navegador'));
 
     await act(async () => {
       result.current.abrirAviso();
+      result.current.abrirAviso();
     });
-    expect(openBrowserAsync).toHaveBeenCalledWith('http://web.test/aviso-de-privacidad');
+    expect(routerSimulado.push).toHaveBeenCalledTimes(1);
+    expect(routerSimulado.push).toHaveBeenCalledWith('/legal/aviso-privacidad');
+    expect(openBrowserAsync).not.toHaveBeenCalled();
   });
 
   it('abre y cierra la hoja de apariencia y aplica la elegida', async () => {
@@ -998,19 +1000,18 @@ describe('useEditarPerfilViewModel', () => {
     });
   });
 
-  it.each<[string, () => Promise<unknown>, string | null]>([
-    ['se abre', () => Promise.resolve({ type: 'opened' }), null],
-    ['no hay navegador', () => Promise.reject(new Error('sin navegador')), 'No pudimos abrir el aviso de privacidad.'],
-  ])('el aviso de privacidad: si %s el error es %p', async (_caso, apertura, error) => {
-    jest.mocked(openBrowserAsync).mockImplementationOnce(apertura as never);
+  it('el aviso de privacidad abre el visor de la app una sola vez aunque se toque dos veces', async () => {
     const { result } = await montarEdicion();
 
     await act(async () => {
       result.current.abrirAviso();
+      result.current.abrirAviso();
     });
     await asentar();
-    expect(openBrowserAsync).toHaveBeenCalledWith('http://web.test/aviso-de-privacidad');
-    expect(result.current.errorGeneral).toBe(error);
+    expect(routerSimulado.push).toHaveBeenCalledTimes(1);
+    expect(routerSimulado.push).toHaveBeenCalledWith('/legal/aviso-privacidad');
+    expect(openBrowserAsync).not.toHaveBeenCalled();
+    expect(result.current.errorGeneral).toBeNull();
   });
 });
 

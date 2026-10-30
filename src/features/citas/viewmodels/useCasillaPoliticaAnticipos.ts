@@ -1,4 +1,3 @@
-import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
 
 import { obtenerConfiguracion, suscribir as suscribirConfiguracion } from '@/shared/api/configuracionPublica';
@@ -8,6 +7,7 @@ import {
   rutaVisorDocumento,
   suscribir as suscribirDocumentos,
 } from '@/shared/api/documentosLegales';
+import { useAbrirUnaVez } from '@/shared/ui/useAbrirUnaVez';
 
 import {
   etiquetaCasillaPolitica,
@@ -40,7 +40,7 @@ const documentoAnticipos = () => documentoEnMemoria('anticipos');
  * montarse precarga el documento para que la versión esté lista al aceptar.
  */
 export function useCasillaPoliticaAnticipos(reglas?: ReglasPoliticaAnticipos): CasillaPoliticaAnticiposVm {
-  const router = useRouter();
+  const abrirUnaVez = useAbrirUnaVez();
   const configuracion = useSyncExternalStore(suscribirConfiguracion, obtenerConfiguracion, obtenerConfiguracion);
   const documento = useSyncExternalStore(suscribirDocumentos, documentoAnticipos, documentoAnticipos);
 
@@ -50,8 +50,8 @@ export function useCasillaPoliticaAnticipos(reglas?: ReglasPoliticaAnticipos): C
   }, []);
 
   const abrirPolitica = useCallback(() => {
-    router.push(rutaVisorDocumento('anticipos'));
-  }, [router]);
+    abrirUnaVez(rutaVisorDocumento('anticipos'));
+  }, [abrirUnaVez]);
 
   return {
     resumen: textoPoliticaAnticipos(reglas, configuracion),

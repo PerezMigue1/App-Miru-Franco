@@ -188,4 +188,22 @@ describe('pagarAnticipo (en línea, con el botón del detalle)', () => {
     await hacer(() => result.current.abrirPolitica());
     expect(routerSimulado.push).toHaveBeenCalledWith('/legal/anticipos');
   });
+
+  it('un doble toque en el enlace de la política abre un solo visor (GP-10.1)', async () => {
+    const { result } = await abrir();
+    await hacer(() => {
+      result.current.abrirPolitica();
+      result.current.abrirPolitica();
+    });
+    expect(routerSimulado.push).toHaveBeenCalledTimes(1);
+    expect(routerSimulado.push).toHaveBeenCalledWith('/legal/anticipos');
+  });
+
+  it('el enlace de la política no deja sin efecto Reprogramar de la hoja de cancelar (GP-10.1)', async () => {
+    const { result } = await abrir();
+    await hacer(() => result.current.abrirPolitica());
+    await hacer(() => result.current.reprogramar());
+    expect(routerSimulado.push).toHaveBeenCalledTimes(2);
+    expect(routerSimulado.push).toHaveBeenLastCalledWith(`/cita/${ID_CITA}/reprogramar`);
+  });
 });

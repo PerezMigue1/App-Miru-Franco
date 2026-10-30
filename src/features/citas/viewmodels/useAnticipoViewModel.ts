@@ -9,6 +9,7 @@ import { rutaVisorDocumento } from '@/shared/api/documentosLegales';
 import { mensajeParaClienta } from '@/shared/api/mensajesError';
 import { obtenerTexto } from '@/shared/api/textosSitio';
 import { useEsperaLimite } from '@/shared/api/useEsperaLimite';
+import { useAbrirUnaVez } from '@/shared/ui/useAbrirUnaVez';
 import { useCandado } from '@/shared/ui/useCandado';
 
 import {
@@ -142,6 +143,7 @@ export function useAnticipoViewModel(
   revisarAlAbrir = false,
 ): AnticipoViewModel {
   const router = useRouter();
+  const abrirUnaVez = useAbrirUnaVez();
   const candado = useCandado();
   const configuracion = useSyncExternalStore(suscribir, obtenerConfiguracion, obtenerConfiguracion);
   const casilla = useAceptacionAnticipos(RUTA_ORIGEN_ANTICIPO);
@@ -394,8 +396,8 @@ export function useAnticipoViewModel(
   }, [candado, casilla, cita, enProceso, espera.activa, pagar, pago.tipo, revisarEstado, verMisCitas]);
 
   const abrirPolitica = useCallback(() => {
-    router.push(rutaVisorDocumento('anticipos'));
-  }, [router]);
+    abrirUnaVez(rutaVisorDocumento('anticipos'));
+  }, [abrirUnaVez]);
 
   // Una cita cerrada (cancelada, completada u otro estado final) ya no tiene plazo de pago.
   const abierta = cita != null && pago.tipo !== 'cerrada' && esVigente(cita);

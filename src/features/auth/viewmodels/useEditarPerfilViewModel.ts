@@ -1,13 +1,14 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { openBrowserAsync } from 'expo-web-browser';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BackHandler } from 'react-native';
 
+import { rutaVisorDocumento } from '@/shared/api/documentosLegales';
 import { mensajeParaClienta } from '@/shared/api/mensajesError';
 import { obtenerTexto } from '@/shared/api/textosSitio';
 import { generacionActual } from '@/shared/api/tokenStorage';
 import { useEsperaLimite } from '@/shared/api/useEsperaLimite';
 import { telefonoSinLada } from '@/shared/ui/digitos';
+import { useAbrirUnaVez } from '@/shared/ui/useAbrirUnaVez';
 import { useCandado } from '@/shared/ui/useCandado';
 
 import {
@@ -22,7 +23,6 @@ import {
   problemaDeNombre,
   problemaDeTieneTratamientos,
   problemaDeTratamientos,
-  urlAvisoPrivacidad,
   type TipoCabello,
 } from '../models/AuthModel';
 import { actualizarPerfil, obtenerPerfilCompleto, releerPerfilCompleto } from '../models/authService';
@@ -95,6 +95,7 @@ export interface EditarPerfilViewModel {
   ayudaTelefono: string;
   /** Opciones de tipo de cabello de "Tu cabello", en el orden en que se muestran. */
   tiposCabello: { valor: TipoCabello; etiqueta: string }[];
+  /** Abre el Aviso de privacidad en el visor de documentos legales de la app. */
   abrirAviso: () => void;
   /** Volver: si hay cambios sin guardar, primero se pregunta. */
   volver: () => void;
@@ -185,6 +186,7 @@ function mensajeDeGuardado(error: unknown): string {
  */
 export function useEditarPerfilViewModel(): EditarPerfilViewModel {
   const { back, dismissTo } = useRouter();
+  const abrirVisor = useAbrirUnaVez();
   const { actualizarNombre } = useAuth();
   const [estado, setEstado] = useState<EstadoEdicion>('cargando');
   const [errorCarga, setErrorCarga] = useState<unknown>(null);
@@ -420,15 +422,9 @@ export function useEditarPerfilViewModel(): EditarPerfilViewModel {
     }, []),
   );
 
+  // En el visor de la app, una sola vez aunque se toque dos veces: al volver, lo escrito sigue ahí.
   const abrirAviso = () => {
-    const url = urlAvisoPrivacidad();
-    if (!url) {
-      setErrorGeneral(obtenerTexto('auth.avisoPrivacidad.noAbre'));
-      return;
-    }
-    openBrowserAsync(url).catch(() => {
-      setErrorGeneral(obtenerTexto('auth.avisoPrivacidad.noAbre'));
-    });
+    abrirVisor(rutaVisorDocumento('aviso-privacidad'));
   };
 
   return {

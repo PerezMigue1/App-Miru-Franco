@@ -45,8 +45,6 @@ const CLAVES_NUEVAS = [
     'preguntasNoCargadas', 'noSePudo', 'revisaDatos',
   ]),
   'auth.revisaCampos',
-  'auth.avisoPrivacidad.noAbre',
-  'auth.terminos.noAbre',
   ...conPrefijo('auth.activar', [
     'titulo', 'instrucciones', 'instruccionesSinCorreo', 'vigencia', 'verificar', 'verificando', 'espera',
     'reenviar', 'reenviando', 'volver', 'codigoInvalido', 'noSeVerifico', 'noSeReenvio', 'sinCorreo',

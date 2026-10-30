@@ -1,5 +1,4 @@
 import { usePathname, useRouter } from 'expo-router';
-import { openBrowserAsync } from 'expo-web-browser';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
@@ -19,6 +18,7 @@ import { useEsperaLimite } from '@/shared/api/useEsperaLimite';
 import { useTextos } from '@/shared/api/useTextos';
 import { soloDigitos, telefonoSinLada } from '@/shared/ui/digitos';
 import { duracion, reintentosCorreo } from '@/shared/ui/tokens';
+import { useAbrirUnaVez } from '@/shared/ui/useAbrirUnaVez';
 import { useCandado } from '@/shared/ui/useCandado';
 
 import {
@@ -46,7 +46,6 @@ import {
   problemaDeTratamientos,
   requiereConsentimiento,
   requisitosDeClave,
-  urlAvisoPrivacidad,
   type DatosRegistro,
   type PreguntaSeguridad,
   type RequisitoClave,
@@ -150,6 +149,7 @@ export interface RegistroViewModel {
   tiposCabello: { valor: TipoCabello; etiqueta: string }[];
   /** error: con estado 'error', por qué no se cargaron las preguntas (sin red, servidor...). */
   preguntas: { estado: EstadoPreguntas; error: string | null; lista: PreguntaSeguridad[]; cargar: () => void };
+  /** Abre el Aviso de privacidad en el visor de documentos legales de la app. */
   abrirAviso: () => void;
   /** Abre los Términos y Condiciones en el visor de documentos legales de la app. */
   abrirTerminos: () => void;
@@ -450,6 +450,7 @@ type Temporizador = ReturnType<typeof setTimeout>;
  */
 export function useRegistroViewModel(): RegistroViewModel {
   const { push } = useRouter();
+  const abrirVisor = useAbrirUnaVez();
   const ruta = usePathname();
   const [campos, setCampos] = useState<CamposRegistro>(CAMPOS_INICIALES);
   const [errores, setErrores] = useState<ErroresRegistro>({});
@@ -797,24 +798,14 @@ export function useRegistroViewModel(): RegistroViewModel {
       });
   };
 
-  /** Abre una página del sitio en el navegador; si no se puede, lo dice en el aviso general. */
-  const abrirPagina = (url: string | null, error: string) => {
-    if (!url) {
-      setErrorGeneral(error);
-      return;
-    }
-    openBrowserAsync(url).catch(() => {
-      setErrorGeneral(error);
-    });
-  };
-
+  // Los dos abren el visor de la app con el mismo candado: un doble toque, aunque sea en los dos
+  // enlaces, abre un solo visor. Al volver, lo escrito sigue ahí.
   const abrirAviso = () => {
-    abrirPagina(urlAvisoPrivacidad(), obtenerTexto('auth.avisoPrivacidad.noAbre'));
+    abrirVisor(rutaVisorDocumento('aviso-privacidad'));
   };
 
-  // El visor de la app, como las demás casillas de documentos: al volver, lo escrito sigue ahí.
   const abrirTerminos = () => {
-    push(rutaVisorDocumento('terminos'));
+    abrirVisor(rutaVisorDocumento('terminos'));
   };
 
   const avanzar = async () => {
